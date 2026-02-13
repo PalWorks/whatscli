@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 	"os/user"
 
@@ -122,7 +121,7 @@ var Config = IniFile{
 	},
 }
 
-func InitConfig() {
+func InitConfig() error {
 	var err error
 	if configFilePath, err = xdg.ConfigFile("whatscli/whatscli.config"); err == nil {
 		// add any new values
@@ -156,9 +155,7 @@ func InitConfig() {
 			}
 		}
 	}
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
+	return err
 }
 
 func GetConfigFilePath() string {
@@ -175,7 +172,13 @@ func GetSessionFilePath() string {
 // gets the OS home dir with a path separator at the end
 func GetHomeDir() string {
 	usr, err := user.Current()
-	if err != nil {
+	if err == nil {
+		return usr.HomeDir + string(os.PathSeparator)
 	}
-	return usr.HomeDir + string(os.PathSeparator)
+	// Fallback to environment variable
+	home := os.Getenv("HOME")
+	if home != "" {
+		return home + string(os.PathSeparator)
+	}
+	return "." + string(os.PathSeparator)
 }

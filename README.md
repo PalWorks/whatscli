@@ -16,6 +16,9 @@ Things that work.
 - Allows color customization
 - Allows basic group management
 - Supports desktop notifications
+- Persistence: Chats and messages are saved across restarts
+- Background saving: Data is saved automatically in the background
+- Robust error handling and configuration management
 - Binaries for Windows, Mac, Linux and RaspBerry Pi
 
 ### Caveats

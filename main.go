@@ -17,7 +17,7 @@ import (
 	"github.com/zyedidia/clipboard"
 )
 
-var VERSION string = "v1.0.11"
+var VERSION string = "v1.0.29-cleanup"
 
 var sndTxt string = ""
 var currentReceiver messages.Chat = messages.Chat{}
@@ -39,7 +39,11 @@ var keyBindings *cbind.Configuration
 var uiHandler messages.UiMessageHandler
 
 func main() {
-	config.InitConfig()
+	err := config.InitConfig()
+	if err != nil {
+		fmt.Printf("Failed to initialize config: %v\n", err)
+		return
+	}
 	uiHandler = UiHandler{}
 	sessionManager = &messages.SessionManager{}
 	sessionManager.Init(uiHandler)
@@ -127,6 +131,7 @@ func main() {
 	}
 	LoadShortcuts()
 	app.Run()
+	sessionManager.Shutdown()
 }
 
 // creates the TreeView for chats
@@ -412,7 +417,6 @@ func PrintHelp() {
 	fmt.Fprintln(textView, "Config file in ->", config.GetConfigFilePath())
 	fmt.Fprintln(textView, "")
 	fmt.Fprintln(textView, "Type [::b]"+cmdPrefix+"commands[::-] to see all commands")
-	fmt.Fprintln(textView, "")
 }
 
 func PrintCommands() {
@@ -708,11 +712,21 @@ func (u UiHandler) SetChats(ids []messages.Chat) {
 }
 
 func (u UiHandler) PrintError(err error) {
-	PrintError(err)
+	go app.QueueUpdateDraw(func() {
+		PrintError(err)
+	})
 }
 
 func (u UiHandler) PrintText(msg string) {
-	PrintText(msg)
+	go app.QueueUpdateDraw(func() {
+		PrintText(msg)
+	})
+}
+
+func (u UiHandler) PrintQR(qr string) {
+	go app.QueueUpdateDraw(func() {
+		fmt.Fprint(tview.ANSIWriter(textView), qr+"\n")
+	})
 }
 
 func (u UiHandler) PrintFile(path string) {
@@ -731,6 +745,44 @@ func (u UiHandler) SetStatus(status messages.SessionStatus) {
 	})
 }
 
-func (u UiHandler) GetWriter() io.Writer {
-	return textView
+func (u UiHandler) ShowColorList() {
+	out := ""
+	for idx, _ := range tcell.ColorNames {
+		out = out + "[" + idx + "]" + idx + "[-]\n"
+	}
+	PrintText(out)
+}
+
+func (u UiHandler) Clear() {
+	go app.QueueUpdateDraw(func() {
+		textView.Clear()
+		PrintHelp()
+	})
+}
+
+func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
+	// Pre-calculate the content to ensure atomic rendering
+	// Translate ANSI codes in the QR string to tview tags to avoid using ANSIWriter during draw
+	qtTrans := tview.TranslateANSI(qr)
+	
+	go app.QueueUpdateDraw(func() {
+		// 1. Clear Screen
+		textView.Clear()
+		
+		// 2. Print Help
+		PrintHelp()
+		
+		// 3. Construct Full Output (Header + QR)
+		var output string
+		if timeout > 0 {
+			output = fmt.Sprintf("\n\n=== QR Code Generated (Attempt %d) - Auto-refreshing in %ds ===\n\nScan this with WhatsApp:\n\n", attempt, timeout)
+		} else {
+			output = fmt.Sprintf("\n\n=== QR Code Generated (Attempt %d) - Awaiting new QR code from WhatsApp Server ===\n\nScan this with WhatsApp:\n\n", attempt)
+		}
+		
+		output += qtTrans + "\n"
+		
+		// 4. Atomic Write (Standard Writer)
+		fmt.Fprint(textView, output)
+	})
 }

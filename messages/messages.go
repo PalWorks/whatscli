@@ -1,7 +1,7 @@
 //this package manages the messages
 package messages
 
-import "io"
+
 
 // TODO: move these funcs/interface to channels
 type UiMessageHandler interface {
@@ -11,9 +11,12 @@ type UiMessageHandler interface {
 	PrintError(error)
 	PrintText(string)
 	PrintFile(string)
+	PrintQR(string)
 	SetStatus(SessionStatus)
 	OpenFile(string)
-	GetWriter() io.Writer
+	ShowColorList()
+	Clear()
+	UpdateQR(qr string, attempt int, timeout int)
 }
 
 // data struct for current session status

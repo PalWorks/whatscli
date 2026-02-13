@@ -33,11 +33,9 @@
 package qrcode
 
 import (
-	nbytes "bytes"
 	"fmt"
 	"github.com/mattn/go-colorable"
 	"github.com/skip2/go-qrcode"
-	"image/png"
 	"io"
 )
 
@@ -113,49 +111,94 @@ func (v *qrcodeTerminal) Get(content interface{}) (result *QRCodeString) {
 	} else if t, ok := content.([]byte); ok {
 		qr, err = qrcode.New(string(t), qrcode.RecoveryLevel(v.level))
 	}
+
 	if qr != nil && err == nil {
-		data := qr.Bitmap()
-		result = v.getQRCodeString(data)
+		bmp := qr.Bitmap()
+		result = v.renderSmall(bmp)
 	}
 	return
 }
 
-func (v *qrcodeTerminal) Get2(bytes []byte) (result *QRCodeString) {
-	data, err := parseQR(bytes)
-	if err == nil {
-		result = v.getQRCodeString(data)
+func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
+	// Using ANSI Inverse for maximum compatibility (monochrome)
+	// We rely on the terminal's default colors:
+	// Default: Black BG, White FG.
+	// We want: White blocks (Background) and Black blocks (Foreground/Data).
+	
+	// INVERSE (\033[7m): Swaps FG and BG. 
+	// Space ' ' is usually BG color.
+	// Space + Inverse = FG color (White).
+	// Space + Normal = BG color (Black).
+	
+	reset := "\033[0m"
+	
+	// Characters
+	// ▀ (Upper Half): Upper=FG(Black), Lower=BG(White)
+	// ▄ (Lower Half): Lower=FG(Black), Upper=BG(White)
+	
+	str := "" // Initialize string builder
+	
+	rows := len(data)
+	if rows == 0 {
+		return
 	}
-	return
-}
+	cols := len(data[0])
 
-func New2(front, back consoleColor, level qrcodeRecoveryLevel) *qrcodeTerminal {
-	obj := qrcodeTerminal{front: front, back: back, level: level}
-	return &obj
-}
+	// Skip margin (Quiet Zone) - standard is 4 modules.
+	// User requested a "Small Border" (2 modules).
+	margin := 2
+	
+	// Safety check: if data provided is smaller than 2*margin, don't strip
+	if rows <= 2*margin || cols <= 2*margin {
+		margin = 0
+	}
 
-func New() *qrcodeTerminal {
-	front, back, level := ConsoleColors.BrightBlack, ConsoleColors.BrightWhite, QRCodeRecoveryLevels.Medium
-	return New2(front, back, level)
-}
-
-func (v *qrcodeTerminal) getQRCodeString(data [][]bool) (result *QRCodeString) {
-	str := ""
-	for ir, row := range data {
-		lr := len(row)
-		if ir == 0 || ir == 1 || ir == 2 ||
-			ir == lr-1 || ir == lr-2 || ir == lr-3 {
-			continue
-		}
-		for ic, col := range row {
-			lc := len(data)
-			if ic == 0 || ic == 1 || ic == 2 ||
-				ic == lc-1 || ic == lc-2 || ic == lc-3 {
-				continue
+	for r := margin; r < rows-margin; r += 2 {
+		for c := margin; c < cols-margin; c++ {
+			top := data[r][c]
+			bot := false
+			if r+1 < rows-margin {
+				bot = data[r+1][c]
 			}
-			if col {
-				str += fmt.Sprint(v.front)
-			} else {
-				str += fmt.Sprint(v.back)
+
+			// Matrix: True = Black (Module), False = White (Background)
+			// But wait, standard QR code: Dark modules on Light background.
+			// data[][] = true means "Dark Module".
+			// data[][] = false means "Light Module".
+			
+			// We want to print:
+			// True = Black (Terminal Background, usually) -> Wait, if terminal is Black BG, we want True to be Light?
+			// NO. QR Code: Dark Modules on Light Background.
+			// Most terminals: White FG, Black BG.
+			// So we want Background (False) to be White (FG color).
+			// And Modules (True) to be Black (BG color).
+			
+			// Let's stick to standard printing:
+			// We want 'False' (Background) to look White (Light).
+			// We want 'True' (Module) to look Black (Dark).
+			
+			// Explicit ANSI Colors (Black on Bright White)
+			// FG=Black (\033[30m), BG=Bright White (\033[107m)
+			// This ensures high contrast (Pure White vs Black).
+			// █ (Full Block) -> Uses FG Color (Black)
+			//   (Space)      -> Uses BG Color (Bright White)
+			// ▀ (Upper Half) -> Top=FG(Black), Bot=BG(Bright White)
+			// ▄ (Lower Half) -> Top=BG(Bright White), Bot=FG(Black)
+			
+			colorPrefix := "\033[30m\033[107m" // Black FG, Bright White BG
+			
+			if top && bot { 
+				// Both Black -> Full Block (FG=Black)
+				str += colorPrefix + "█" + reset
+			} else if !top && !bot { 
+				// Both White -> Space (BG=White)
+				str += colorPrefix + " " + reset
+			} else if top && !bot { 
+				// Top Black, Bot White -> Upper Half '▀' (Top=FG=Black, Bot=BG=White)
+				str += colorPrefix + "▀" + reset
+			} else { 
+				// Top White, Bot Black -> Lower Half '▄' (Bot=FG=Black, Top=BG=White)
+				str += colorPrefix + "▄" + reset
 			}
 		}
 		str += fmt.Sprintln()
@@ -165,23 +208,11 @@ func (v *qrcodeTerminal) getQRCodeString(data [][]bool) (result *QRCodeString) {
 	return
 }
 
-func parseQR(bytes []byte) (data [][]bool, err error) {
-	r := nbytes.NewReader(bytes)
-	img, err := png.Decode(r)
-	if err == nil {
-		rect := img.Bounds()
-		mx, my := rect.Max.X, rect.Max.Y
-		data = make([][]bool, mx)
-		for x := 0; x < mx; x++ {
-			data[x] = make([]bool, my)
-			for y := 0; y < my; y++ {
-				c := img.At(x, y)
-				r, _, _, _ := c.RGBA()
-				data[x][y] = r == 0
-			}
-		}
+func New() *qrcodeTerminal {
+	// Level Low is sufficient for cleaner/smaller QR codes
+	return &qrcodeTerminal{
+		level: qrcodeRecoveryLevel(qrcode.Low),
 	}
-	return
 }
 
 func (_ *qrcodeTerminal) SetOutput(out io.Writer) {

@@ -2,6 +2,8 @@ package messages
 
 import (
 	"fmt"
+	"encoding/gob"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -17,6 +19,17 @@ type MessageDatabase struct {
 	contactLock   sync.RWMutex
 	chatLock      sync.RWMutex
 	messageLock   sync.RWMutex
+	saveLock      sync.Mutex
+	dirty         bool
+	dirtyLock     sync.RWMutex
+}
+
+// Data dump struct for gob encoding
+type storageDump struct {
+	Messages     map[string][]Message
+	MessagesById map[string]Message
+	Chats        map[string]Chat
+	Contacts     map[string]Contact
 }
 
 // Initializes the message database
@@ -25,6 +38,100 @@ func (md *MessageDatabase) Init() {
 	md.messagesById = make(map[string]Message)
 	md.chats = make(map[string]Chat)
 	md.contacts = make(map[string]Contact)
+}
+
+// Checks if database needs saving
+func (md *MessageDatabase) IsDirty() bool {
+	md.dirtyLock.RLock()
+	defer md.dirtyLock.RUnlock()
+	return md.dirty
+}
+
+// Marks database as clean
+func (md *MessageDatabase) MarkClean() {
+	md.dirtyLock.Lock()
+	defer md.dirtyLock.Unlock()
+	md.dirty = false
+}
+
+// Marks database as dirty
+func (md *MessageDatabase) MarkDirty() {
+	md.dirtyLock.Lock()
+	defer md.dirtyLock.Unlock()
+	md.dirty = true
+}
+
+// Save persists the database to a file
+func (md *MessageDatabase) Save(filePath string) error {
+	md.saveLock.Lock()
+	defer md.saveLock.Unlock()
+
+	md.messageLock.RLock()
+	defer md.messageLock.RUnlock()
+	md.chatLock.RLock()
+	defer md.chatLock.RUnlock()
+	md.contactLock.RLock()
+	defer md.contactLock.RUnlock()
+
+	data := storageDump{
+		Messages:     md.messages,
+		MessagesById: md.messagesById,
+		Chats:        md.chats,
+		Contacts:     md.contacts,
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := gob.NewEncoder(file)
+	err = encoder.Encode(data)
+	if err == nil {
+		md.MarkClean()
+	}
+	return err
+}
+
+// Load restores the database from a file
+func (md *MessageDatabase) Load(filePath string) error {
+	file, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	defer file.Close()
+
+	var data storageDump
+	decoder := gob.NewDecoder(file)
+	if err := decoder.Decode(&data); err != nil {
+		return err
+	}
+
+	md.messageLock.Lock()
+	defer md.messageLock.Unlock()
+	md.chatLock.Lock()
+	defer md.chatLock.Unlock()
+	md.contactLock.Lock()
+	defer md.contactLock.Unlock()
+
+	if data.Messages != nil {
+		md.messages = data.Messages
+	}
+	if data.MessagesById != nil {
+		md.messagesById = data.MessagesById
+	}
+	if data.Chats != nil {
+		md.chats = data.Chats
+	}
+	if data.Contacts != nil {
+		md.contacts = data.Contacts
+	}
+
+	return nil
 }
 
 // Adds a message to the database
@@ -60,6 +167,7 @@ func (md *MessageDatabase) AddMessage(msg Message) bool {
 	// Update or create chat
 	md.updateChatFromMessage(msg)
 	
+	md.MarkDirty()
 	return true
 }
 
@@ -114,6 +222,9 @@ func (md *MessageDatabase) AddChat(chat Chat) {
 	md.chatLock.Lock()
 	defer md.chatLock.Unlock()
 	md.chats[chat.Id] = chat
+	md.dirtyLock.Lock()
+	md.dirty = true
+	md.dirtyLock.Unlock()
 }
 
 // Add contact to database
@@ -121,6 +232,9 @@ func (md *MessageDatabase) AddContact(contact Contact) {
 	md.contactLock.Lock()
 	defer md.contactLock.Unlock()
 	md.contacts[contact.Id] = contact
+	md.dirtyLock.Lock()
+	md.dirty = true
+	md.dirtyLock.Unlock()
 }
 
 // NewUnreadChat marks a chat as having unread messages
@@ -130,6 +244,7 @@ func (md *MessageDatabase) NewUnreadChat(chatId string) {
 	if chat, ok := md.chats[chatId]; ok {
 		chat.Unread++
 		md.chats[chatId] = chat
+		md.MarkDirty()
 	}
 }
 
