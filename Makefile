@@ -18,5 +18,11 @@ get:
 update:
 	go get -u
 
+test:
+	go test -race ./...
+
+vet:
+	go vet ./...
+
 release:
 	./release.sh
