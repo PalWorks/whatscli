@@ -36,7 +36,7 @@ type storageDump struct {
 }
 
 // Initializes the message database with SQLite
-func (md *MessageDatabase) Init() {
+func (md *MessageDatabase) Init() error {
 	// Initialize legacy maps for now to prevent nil pointer panics in existing code
 	md.messages = make(map[string][]Message)
 	md.messagesById = make(map[string]Message)
@@ -44,9 +44,9 @@ func (md *MessageDatabase) Init() {
 
 	// Initialize SQLite
 	dbPath := config.GetSessionFilePath() + "_meta.db"
-	db, err := sql.Open("sqlite3", dbPath)
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
-		panic(fmt.Sprintf("Failed to open metadata db: %v", err))
+		return fmt.Errorf("failed to open metadata db: %w", err)
 	}
 	md.db = db
 
@@ -63,7 +63,7 @@ func (md *MessageDatabase) Init() {
 	`
 	_, err = md.db.Exec(query)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create conversations table: %v", err))
+		return fmt.Errorf("failed to create conversations table: %w", err)
 	}
 
 	// Create messages table (Phase 5)
@@ -83,8 +83,10 @@ func (md *MessageDatabase) Init() {
 	`
 	_, err = md.db.Exec(queryMsgs)
 	if err != nil {
-		panic(fmt.Sprintf("Failed to create messages table: %v", err))
+		return fmt.Errorf("failed to create messages table: %w", err)
 	}
+
+	return nil
 }
 
 // Checks if database needs saving (Legacy support)

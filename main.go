@@ -61,7 +61,10 @@ func main() {
 	}
 	uiHandler = UiHandler{}
 	sessionManager = &messages.SessionManager{}
-	sessionManager.Init(uiHandler)
+	if err := sessionManager.Init(uiHandler); err != nil {
+		fmt.Printf("Failed to initialize session: %v\n", err)
+		return
+	}
 
 	app = tview.NewApplication()
 
@@ -95,7 +98,6 @@ func main() {
 	PrintHelp()
 
 	textInput = tview.NewInputField()
-	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	textInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background]) // Matches background, removing blue fill
 	textInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
@@ -160,9 +162,6 @@ func main() {
 }
 
 // SetupLeftPane initializes the left panel with Status, Chats, and Groups
-// SetupLeftPane initializes the left panel with Status, Chats, and Groups
-// Left Pane Global
-// SetupLeftPane creates the left side panel with Status, Chats, and Groups
 func SetupLeftPane() *tview.Flex {
 	// 1. Status Section
 	statusTable = tview.NewTable()
@@ -674,7 +673,6 @@ func LoadShortcuts() {
 	statusTable.SetInputCapture(keysStatusPanel.Capture)
 }
 
-// prints help to chat view
 // prints help to chat view
 func PrintHelp() {
 	cmdPrefix := config.Config.General.CmdPrefix

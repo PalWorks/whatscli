@@ -47,9 +47,11 @@ type SessionManager struct {
 }
 
 // initialize the SessionManager
-func (sm *SessionManager) Init(handler UiMessageHandler) {
+func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	sm.db = &MessageDatabase{}
-	sm.db.Init()
+	if err := sm.db.Init(); err != nil {
+		return fmt.Errorf("database initialization failed: %w", err)
+	}
 	// Load existing data
 	sm.db.Load(config.GetSessionFilePath() + ".gob")
 
@@ -82,6 +84,7 @@ func (sm *SessionManager) Init(handler UiMessageHandler) {
 	sm.ChatChannel = make(chan Chat, 10)
 	sm.TextChannel = make(chan *waProto.Message, 10)
 	sm.eventHandler = &eventHandler{sm: sm}
+	return nil
 }
 
 // starts the receiver and message handling go routine
@@ -369,10 +372,6 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 			} else if qrTimeout == 0 && currentQR != "" {
 				// Prevent negative countdown, just show waiting
 				qrTimeout = -1
-				go sm.uiHandler.Clear() // Clear the QR to avoid confusion or just keep it?
-				// Better to keep it but change the title?
-				// The UpdateQR function takes logic.
-				// Let's just update the text manually for now.
 				sm.uiHandler.UpdateQR(currentQR, qrCount, 0) // Show 0s
 			}
 		}
