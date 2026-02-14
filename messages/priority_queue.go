@@ -31,7 +31,7 @@ func (pq PriorityQueue) Swap(i, j int) {
 	pq[j].Index = j
 }
 
-// Push adds an item to the queue. 
+// Push adds an item to the queue.
 // DO NOT use this directly; use heap.Push(pq, item).
 func (pq *PriorityQueue) Push(x interface{}) {
 	n := len(*pq)

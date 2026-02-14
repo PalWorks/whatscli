@@ -5,32 +5,39 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
-	"sort"
 
 	"code.rocketnine.space/tslocum/cbind"
+	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
 	"github.com/normen/whatscli/config"
 	"github.com/normen/whatscli/messages"
 	"github.com/rivo/tview"
 	"github.com/skratchdot/open-golang/open"
-	"github.com/zyedidia/clipboard"
 )
 
-var VERSION string = "v1.0.29-cleanup"
+var VERSION string = "v1.0.40"
 
 var sndTxt string = ""
 var currentReceiver messages.Chat = messages.Chat{}
 var curRegions []messages.Message
 
 var textView *tview.TextView
+var leftPane *tview.Flex
 var chatTable *tview.Table
+var groupTable *tview.Table
+var statusTable *tview.Table
+var chatHeader *tview.TextView
+var groupHeader *tview.TextView
 var textInput *tview.InputField
 var topBar *tview.TextView
-var infoBar *tview.TextView
+
+// var topBar *tview.TextView // Removed duplicate
 
 var app *tview.Application
+var mouseState bool = true // Track mouse state
 
 var sessionManager *messages.SessionManager
 
@@ -41,6 +48,7 @@ var uiHandler messages.UiMessageHandler
 // Chat list state for lazy loading
 var allChats []*messages.Conversation
 var chatLimit int = 50
+
 const batchSize = 50
 
 func main() {
@@ -70,9 +78,7 @@ func main() {
 	topBar.SetText("[::b] WhatsCLI " + VERSION + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
 	topBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 
-	infoBar = tview.NewTextView()
-	infoBar.SetDynamicColors(true)
-	UpdateStatusBar(messages.SessionStatus{})
+	// Status Bar removed as per new layout
 
 	textView = tview.NewTextView().
 		SetDynamicColors(true).
@@ -88,13 +94,23 @@ func main() {
 
 	textInput = tview.NewInputField()
 	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
-	textInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.InputBackground])
+	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	textInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background]) // Matches background, removing blue fill
 	textInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
 	textInput.SetChangedFunc(func(change string) {
 		sndTxt = change
 	})
 	textInput.SetDoneFunc(EnterCommand)
 	textInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Key() == tcell.KeyTab {
+			// Jump back to top (Status)
+			if statusTable != nil && statusTable.GetRowCount() > 0 {
+				app.SetFocus(statusTable)
+			} else {
+				app.SetFocus(chatTable)
+			}
+			return nil
+		}
 		if event.Key() == tcell.KeyDown {
 			offset, _ := textView.GetScrollOffset()
 			offset += 1
@@ -123,8 +139,10 @@ func main() {
 	})
 
 	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
-	gridLayout.AddItem(infoBar, 2, 0, 1, 1, 0, 0, false)
-	gridLayout.AddItem(MakeTable(), 1, 0, 1, 1, 0, 0, false)
+	// Replace old layout items with new leftPane
+	// Row 1, Col 0, Span 2 Rows (1 and 2), Width 1
+	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
+
 	gridLayout.AddItem(textView, 1, 1, 1, 3, 0, 0, false)
 	gridLayout.AddItem(textInput, 2, 1, 1, 3, 0, 0, false)
 
@@ -139,52 +157,153 @@ func main() {
 	sessionManager.Shutdown()
 }
 
-// creates the Table for chats
-func MakeTable() *tview.Table {
-	chatTable = tview.NewTable().
-		SetSelectable(true, false)
-	chatTable.SetBorder(true).
-		SetTitle("Chats")
-	
-	chatTable.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+// SetupLeftPane initializes the left panel with Status, Chats, and Groups
+// SetupLeftPane initializes the left panel with Status, Chats, and Groups
+// Left Pane Global
+// SetupLeftPane creates the left side panel with Status, Chats, and Groups
+func SetupLeftPane() *tview.Flex {
+	// 1. Status Section
+	statusTable = tview.NewTable()
+	statusTable.SetSelectable(true, false)
+	statusTable.SetBorder(true)
+	statusTable.SetTitle(" Status ")
+	statusTable.SetTitleAlign(tview.AlignCenter)
+	statusTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
 
-	// Selection Changed Func (Navigation)
-	chatTable.SetSelectionChangedFunc(func(row, column int) {
-		cell := chatTable.GetCell(row, column)
-		if cell == nil {
-			return
-		}
-		ref := cell.GetReference()
-		if ref == nil {
-			return
-		}
-		
-		conv := ref.(*messages.Conversation)
-		
-		// Map struct Conversation to legacy Chat for SetDisplayedChat
-		// Note: Unread count might be outdated in legacy Chat struct used by SetDisplayedChat
-		// but SetDisplayedChat mainly needs Name and ID.
-		legacyChat := messages.Chat{
-			Id:      conv.JID,
-			IsGroup: strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
-			Name:    conv.Name,
-			Unread:  int(conv.Unread),
-		}
-		
-		SetDisplayedChat(legacyChat)
+	// 2. Chats Section
+	chatTable = tview.NewTable()
+	chatTable.SetSelectable(true, false)
+	chatTable.SetBorder(true)
+	chatTable.SetTitle(" Chats ")
+	chatTable.SetTitleAlign(tview.AlignCenter)
+	chatTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
 
-		// Infinite scroll trigger: if we are near the bottom, load more
-		if row >= chatLimit-5 && chatLimit < len(allChats) {
+	// 3. Groups Section
+	groupTable = tview.NewTable()
+	groupTable.SetSelectable(true, false)
+	groupTable.SetBorder(true)
+	groupTable.SetTitle(" Groups ")
+	groupTable.SetTitleAlign(tview.AlignCenter)
+	groupTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
+
+	// Helper to update focus appearance (mutually exclusive)
+	setActiveTable := func(active *tview.Table) {
+		tables := []*tview.Table{statusTable, chatTable, groupTable}
+		for _, t := range tables {
+			if t == active {
+				t.SetSelectable(true, false)
+				t.SetSelectedStyle(tcell.StyleDefault.Reverse(true))
+			} else {
+				t.SetSelectable(false, false)
+				t.SetSelectedStyle(tcell.StyleDefault)
+			}
+		}
+	}
+
+	// Define selection handlers
+	statusSelectFunc := func(row, column int) {
+		if statusTable.HasFocus() && row >= 0 && row < statusTable.GetRowCount() {
+			cell := statusTable.GetCell(row, column)
+			if cell != nil {
+				ref := cell.GetReference()
+				if ref != nil {
+					conv := ref.(*messages.Conversation)
+					chat := messages.Chat{
+						Id:          conv.JID,
+						Name:        conv.Name,
+						Unread:      int(conv.Unread),
+						LastMessage: conv.LastMsgTime,
+						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+					}
+					SetDisplayedChat(chat)
+				}
+			}
+		}
+	}
+
+	chatSelectFunc := func(row, column int) {
+		if chatTable.HasFocus() && row >= 0 && row < chatTable.GetRowCount() {
+			cell := chatTable.GetCell(row, column)
+			if cell != nil {
+				ref := cell.GetReference()
+				if ref != nil {
+					conv := ref.(*messages.Conversation)
+					chat := messages.Chat{
+						Id:          conv.JID,
+						Name:        conv.Name,
+						Unread:      int(conv.Unread),
+						LastMessage: conv.LastMsgTime,
+						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+					}
+					SetDisplayedChat(chat)
+				}
+			}
+		}
+		// Infinite scroll trigger for contacts
+		if row >= chatTable.GetRowCount()-5 && chatLimit < len(allChats) {
 			chatLimit += batchSize
 			RenderChatTable()
-			// Restore focus/selection logic is partly handled by tview, 
-			// but we might need to ensure we don't jump top if not needed.
-			// RenderChatTable handles data update. tview Table usually keeps selection 
-			// if the row still exists.
 		}
+	}
+
+	groupSelectFunc := func(row, column int) {
+		if groupTable.HasFocus() && row >= 0 && row < groupTable.GetRowCount() {
+			cell := groupTable.GetCell(row, column)
+			if cell != nil {
+				ref := cell.GetReference()
+				if ref != nil {
+					conv := ref.(*messages.Conversation)
+					chat := messages.Chat{
+						Id:          conv.JID,
+						Name:        conv.Name,
+						Unread:      int(conv.Unread),
+						LastMessage: conv.LastMsgTime,
+						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+					}
+					SetDisplayedChat(chat)
+				}
+			}
+		}
+	}
+
+	// Selection Changed Funcs
+	statusTable.SetSelectionChangedFunc(statusSelectFunc)
+	statusTable.SetFocusFunc(func() {
+		setActiveTable(statusTable)
+		row, col := statusTable.GetSelection()
+		statusSelectFunc(row, col)
 	})
-	
-	return chatTable
+
+	chatTable.SetSelectionChangedFunc(chatSelectFunc)
+	chatTable.SetFocusFunc(func() {
+		setActiveTable(chatTable)
+		row, col := chatTable.GetSelection()
+		chatSelectFunc(row, col)
+	})
+
+	groupTable.SetSelectionChangedFunc(groupSelectFunc)
+	groupTable.SetFocusFunc(func() {
+		setActiveTable(groupTable)
+		row, col := groupTable.GetSelection()
+		groupSelectFunc(row, col)
+	})
+
+	// Initialize styles (start with all inactive)
+	setActiveTable(nil)
+
+	leftPane = tview.NewFlex().SetDirection(tview.FlexRow)
+	// Status (Fixed height: Title/Border + 1 row + Border = 4?)
+	// Let's try height 5 to be safe (Title, TopBorder, Row, BottomBorder... wait)
+	// tview table with border:
+	// Border top, content, border bottom.
+	// If 1 row of content: Top + 1 + Bottom = 3 lines.
+	// Let's give it 3 lines.
+	leftPane.AddItem(statusTable, 3, 1, false)
+
+	leftPane.AddItem(chatTable, 0, 1, true)
+	leftPane.AddItem(groupTable, 0, 1, false)
+
+	return leftPane
 }
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {
@@ -215,17 +334,30 @@ func handleFocusContacts(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleSwitchPanels(ev *tcell.EventKey) *tcell.EventKey {
 	ResetMsgSelection()
-	if !textInput.HasFocus() {
-		app.SetFocus(textInput)
-	} else {
+	focus := app.GetFocus()
+	if focus == textInput {
+		if statusTable != nil && statusTable.GetRowCount() > 0 {
+			app.SetFocus(statusTable)
+		} else {
+			app.SetFocus(chatTable)
+		}
+	} else if focus == statusTable {
 		app.SetFocus(chatTable)
+	} else if focus == chatTable {
+		app.SetFocus(groupTable)
+	} else {
+		if statusTable != nil && statusTable.GetRowCount() > 0 {
+			app.SetFocus(statusTable)
+		} else {
+			app.SetFocus(chatTable)
+		}
 	}
 	return nil
 }
 
 func handleCommand(command string) func(ev *tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		sessionManager.CommandChannel <- messages.Command{command, nil}
+		sessionManager.CommandChannel <- messages.Command{Name: command, Params: nil}
 		return nil
 	}
 }
@@ -234,27 +366,38 @@ func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
 	if hls := textView.GetHighlights(); len(hls) > 0 {
 		for _, val := range curRegions {
 			if val.Id == hls[0] {
-				clipboard.WriteAll(val.ContactId, "clipboard")
-				PrintText("copied id of " + val.ContactName + " to clipboard")
+				err := clipboard.WriteAll(val.ContactId)
+				if err != nil {
+					PrintText("failed to copy: " + err.Error())
+				} else {
+					PrintText("copied id of " + val.ContactName + " to clipboard")
+				}
 			}
 		}
 		ResetMsgSelection()
 	} else if currentReceiver.Id != "" {
-		clipboard.WriteAll(currentReceiver.Id, "clipboard")
-		PrintText("copied id of " + currentReceiver.Name + " to clipboard")
+		err := clipboard.WriteAll(currentReceiver.Id)
+		if err != nil {
+			PrintText("failed to copy: " + err.Error())
+		} else {
+			PrintText("copied id of " + currentReceiver.Name + " to clipboard")
+		}
 	}
 	return nil
 }
 
 func handlePasteUser(ev *tcell.EventKey) *tcell.EventKey {
-	if clip, err := clipboard.ReadAll("clipboard"); err == nil {
-		textInput.SetText(textInput.GetText() + " " + clip)
+	text, err := clipboard.ReadAll()
+	if err != nil {
+		PrintText("failed to paste: " + err.Error())
+		return nil
 	}
+	textInput.SetText(textInput.GetText() + " " + text)
 	return nil
 }
 
 func handleQuit(ev *tcell.EventKey) *tcell.EventKey {
-	sessionManager.CommandChannel <- messages.Command{"disconnect", nil}
+	sessionManager.CommandChannel <- messages.Command{Name: "disconnect", Params: nil}
 	app.Stop()
 	return nil
 }
@@ -264,11 +407,24 @@ func handleHelp(ev *tcell.EventKey) *tcell.EventKey {
 	return nil
 }
 
+func handleToggleMouse(ev *tcell.EventKey) *tcell.EventKey {
+	if mouseState {
+		app.EnableMouse(false)
+		mouseState = false
+		PrintText("[::b]Mouse interaction DISABLED (Native selection enabled)[::-]")
+	} else {
+		app.EnableMouse(true)
+		mouseState = true
+		PrintText("[::b]Mouse interaction ENABLED (App selection enabled)[::-]")
+	}
+	return nil
+}
+
 func handleMessageCommand(command string) func(ev *tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
 		hls := textView.GetHighlights()
 		if len(hls) > 0 {
-			sessionManager.CommandChannel <- messages.Command{command, []string{hls[0]}}
+			sessionManager.CommandChannel <- messages.Command{Name: command, Params: []string{hls[0]}}
 			ResetMsgSelection()
 			app.SetFocus(textInput)
 		}
@@ -303,6 +459,12 @@ func handleChatPanelUp(ev *tcell.EventKey) *tcell.EventKey {
 	row, _ := chatTable.GetSelection()
 	if row > 0 {
 		chatTable.Select(row-1, 0)
+	} else {
+		// Jump to Status if at top
+		if statusTable.GetRowCount() > 0 {
+			app.SetFocus(statusTable)
+			statusTable.Select(0, 0)
+		}
 	}
 	return nil
 }
@@ -311,7 +473,72 @@ func handleChatPanelDown(ev *tcell.EventKey) *tcell.EventKey {
 	row, _ := chatTable.GetSelection()
 	if row < chatTable.GetRowCount()-1 {
 		chatTable.Select(row+1, 0)
+	} else {
+		// Jump to groups if at bottom
+		if groupTable.GetRowCount() > 0 {
+			app.SetFocus(groupTable)
+			// Select first group
+			groupTable.Select(0, 0)
+		}
 	}
+	return nil
+}
+
+func handleGroupPanelUp(ev *tcell.EventKey) *tcell.EventKey {
+	row, _ := groupTable.GetSelection()
+	if row > 0 {
+		groupTable.Select(row-1, 0)
+	} else {
+		// Jump back to chats if at top
+		if chatTable.GetRowCount() > 0 {
+			app.SetFocus(chatTable)
+			// Select last chat
+			chatTable.Select(chatTable.GetRowCount()-1, 0)
+		}
+	}
+	return nil
+}
+
+func handleGroupPanelDown(ev *tcell.EventKey) *tcell.EventKey {
+	row, _ := groupTable.GetSelection()
+	if row < groupTable.GetRowCount()-1 {
+		groupTable.Select(row+1, 0)
+	}
+	return nil
+}
+
+func handleStatusPanelUp(ev *tcell.EventKey) *tcell.EventKey {
+	// Status usually has only 1 item, so maybe no-op or cycle?
+	// If at top, maybe nothing?
+	return nil
+}
+
+func handleStatusPanelDown(ev *tcell.EventKey) *tcell.EventKey {
+	// Jump to Chats
+	if chatTable.GetRowCount() > 0 {
+		app.SetFocus(chatTable)
+		chatTable.Select(0, 0)
+	}
+	return nil
+}
+
+func handleStatusPanelTab(ev *tcell.EventKey) *tcell.EventKey {
+	app.SetFocus(chatTable)
+	return nil
+}
+
+func handleChatPanelTab(ev *tcell.EventKey) *tcell.EventKey {
+	app.SetFocus(groupTable)
+	return nil
+}
+
+func handleGroupPanelTab(ev *tcell.EventKey) *tcell.EventKey {
+	app.SetFocus(textView)
+	return nil
+}
+
+func handleMessagePanelTab(ev *tcell.EventKey) *tcell.EventKey {
+	app.SetFocus(textInput)
 	return nil
 }
 
@@ -379,6 +606,9 @@ func LoadShortcuts() {
 	if err := keyBindings.Set(config.Config.Keymap.CommandHelp, handleHelp); err != nil {
 		PrintErrorMsg("command_help:", err)
 	}
+	// Toggle mouse binding (Hardcoded for now as it's a new feature)
+	keyBindings.SetRune(tcell.ModCtrl, 'p', handleToggleMouse)
+
 	app.SetInputCapture(keyBindings.Capture)
 	// bindings for chat message text view
 	keysMessages := cbind.NewConfiguration()
@@ -417,22 +647,42 @@ func LoadShortcuts() {
 	keysMessages.SetRune(tcell.ModNone, 'G', handleMessagesLast)
 	keysMessages.SetRune(tcell.ModCtrl, 'u', handleMessagesMove(-10))
 	keysMessages.SetRune(tcell.ModCtrl, 'd', handleMessagesMove(10))
+	keysMessages.SetKey(tcell.ModNone, tcell.KeyTab, handleMessagePanelTab)
 	textView.SetInputCapture(keysMessages.Capture)
 	keysChatPanel := cbind.NewConfiguration()
 	keysChatPanel.SetRune(tcell.ModCtrl, 'u', handleChatPanelUp)
 	keysChatPanel.SetRune(tcell.ModCtrl, 'd', handleChatPanelDown)
+	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyUp, handleChatPanelUp)
+	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleChatPanelDown)
+	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleChatPanelTab)
 	chatTable.SetInputCapture(keysChatPanel.Capture)
+
+	keysGroupPanel := cbind.NewConfiguration()
+	keysGroupPanel.SetRune(tcell.ModCtrl, 'u', handleGroupPanelUp)
+	keysGroupPanel.SetRune(tcell.ModCtrl, 'd', handleGroupPanelDown)
+	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyUp, handleGroupPanelUp)
+	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleGroupPanelDown)
+	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleGroupPanelTab)
+	groupTable.SetInputCapture(keysGroupPanel.Capture)
+
+	keysStatusPanel := cbind.NewConfiguration()
+	keysStatusPanel.SetRune(tcell.ModCtrl, 'd', handleStatusPanelDown)
+	keysStatusPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleStatusPanelDown)
+	keysStatusPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleStatusPanelTab)
+	statusTable.SetInputCapture(keysStatusPanel.Capture)
 }
 
 // prints help to chat view
 func PrintHelp() {
 	cmdPrefix := config.Config.General.CmdPrefix
-	fmt.Fprintln(textView, "[-::u]Keys:[-::-]")
+	fmt.Fprintln(textView, "[::b]Keys:[::-]")
 	fmt.Fprintln(textView, "")
 	fmt.Fprintln(textView, "Global")
 	fmt.Fprintln(textView, "[::b] Up/Down[::-] = Scroll history/chats")
 	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.SwitchPanels, "[::-] = Switch input/chats")
 	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.FocusMessages, "[::-] = Focus message panel")
+	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.FocusMessages, "[::-] = Focus message panel")
+	fmt.Fprintln(textView, "[::b] Ctrl+p [::-] = Toggle Mouse (Enable/Disable for text selection)")
 	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.CommandQuit, "[::-] = Exit app")
 	fmt.Fprintln(textView, "")
 	fmt.Fprintln(textView, "[-::-]Message panel[-::-]")
@@ -447,12 +697,14 @@ func PrintHelp() {
 	fmt.Fprintln(textView, "Config file in ->", config.GetConfigFilePath())
 	fmt.Fprintln(textView, "")
 	fmt.Fprintln(textView, "Type [::b]"+cmdPrefix+"commands[::-] to see all commands")
+	fmt.Fprintln(textView, "Version:", VERSION)
 }
 
+// prints help to chat view
 func PrintCommands() {
 	cmdPrefix := config.Config.General.CmdPrefix
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[-::u]Commands:[-::-]")
+	fmt.Fprintln(textView, "[::b]Commands:[::-]")
 	fmt.Fprintln(textView, "")
 	fmt.Fprintln(textView, "[-::-]Global[-::-]")
 	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"connect [::-]or[::b]", config.Config.Keymap.CommandConnect, "[::-] = (Re)Connect to server")
@@ -482,55 +734,35 @@ func PrintCommands() {
 	fmt.Fprintln(textView, "")
 }
 
-// called when text is entered by the user
+// EnterCommand is the DoneFunc for the input field
 func EnterCommand(key tcell.Key) {
-	if sndTxt == "" {
-		return
-	}
-	if key == tcell.KeyEsc {
-		textInput.SetText("")
-		return
-	}
-	cmdPrefix := config.Config.General.CmdPrefix
-	if sndTxt == cmdPrefix+"help" {
-		PrintHelp()
-		textInput.SetText("")
-		return
-	}
-	if sndTxt == cmdPrefix+"commands" {
-		PrintCommands()
-		textInput.SetText("")
-		return
-	}
-	if sndTxt == cmdPrefix+"quit" {
-		sessionManager.CommandChannel <- messages.Command{"disconnect", nil}
-		app.Stop()
-		return
-	}
-	if strings.HasPrefix(sndTxt, cmdPrefix) {
-		cmd := strings.TrimPrefix(sndTxt, cmdPrefix)
-		var params []string
-		if strings.Index(cmd, " ") >= 0 {
-			cmdParts := strings.Split(cmd, " ")
-			cmd = cmdParts[0]
-			params = cmdParts[1:]
+	if key == tcell.KeyEnter {
+		cmd := textInput.GetText()
+		if len(cmd) == 0 {
+			return
 		}
-		sessionManager.CommandChannel <- messages.Command{cmd, params}
+		if strings.HasPrefix(cmd, config.Config.General.CmdPrefix) {
+			input := strings.Fields(cmd)
+			// Input[0] is the command (e.g., "/help")
+			// We remove the prefix to get "help"
+			cm := strings.TrimPrefix(input[0], config.Config.General.CmdPrefix)
+			var params []string
+			if len(input) > 1 {
+				params = input[1:]
+			}
+			sessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
+		} else {
+			if currentReceiver.Id == "" {
+				PrintText("no receiver")
+				textInput.SetText("")
+				return
+			}
+			sessionManager.CommandChannel <- messages.Command{Name: "send", Params: []string{currentReceiver.Id, cmd}}
+		}
 		textInput.SetText("")
-		return
-	}
-	if currentReceiver.Id == "" {
-		PrintText("no receiver")
+	} else if key == tcell.KeyEsc {
 		textInput.SetText("")
-		return
 	}
-	// no command, send as message
-	msg := messages.Command{
-		Name:   "send",
-		Params: []string{currentReceiver.Id, sndTxt},
-	}
-	sessionManager.CommandChannel <- msg
-	textInput.SetText("")
 }
 
 // get the next message id to select (highlighted + offset)
@@ -629,17 +861,16 @@ func UpdateStatusBar(statusInfo messages.SessionStatus) {
 	}
 	out += ")[::-] "
 	out += statusInfo.LastSeen
-	infoBar.SetText(out)
-	//infoBar.SetText("🔋: ??%")
+	// InfoBar removed
+	// infoBar.SetText(out)
 }
 
 // sets the current chat, loads text from storage to TextView
-func SetDisplayedChat(wid messages.Chat) {
-	//TODO: how to get chat to set
-	currentReceiver = wid
+func SetDisplayedChat(chat messages.Chat) {
+	currentReceiver = chat
 	textView.Clear()
-	textView.SetTitle(wid.Name)
-	sessionManager.CommandChannel <- messages.Command{"select", []string{currentReceiver.Id}}
+	textView.SetTitle(chat.Name)
+	sessionManager.CommandChannel <- messages.Command{Name: "select", Params: []string{currentReceiver.Id}}
 }
 
 // get a string representation of all messages for chat
@@ -653,7 +884,7 @@ func getMessagesString(msgs []messages.Message) string {
 }
 
 // create a formatted string with regions based on message ID from a text message
-//TODO: optimize, use Sprintf etc
+// TODO: optimize, use Sprintf etc
 func getTextMessageString(msg *messages.Message) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
@@ -709,11 +940,11 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 		// Update the store
 		allChats = make([]*messages.Conversation, len(pq))
 		copy(allChats, pq)
-		
+
 		// Sort the full list once
 		sort.Slice(allChats, func(i, j int) bool {
 			a, b := allChats[i], allChats[j]
-			
+
 			// Pinned check
 			if a.IsPinned && !b.IsPinned {
 				return true
@@ -721,75 +952,109 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 			if !a.IsPinned && b.IsPinned {
 				return false
 			}
-			
+
 			// Time check (descending)
 			return a.LastMsgTime > b.LastMsgTime
 		})
-		
+
 		// Reset limit if list seems to be refreshed significantly, or keep it?
 		// For now, let's keep it to grow naturally, but maybe reset on big reloads?
 		// If we reload everything (e.g. startup), reset to batchSize.
 		// A simple heuristic: if limit is huge but len is small, reset?
-		// Or just always reset on full update? User might lose position if we reset 
-		// and they were scrolled down. 
+		// Or just always reset on full update? User might lose position if we reset
+		// and they were scrolled down.
 		// BUT `UpdateChatList` is usually called on sync/init.
 		// Let's reset limit to batchSize on full update to keep it clean.
 		chatLimit = batchSize
-		
+
 		RenderChatTable()
 	})
 }
 
 // RenderChatTable renders the table based on allChats and chatLimit
 func RenderChatTable() {
-	// Snapshot current selection
-	row, col := chatTable.GetSelection()
+	// Snapshot current selection ??
+	rowS, _ := statusTable.GetSelection()
+	rowC, _ := chatTable.GetSelection()
+	rowG, _ := groupTable.GetSelection()
 
 	displayList := allChats
 	if len(displayList) > chatLimit {
 		displayList = displayList[:chatLimit]
 	}
 
+	statusTable.Clear()
 	chatTable.Clear()
-	
-	for i, conv := range displayList {
+	groupTable.Clear()
+
+	sIdx := 0
+	cIdx := 0
+	gIdx := 0
+
+	for _, conv := range displayList {
 		// Name cell
 		name := conv.Name
 		if name == "" {
 			name = conv.JID // Fallback
 		}
-		
+
 		// Unread status
 		if conv.Unread > 0 {
 			name += " ([" + config.Config.Colors.UnreadCount + "]" + fmt.Sprint(conv.Unread) + "[-])"
 		}
-		
+
 		// Pinned indicator
 		if conv.IsPinned {
 			name = "📌 " + name
 		}
-		
+
 		cell := tview.NewTableCell(name).
 			SetReference(conv).
 			SetExpansion(1).
 			SetSelectable(true)
-			
-		// Color
-		isGroup := strings.HasSuffix(conv.JID, messages.GROUPSUFFIX)
-		if isGroup {
+
+		// Color & Split
+		if conv.JID == messages.STATUSSUFFIX {
+			// Status
+			cell.SetTextColor(tcell.ColorYellow) // Distinct color
+			statusTable.SetCell(sIdx, 0, cell)
+			sIdx++
+		} else if strings.HasSuffix(conv.JID, messages.GROUPSUFFIX) {
+			// Group
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListGroup])
+			groupTable.SetCell(gIdx, 0, cell)
+			gIdx++
 		} else {
+			// Contact
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListContact])
+			chatTable.SetCell(cIdx, 0, cell)
+			cIdx++
 		}
-		
-		chatTable.SetCell(i, 0, cell)
 	}
-	
+
 	// Restore selection
-	if row < chatTable.GetRowCount() {
-		chatTable.Select(row, col)
-	} else if chatTable.GetRowCount() > 0 {
-		chatTable.Select(chatTable.GetRowCount()-1, 0)
+	if statusTable.GetRowCount() > 0 {
+		if rowS < statusTable.GetRowCount() {
+			statusTable.Select(rowS, 0)
+		} else {
+			statusTable.Select(0, 0)
+		}
+	}
+
+	if chatTable.GetRowCount() > 0 {
+		if rowC < chatTable.GetRowCount() {
+			chatTable.Select(rowC, 0)
+		} else {
+			chatTable.Select(0, 0)
+		}
+	}
+
+	if groupTable.GetRowCount() > 0 {
+		if rowG < groupTable.GetRowCount() {
+			groupTable.Select(rowG, 0)
+		} else {
+			groupTable.Select(0, 0)
+		}
 	}
 }
 
@@ -847,18 +1112,36 @@ func (u UiHandler) Clear() {
 	})
 }
 
+func (u UiHandler) PrintCommands() {
+	go app.QueueUpdateDraw(func() {
+		PrintCommands()
+	})
+}
+
+func (u UiHandler) PrintHelp() {
+	go app.QueueUpdateDraw(func() {
+		PrintHelp()
+	})
+}
+
+func (u UiHandler) Quit() {
+	go app.QueueUpdateDraw(func() {
+		app.Stop()
+	})
+}
+
 func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 	// Pre-calculate the content to ensure atomic rendering
 	// Translate ANSI codes in the QR string to tview tags to avoid using ANSIWriter during draw
 	qtTrans := tview.TranslateANSI(qr)
-	
+
 	go app.QueueUpdateDraw(func() {
 		// 1. Clear Screen
 		textView.Clear()
-		
+
 		// 2. Print Help
 		PrintHelp()
-		
+
 		// 3. Construct Full Output (Header + QR)
 		var output string
 		if timeout > 0 {
@@ -866,9 +1149,9 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 		} else {
 			output = fmt.Sprintf("\n\n=== QR Code Generated (Attempt %d) - Awaiting new QR code from WhatsApp Server ===\n\nScan this with WhatsApp:\n\n", attempt)
 		}
-		
+
 		output += qtTrans + "\n"
-		
+
 		// 4. Atomic Write (Standard Writer)
 		fmt.Fprint(textView, output)
 	})

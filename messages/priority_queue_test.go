@@ -30,7 +30,7 @@ func TestPriorityQueue(t *testing.T) {
 	}
 
 	// Test Pop Order
-	// Expected Order: 
+	// Expected Order:
 	// 1. New Pinned (c4) - Pinned & Newer than c3
 	// 2. Old Pinned (c3) - Pinned
 	// 3. New Unpinned (c2) - Unpinned & Newer than c1
@@ -50,12 +50,12 @@ func TestPriorityQueue(t *testing.T) {
 	heap.Push(&pq, c1)
 	heap.Push(&pq, c2)
 	heap.Push(&pq, c3)
-	
+
 	// c1 is currently last (Old Unpinned). Let's pin it.
 	// New state: c1 (Pinned, Old), c3 (Pinned, Older), c2 (Unpinned) -> c1 should jump to top or near top?
 	// c3 Time: now-7200. c1 Time: now-3600.
 	// If both pinned, c1 is newer, so c1 should be #1.
-	
+
 	pq.Update(c1, c1.LastMsgTime, true) // Pin c1
 
 	first := heap.Pop(&pq).(*Conversation)

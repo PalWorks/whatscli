@@ -1,7 +1,5 @@
-//this package manages the messages
+// this package manages the messages
 package messages
-
-
 
 // TODO: move these funcs/interface to channels
 type UiMessageHandler interface {
@@ -18,6 +16,9 @@ type UiMessageHandler interface {
 	ShowColorList()
 	Clear()
 	UpdateQR(qr string, attempt int, timeout int)
+	PrintCommands()
+	PrintHelp()
+	Quit()
 }
 
 // data struct for current session status
@@ -91,4 +92,3 @@ type Conversation struct {
 	IsPinned    bool
 	Index       int // Heap index for internal use
 }
-

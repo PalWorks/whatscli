@@ -124,20 +124,20 @@ func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
 	// We rely on the terminal's default colors:
 	// Default: Black BG, White FG.
 	// We want: White blocks (Background) and Black blocks (Foreground/Data).
-	
-	// INVERSE (\033[7m): Swaps FG and BG. 
+
+	// INVERSE (\033[7m): Swaps FG and BG.
 	// Space ' ' is usually BG color.
 	// Space + Inverse = FG color (White).
 	// Space + Normal = BG color (Black).
-	
+
 	reset := "\033[0m"
-	
+
 	// Characters
 	// ▀ (Upper Half): Upper=FG(Black), Lower=BG(White)
 	// ▄ (Lower Half): Lower=FG(Black), Upper=BG(White)
-	
+
 	str := "" // Initialize string builder
-	
+
 	rows := len(data)
 	if rows == 0 {
 		return
@@ -147,7 +147,7 @@ func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
 	// Skip margin (Quiet Zone) - standard is 4 modules.
 	// User requested a "Small Border" (2 modules).
 	margin := 2
-	
+
 	// Safety check: if data provided is smaller than 2*margin, don't strip
 	if rows <= 2*margin || cols <= 2*margin {
 		margin = 0
@@ -165,18 +165,18 @@ func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
 			// But wait, standard QR code: Dark modules on Light background.
 			// data[][] = true means "Dark Module".
 			// data[][] = false means "Light Module".
-			
+
 			// We want to print:
 			// True = Black (Terminal Background, usually) -> Wait, if terminal is Black BG, we want True to be Light?
 			// NO. QR Code: Dark Modules on Light Background.
 			// Most terminals: White FG, Black BG.
 			// So we want Background (False) to be White (FG color).
 			// And Modules (True) to be Black (BG color).
-			
+
 			// Let's stick to standard printing:
 			// We want 'False' (Background) to look White (Light).
 			// We want 'True' (Module) to look Black (Dark).
-			
+
 			// Explicit ANSI Colors (Black on Bright White)
 			// FG=Black (\033[30m), BG=Bright White (\033[107m)
 			// This ensures high contrast (Pure White vs Black).
@@ -184,19 +184,19 @@ func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
 			//   (Space)      -> Uses BG Color (Bright White)
 			// ▀ (Upper Half) -> Top=FG(Black), Bot=BG(Bright White)
 			// ▄ (Lower Half) -> Top=BG(Bright White), Bot=FG(Black)
-			
+
 			colorPrefix := "\033[30m\033[107m" // Black FG, Bright White BG
-			
-			if top && bot { 
+
+			if top && bot {
 				// Both Black -> Full Block (FG=Black)
 				str += colorPrefix + "█" + reset
-			} else if !top && !bot { 
+			} else if !top && !bot {
 				// Both White -> Space (BG=White)
 				str += colorPrefix + " " + reset
-			} else if top && !bot { 
+			} else if top && !bot {
 				// Top Black, Bot White -> Upper Half '▀' (Top=FG=Black, Bot=BG=White)
 				str += colorPrefix + "▀" + reset
-			} else { 
+			} else {
 				// Top White, Bot Black -> Lower Half '▄' (Bot=FG=Black, Top=BG=White)
 				str += colorPrefix + "▄" + reset
 			}

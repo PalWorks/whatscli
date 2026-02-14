@@ -42,7 +42,6 @@ func (md *MessageDatabase) Init() {
 	md.messagesById = make(map[string]Message)
 	md.chats = make(map[string]Chat)
 
-
 	// Initialize SQLite
 	dbPath := config.GetSessionFilePath() + "_meta.db"
 	db, err := sql.Open("sqlite3", dbPath)
@@ -119,12 +118,10 @@ func (md *MessageDatabase) Save(filePath string) error {
 	md.chatLock.RLock()
 	defer md.chatLock.RUnlock()
 
-
 	data := storageDump{
 		Messages:     md.messages,
 		MessagesById: md.messagesById,
 		Chats:        md.chats,
-
 	}
 
 	file, err := os.Create(filePath)
@@ -163,7 +160,6 @@ func (md *MessageDatabase) Load(filePath string) error {
 	md.chatLock.Lock()
 	defer md.chatLock.Unlock()
 
-
 	// Phase 6: DO NOT load messages into memory.
 	// We rely on SQLite now.
 	// if data.Messages != nil {
@@ -176,7 +172,6 @@ func (md *MessageDatabase) Load(filePath string) error {
 	if data.Chats != nil {
 		md.chats = data.Chats
 	}
-
 
 	return nil
 }
@@ -191,7 +186,7 @@ func (md *MessageDatabase) MigrateToSQLite() {
 	var countC int
 	errC := rowC.Scan(&countC)
 	if errC == nil && countC == 0 && len(md.chats) > 0 {
-		fmt.Println("Migrating chats to conversations table...")
+		// fmt.Println("Migrating chats to conversations table...")
 		tx, _ := md.db.Begin()
 		stmt, _ := tx.Prepare(`INSERT OR IGNORE INTO conversations (jid, name, last_msg_time, preview, unread, is_pinned) VALUES (?, ?, ?, ?, ?, ?)`)
 		for _, chat := range md.chats {
@@ -210,7 +205,7 @@ func (md *MessageDatabase) MigrateToSQLite() {
 		return // Already populated
 	}
 
-	fmt.Println("Migrating messages to SQLite...")
+	// fmt.Println("Migrating messages to SQLite...")
 
 	// If md.messages is empty (because Load skipped it), we need to read the Gob file again just for migration
 	sourceMessages := md.messages
@@ -230,47 +225,48 @@ func (md *MessageDatabase) MigrateToSQLite() {
 	if len(sourceMessages) == 0 {
 		return // Nothing to migrate
 	}
-	
+
 	md.messageLock.RLock()
 	defer md.messageLock.RUnlock()
-	
+
 	count = 0
 	tx, err := md.db.Begin()
 	if err != nil {
-		fmt.Printf("Migration failed to start transaction: %v\n", err)
+		// uiHandler.PrintError(fmt.Sprintf("Migration failed to start transaction: %v", err))
 		return
 	}
-	
+
 	stmt, err := tx.Prepare(`
 		INSERT OR IGNORE INTO messages 
 		(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text) 
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`)
 	if err != nil {
-		fmt.Printf("Migration failed to prepare statement: %v\n", err)
+		// fmt.Printf("Migration failed to prepare statement: %v\n", err)
+		tx.Rollback()
 		return
 	}
 	defer stmt.Close()
-	
+
 	for _, msgs := range sourceMessages {
 		for _, msg := range msgs {
 			_, err := stmt.Exec(
-				msg.Id, msg.ChatId, msg.ContactId, msg.ContactName, 
+				msg.Id, msg.ChatId, msg.ContactId, msg.ContactName,
 				msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 			)
 			if err != nil {
-				fmt.Printf("Failed to migrate message %s: %v\n", msg.Id, err)
+				// fmt.Printf("Failed to migrate message %s: %v\n", msg.Id, err)
 			} else {
 				count++
 			}
 		}
 	}
-	
+
 	err = tx.Commit()
 	if err != nil {
-		fmt.Printf("Migration failed to commit: %v\n", err)
+		// uiHandler.PrintError(fmt.Sprintf("Migration failed to commit: %v", err))
 	} else {
-		fmt.Printf("Migrated %d messages to SQLite\n", count)
+		// fmt.Printf("Migrated %d messages to SQLite\n", count)
 	}
 }
 
@@ -281,13 +277,12 @@ func (md *MessageDatabase) AddMessageToDB(msg Message) error {
 	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text) 
 	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
-	_, err := md.db.Exec(query, 
-		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName, 
+	_, err := md.db.Exec(query,
+		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName,
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 	)
 	return err
 }
-
 
 // --- Legacy Methods (Kept for compatibility until Phase 3/6) ---
 
@@ -303,6 +298,7 @@ func (md *MessageDatabase) AddMessage(msg Message) bool {
 	}
 	return true
 }
+
 // UpsertConversation updates or inserts a conversation
 func (md *MessageDatabase) UpsertConversation(c Conversation) error {
 	query := `
@@ -340,8 +336,6 @@ func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
 
 // --- Legacy Methods (Kept for compatibility until Phase 3/6) ---
 
-
-
 // Add chat to database (Legacy)
 func (md *MessageDatabase) AddChat(chat Chat) {
 	md.chatLock.Lock()
@@ -349,8 +343,6 @@ func (md *MessageDatabase) AddChat(chat Chat) {
 	md.chats[chat.Id] = chat
 	md.MarkDirty()
 }
-
-
 
 // NewUnreadChat marks a chat as having unread messages (Legacy)
 func (md *MessageDatabase) NewUnreadChat(chatId string) {
@@ -411,7 +403,3 @@ func (md *MessageDatabase) GetMessageInfo(wid string) string {
 	// Simplified stub for now
 	return "Info not available in legacy transition"
 }
-
-
-
-

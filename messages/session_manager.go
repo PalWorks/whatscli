@@ -52,27 +52,27 @@ func (sm *SessionManager) Init(handler UiMessageHandler) {
 	sm.db.Init()
 	// Load existing data
 	sm.db.Load(config.GetSessionFilePath() + ".gob")
-	
+
 	// Phase 5: Ensure messages are migrated to SQLite
 	// This performs a one-time migration of loaded Gob data to SQLite
 	sm.db.MigrateToSQLite()
-	
+
 	// Initialize Priority Queue
 	sm.priorityQueue = make(PriorityQueue, 0)
 	heap.Init(&sm.priorityQueue)
-	
+
 	// Load conversations from SQLite into PriorityQueue
 	convs, err := sm.db.GetConversations()
 	if err == nil {
 		for _, c := range convs {
 			// We need to pass pointers to the PQ
 			// Make a copy to avoid pointing to loop variable
-			conv := c 
+			conv := c
 			heap.Push(&sm.priorityQueue, &conv)
 		}
 	} else {
 		// Log error but don't crash, potentially first run
-		fmt.Printf("Failed to load conversations for PQ: %v\n", err)
+		// fmt.Printf("Failed to load conversations for PQ: %v\n", err)
 	}
 
 	sm.uiHandler = handler
@@ -101,12 +101,12 @@ func (sm *SessionManager) runManager() error {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to create WhatsApp connection: %v", err))
 		return err
 	}
-	
+
 	if client == nil {
 		sm.uiHandler.PrintError(errors.New("could not establish WhatsApp connection"))
 		return errors.New("could not establish WhatsApp connection")
 	}
-	
+
 	// Run login asynchronously to allow command processing
 	go func() {
 		err = sm.loginWithConnection(client)
@@ -114,7 +114,7 @@ func (sm *SessionManager) runManager() error {
 			sm.uiHandler.PrintError(err)
 		}
 	}()
-	
+
 	// Start auto-saver
 	go sm.startAutoSaver()
 
@@ -139,13 +139,13 @@ func (sm *SessionManager) runManager() error {
 			} else {
 				sm.statusInfo.Connected = statusMsg.connected
 			}
-			
+
 			if sm.client != nil {
 				sm.statusInfo.Connected = sm.client.IsConnected()
 			} else {
 				sm.statusInfo.Connected = false
 			}
-			
+
 			sm.uiHandler.SetStatus(sm.statusInfo)
 			if prevStatus != sm.statusInfo.Connected {
 				if sm.statusInfo.Connected {
@@ -200,23 +200,23 @@ func (sm *SessionManager) getConnection() (*whatsmeow.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to connect to database: %v", err)
 		}
-		
+
 		// Get device store
 		deviceStore, err := container.GetFirstDevice(context.Background())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get device: %v", err)
 		}
-		
+
 		// Create client
 		client := whatsmeow.NewClient(deviceStore, waLog.Noop)
-		
+
 		// Set event handler
 		client.AddEventHandler(sm.eventHandler.Handle)
-		
+
 		sm.client = client
 		sm.container = container
 	}
-	
+
 	return sm.client, nil
 }
 
@@ -225,16 +225,16 @@ func (sm *SessionManager) getConnection() (*whatsmeow.Client, error) {
 func (sm *SessionManager) login() error {
 	// Clear any existing connection for retry
 	sm.client = nil
-	
+
 	client, err := sm.getConnection()
 	if err != nil {
 		return fmt.Errorf("failed to create WhatsApp connection: %v", err)
 	}
-	
+
 	if client == nil {
 		return errors.New("could not establish WhatsApp connection")
 	}
-	
+
 	// Try to log in
 	return sm.loginWithConnection(client)
 }
@@ -243,7 +243,7 @@ func (sm *SessionManager) login() error {
 // new one using qr scanned on the terminal.
 func (sm *SessionManager) loginWithConnection(client *whatsmeow.Client) error {
 	sm.uiHandler.PrintText("connecting..")
-	
+
 	// Ensure connection is clean before starting
 	if client.IsConnected() {
 		client.Disconnect()
@@ -251,27 +251,27 @@ func (sm *SessionManager) loginWithConnection(client *whatsmeow.Client) error {
 		// Small pause to ensure disconnection completes
 		time.Sleep(500 * time.Millisecond)
 	}
-	
+
 	// Check if we need to pair
 	if client.Store.ID == nil {
 		// Need to pair with QR code
 		return sm.loginWithQRCode(client)
 	}
-	
+
 	// We have credentials, try connecting
 	err := client.Connect()
 	if err != nil {
 		// If we get authentication errors, we may need to re-pair
-		if errors.Is(err, whatsmeow.ErrNotConnected) || 
-		   errors.Is(err, whatsmeow.ErrNotLoggedIn) {
+		if errors.Is(err, whatsmeow.ErrNotConnected) ||
+			errors.Is(err, whatsmeow.ErrNotLoggedIn) {
 			sm.uiHandler.PrintText("Session expired, need to scan QR code again")
-			
+
 			// Clear the device from the store
 			err := client.Store.Delete(context.Background())
 			if err != nil {
 				return fmt.Errorf("failed to clear expired session: %v", err)
 			}
-			
+
 			// Recreate the client
 			sm.mu.Lock()
 			sm.client = nil
@@ -280,27 +280,27 @@ func (sm *SessionManager) loginWithConnection(client *whatsmeow.Client) error {
 			if err != nil {
 				return fmt.Errorf("failed to create new connection: %v", err)
 			}
-			
+
 			// Try pairing
 			return sm.loginWithQRCode(client)
 		}
-		
+
 		return fmt.Errorf("connection failed: %v", err)
 	}
-	
+
 	sm.uiHandler.PrintText("Session restored successfully")
 	sm.StatusChannel <- StatusMsg{true, nil}
-	
+
 	// Load existing chats after successful connection
 	go sm.loadRecentChats()
-	
+
 	return nil
 }
 
 // Helper method to login with QR code
 func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 	sm.uiHandler.PrintText("Please scan the QR code with your phone")
-	
+
 	// Request QR code
 	qrChan, err := client.GetQRChannel(context.Background())
 	if err != nil {
@@ -310,7 +310,7 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 	if err != nil {
 		return fmt.Errorf("error connecting to WhatsApp: %v", err)
 	}
-	
+
 	qrCount := 0
 	currentQR := ""
 	qrTimeout := 0
@@ -331,20 +331,20 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 				// Convert to ASCII QR code and print
 				terminal := qrcode.New()
 				qrStr := terminal.Get(evt.Code)
-				
+
 				currentQR = string(*qrStr)
 				qrTimeout = 20 // Reset countdown to 20s as requested
-				
+
 				// Atomic Update
 				sm.uiHandler.UpdateQR(currentQR, qrCount, qrTimeout)
-				
+
 			} else if evt.Event == "success" {
 				sm.uiHandler.PrintText("Successfully logged in!")
 				sm.StatusChannel <- StatusMsg{true, nil}
-				
+
 				// Load existing chats after successful login
 				go sm.loadRecentChats()
-				
+
 				return nil
 			} else if evt.Event == "timeout" {
 				sm.uiHandler.PrintText("QR code timeout. Waiting for new code...")
@@ -357,9 +357,9 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 				sm.uiHandler.UpdateQR(currentQR, qrCount, qrTimeout)
 			} else if qrTimeout == 0 && currentQR != "" {
 				// Prevent negative countdown, just show waiting
-				qrTimeout = -1 
+				qrTimeout = -1
 				go sm.uiHandler.Clear() // Clear the QR to avoid confusion or just keep it?
-				// Better to keep it but change the title? 
+				// Better to keep it but change the title?
 				// The UpdateQR function takes logic.
 				// Let's just update the text manually for now.
 				sm.uiHandler.UpdateQR(currentQR, qrCount, 0) // Show 0s
@@ -392,10 +392,10 @@ func (sm *SessionManager) loadRecentChats() {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to load contacts for chat list: %v", err))
 			return
 		}
-		
+
 		// Process each contact as a potential chat
 		chatCount := 0
-		
+
 		// Map to track what we've processed to avoid duplicates in PQ if reloading
 		processed := make(map[string]bool)
 
@@ -403,15 +403,15 @@ func (sm *SessionManager) loadRecentChats() {
 			if !contact.Found {
 				continue
 			}
-			
+
 			// Skip non-chat JIDs
 			if jid.Server != "s.whatsapp.net" && jid.Server != "g.us" {
 				continue
 			}
-			
+
 			jidStr := jid.String()
 			processed[jidStr] = true
-			
+
 			// Determine name
 			var name string
 			isGroup := jid.Server == "g.us"
@@ -434,9 +434,9 @@ func (sm *SessionManager) loadRecentChats() {
 
 			// Create/Update Conversation struct
 			// In a real sync, we might want to check the actual last message time.
-			// For now, if it's a new import, use current time. 
+			// For now, if it's a new import, use current time.
 			// If it exists in DB, we should probably prefer the DB's time unless we have new info.
-			
+
 			// Check if exists in PQ (which was loaded from DB) specifically to preserve LastMsgTime
 			var existingConv *Conversation
 			for _, item := range sm.priorityQueue {
@@ -464,7 +464,7 @@ func (sm *SessionManager) loadRecentChats() {
 				lastMsgTime = 0 // Default for new import: 0 means no messages, so bottom of list
 				unread = 0
 				isPinned = false
-				
+
 				newConv := &Conversation{
 					JID:         jidStr,
 					Name:        name,
@@ -473,17 +473,17 @@ func (sm *SessionManager) loadRecentChats() {
 					Unread:      unread,
 					IsPinned:    isPinned,
 				}
-				
+
 				// Persist to SQLite
 				err := sm.db.UpsertConversation(*newConv)
 				if err != nil {
 					sm.uiHandler.PrintError(fmt.Errorf("failed to upsert conversation %s: %v", jidStr, err))
 				}
-				
+
 				// Add to Priority Queue
 				heap.Push(&sm.priorityQueue, newConv)
 			}
-			
+
 			// Legacy support: Add to old maps for now (until Phase 6)
 			chatObj := Chat{
 				Id:          jidStr,
@@ -493,35 +493,33 @@ func (sm *SessionManager) loadRecentChats() {
 				LastMessage: lastMsgTime,
 			}
 			sm.db.AddChat(chatObj)
-			
+
 			chatCount++
 		}
-		
+
 		// Update UI with the new chat list (legacy way for now, Phase 4 uses PQ)
-		// sm.uiHandler.SetChats(sm.db.GetChatIds()) 
-		
+		// sm.uiHandler.SetChats(sm.db.GetChatIds())
+
 		// Phase 4: Use UpdateChatList with PQ
 		// casting PriorityQueue (which is []*Conversation) to []*Conversation
 		sm.uiHandler.UpdateChatList([]*Conversation(sm.priorityQueue))
-		
+
 		sm.uiHandler.PrintText("Chats loaded.")
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
 	}
 }
 
-
-
 // loadRecentMessages loads the most recent messages for a chat
 func (sm *SessionManager) loadRecentMessages(chatJID string) {
 	if sm.client == nil || !sm.client.IsConnected() {
 		return
 	}
-	
+
 	// For now, message history retrieval is limited in whatsmeow
 	// Messages will be populated as they're sent and received
 	// silenced: sm.uiHandler.PrintText(fmt.Sprintf("Message history for %s will be populated as you communicate", chatJID))
-	
+
 	// If this is the currently selected chat, update the UI
 	if chatJID == sm.currentReceiver {
 		screen := sm.getMessages(chatJID)
@@ -562,7 +560,7 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 		}
 		return "Group Chat"
 	}
-	
+
 	// For individual chats, try to get the contact name
 	if sm.client != nil && sm.client.Store != nil {
 		contact, err := sm.client.Store.Contacts.GetContact(context.Background(), jid)
@@ -575,7 +573,7 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 			}
 		}
 	}
-	
+
 	// Fallback to JID User (Phone Number)
 	return jid.User
 }
@@ -605,11 +603,11 @@ func (sm *SessionManager) Shutdown() {
 		sm.started = false
 	}
 	sm.mu.Unlock()
-	
+
 	if sm.db != nil {
 		sm.db.Save(config.GetSessionFilePath() + ".gob")
 	}
-	// Disconnect is handled by the runManager loop via channel close, 
+	// Disconnect is handled by the runManager loop via channel close,
 	// but we can ensure it here too just in case
 	if sm.client != nil && sm.client.IsConnected() {
 		sm.client.Disconnect()
@@ -625,11 +623,11 @@ func (sm *SessionManager) logout() error {
 		sm.mu.Unlock()
 		return nil
 	}
-	
+
 	if sm.client.IsConnected() {
 		sm.client.Disconnect()
 	}
-	
+
 	// Delete device from store
 	if sm.client.Store != nil {
 		err := sm.client.Store.Delete(context.Background())
@@ -637,15 +635,15 @@ func (sm *SessionManager) logout() error {
 			sm.uiHandler.PrintText("Warning: Couldn't properly remove session: " + err.Error())
 		}
 	}
-	
+
 	// Remove the GOB file
 	gobPath := config.GetSessionFilePath() + ".gob"
 	os.Remove(gobPath)
-	
+
 	// Reset client
 	sm.client = nil
 	sm.mu.Unlock()
-	
+
 	sm.uiHandler.PrintText("Successfully logged out")
 	sm.StatusChannel <- StatusMsg{false, nil}
 	return nil
@@ -657,6 +655,12 @@ func (sm *SessionManager) execCommand(command Command) {
 	switch cmd {
 	default:
 		sm.uiHandler.PrintText("[" + config.Config.Colors.Negative + "]Unknown command: [-]" + cmd)
+	case "help":
+		sm.uiHandler.PrintHelp()
+	case "commands":
+		sm.uiHandler.PrintCommands()
+	case "quit":
+		sm.uiHandler.Quit()
 	case "backlog":
 		sm.mu.RLock()
 		receiver := sm.currentReceiver
@@ -669,12 +673,12 @@ func (sm *SessionManager) execCommand(command Command) {
 				sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
 				return
 			}
-			
+
 			sm.uiHandler.PrintText("Retrieving message history...")
-			
+
 			// Get existing messages to compare later
 			existingMessages := sm.db.GetMessages(receiver)
-			
+
 			// Find the ID of the oldest message we have - not used currently but could be in future
 			var oldestTimestamp uint64 = ^uint64(0) // Maximum uint64 value
 			for _, msg := range existingMessages {
@@ -682,24 +686,24 @@ func (sm *SessionManager) execCommand(command Command) {
 					oldestTimestamp = msg.Timestamp
 				}
 			}
-			
+
 			// Try multiple approaches:
 			var messagesFetched bool
-			
+
 			// 1. First try direct message fetch
 			if sm.client != nil && sm.client.IsConnected() {
 				sm.uiHandler.PrintText("Attempting to fetch older messages...")
-				
+
 				// Try to send a simpler read receipt which sometimes triggers history sync
 				receiptType := types.ReceiptTypeRead
 				err := sm.client.MarkRead(context.Background(), []types.MessageID{}, time.Now(), jid, jid, receiptType)
 				if err != nil {
 					sm.uiHandler.PrintText(fmt.Sprintf("Note: Could not send read receipt: %v", err))
 				}
-				
+
 				// Wait a bit
 				time.Sleep(2 * time.Second)
-				
+
 				// Check if we got any new messages
 				updatedMessages := sm.db.GetMessages(sm.currentReceiver)
 				if len(updatedMessages) > len(existingMessages) {
@@ -707,20 +711,20 @@ func (sm *SessionManager) execCommand(command Command) {
 					sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(updatedMessages)-len(existingMessages)))
 				}
 			}
-			
+
 			// 2. If that didn't work, try a presence update which can trigger history sync
 			if !messagesFetched && sm.client != nil && sm.client.IsConnected() {
 				sm.uiHandler.PrintText("Trying alternative method...")
-				
+
 				// Send chat presence - using ChatPresence constants from the types package
 				err = sm.client.SendChatPresence(context.Background(), jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
 				if err != nil {
 					sm.uiHandler.PrintText(fmt.Sprintf("Note: Could not send chat presence: %v", err))
 				}
-				
+
 				// Wait a bit longer for any messages to arrive
 				time.Sleep(3 * time.Second)
-				
+
 				// Check if we got any new messages
 				updatedMessages := sm.db.GetMessages(sm.currentReceiver)
 				if len(updatedMessages) > len(existingMessages) {
@@ -728,15 +732,15 @@ func (sm *SessionManager) execCommand(command Command) {
 					sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(updatedMessages)-len(existingMessages)))
 				}
 			}
-			
+
 			// 3. Last resort: try history sync notification
 			if !messagesFetched && sm.client != nil && sm.client.IsConnected() {
 				sm.uiHandler.PrintText("Trying final method...")
-				
+
 				// Create context with timeout
 				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
-				
+
 				// Create a basic history sync notification
 				historyMsg := &waProto.Message{
 					ProtocolMessage: &waProto.ProtocolMessage{
@@ -748,15 +752,15 @@ func (sm *SessionManager) execCommand(command Command) {
 						Type: waProto.ProtocolMessage_HISTORY_SYNC_NOTIFICATION.Enum(),
 					},
 				}
-				
+
 				// Send it and ignore errors (it may not work)
 				if sm.client != nil {
 					sm.client.SendMessage(ctx, jid, historyMsg)
 				}
-				
+
 				// Wait a bit longer for any messages to arrive
 				time.Sleep(3 * time.Second)
-				
+
 				// Final check if we got any new messages
 				finalMessages := sm.db.GetMessages(sm.currentReceiver)
 				if len(finalMessages) > len(existingMessages) {
@@ -765,9 +769,7 @@ func (sm *SessionManager) execCommand(command Command) {
 					sm.uiHandler.PrintText("No additional messages found. WhatsApp may limit history access.")
 				}
 			}
-			
 
-			
 			// Show the updated message list
 			screen := sm.getMessages(receiver)
 			sm.uiHandler.NewScreen(screen)
@@ -790,7 +792,7 @@ func (sm *SessionManager) execCommand(command Command) {
 			if client.IsConnected() {
 				client.Disconnect()
 			}
-			
+
 			if client.Store != nil {
 				err := client.Store.Delete(context.Background())
 				if err != nil {
@@ -798,18 +800,18 @@ func (sm *SessionManager) execCommand(command Command) {
 				}
 			}
 		}
-		
+
 		sm.client = nil
 		sm.container = nil
 		sm.mu.Unlock()
-		
+
 		// Remove the DB file
 		dbPath := config.GetSessionFilePath() + ".db"
 		err := os.Remove(dbPath)
 		if err != nil && !os.IsNotExist(err) {
 			sm.uiHandler.PrintText("Warning: Couldn't remove database file: " + err.Error())
 		}
-		
+
 		sm.uiHandler.PrintText("Session reset. Use /connect to reconnect with a new QR code.")
 		sm.StatusChannel <- StatusMsg{false, nil}
 	case "disconnect":
@@ -888,40 +890,40 @@ func (sm *SessionManager) sendText(wid string, text string) {
 		sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 		return
 	}
-	
+
 	// Parse JID
 	receiver, err := types.ParseJID(wid)
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
 		return
 	}
-	
+
 	// Create message
 	msg := &waProto.Message{
 		Conversation: proto.String(text),
 	}
-	
+
 	// Send message
 	sm.lastSent = time.Now()
 	resp, err := client.SendMessage(context.Background(), receiver, msg)
-	
+
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to send message: %v", err))
 	} else {
 		// Create a Message struct to save to the database
 		newMsg := Message{
-			Id:          resp.ID,
-			ChatId:      wid,
-			FromMe:      true,
-			Timestamp:   uint64(time.Now().Unix()),
-			Text:        text,
-			ContactId:   client.Store.ID.String(),
-			ContactName: "Me",
+			Id:           resp.ID,
+			ChatId:       wid,
+			FromMe:       true,
+			Timestamp:    uint64(time.Now().Unix()),
+			Text:         text,
+			ContactId:    client.Store.ID.String(),
+			ContactName:  "Me",
 			ContactShort: "Me",
 		}
-		
+
 		sm.db.AddMessage(newMsg)
-		
+
 		sm.mu.RLock()
 		isCurrent := sm.currentReceiver == wid
 		sm.mu.RUnlock()
@@ -978,7 +980,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	updatePQ := func(preview string) {
 		eh.sm.mu.Lock()
 		defer eh.sm.mu.Unlock()
-		
+
 		var conv *Conversation
 		for _, item := range eh.sm.priorityQueue {
 			if item.JID == chatJID {
@@ -1017,7 +1019,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	// 1. Text Messages
 	if evt.Message.GetConversation() != "" {
 		text := evt.Message.GetConversation()
-		
+
 		msg := Message{
 			Id:           evt.Info.ID,
 			ChatId:       chatJID,
@@ -1028,13 +1030,13 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			ContactName:  eh.getContactName(evt.Info.Sender),
 			ContactShort: eh.getContactShort(evt.Info.Sender),
 		}
-		
+
 		// Legacy DB
 		eh.sm.db.AddMessage(msg)
 
 		// Update PQ
 		updatePQ(text)
-		
+
 		// UI Update for Chat
 		eh.sm.mu.RLock()
 		isCurrent := chatJID == eh.sm.currentReceiver
@@ -1064,7 +1066,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		} else {
 			caption = "[IMAGE] " + caption
 		}
-		
+
 		msg := Message{
 			Id:           evt.Info.ID,
 			ChatId:       chatJID,
@@ -1075,12 +1077,12 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			ContactName:  eh.getContactName(evt.Info.Sender),
 			ContactShort: eh.getContactShort(evt.Info.Sender),
 		}
-		
+
 		eh.sm.db.AddMessage(msg)
-		
+
 		// Update PQ
 		updatePQ(caption)
-		
+
 		eh.sm.mu.RLock()
 		isCurrent := chatJID == eh.sm.currentReceiver
 		eh.sm.mu.RUnlock()
@@ -1089,7 +1091,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			eh.sm.uiHandler.NewMessage(msg)
 		}
 	}
-	
+
 	// Make sure to update the chat list with new ordering
 	if shouldUpdateList {
 		eh.sm.uiHandler.UpdateChatList([]*Conversation(eh.sm.priorityQueue))
@@ -1104,7 +1106,7 @@ func (eh *eventHandler) getContactName(jid types.JID) string {
 			return contact.FullName
 		}
 	}
-	
+
 	// Fallback to JID User (Phone Number)
 	return jid.User
 }
@@ -1117,7 +1119,7 @@ func (eh *eventHandler) getContactShort(jid types.JID) string {
 			return contact.PushName
 		}
 	}
-	
+
 	// Fallback to JID User (Phone Number)
 	return jid.User
 }
