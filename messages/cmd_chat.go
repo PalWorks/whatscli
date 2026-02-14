@@ -175,22 +175,20 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 			return
 		}
 
-		count := 0
+		// Batch all PQ operations under a single lock
+		var toUpsert []Conversation
+		sm.mu.Lock()
 		for _, group := range groups {
-			// Convert to Conversation/Chat format and save
 			jid := group.JID.String()
 			name := group.Name
 			if name == "" {
 				name = "Unknown Group"
 			}
 
-			sm.mu.Lock()
-			existingConv := sm.convByJID[jid]
-
-			if existingConv != nil {
-				if existingConv.Name != name {
-					existingConv.Name = name
-					sm.db.UpsertConversation(*existingConv)
+			if existing := sm.convByJID[jid]; existing != nil {
+				if existing.Name != name {
+					existing.Name = name
+					toUpsert = append(toUpsert, *existing)
 				}
 			} else {
 				newConv := &Conversation{
@@ -203,17 +201,18 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 				}
 				heap.Push(&sm.priorityQueue, newConv)
 				sm.convByJID[jid] = newConv
-				sm.db.UpsertConversation(*newConv)
+				toUpsert = append(toUpsert, *newConv)
 			}
-			sm.mu.Unlock()
-			count++
 		}
-
-		sm.mu.Lock()
 		safeList := sm.snapshotPQ()
 		sm.mu.Unlock()
 
+		// DB writes outside lock
+		for _, c := range toUpsert {
+			sm.db.UpsertConversation(c)
+		}
+
 		sm.uiHandler.UpdateChatList(safeList)
-		sm.uiHandler.PrintText(fmt.Sprintf("Synced %d groups.", count))
+		sm.uiHandler.PrintText(fmt.Sprintf("Synced %d groups.", len(groups)))
 	}()
 }

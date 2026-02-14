@@ -417,51 +417,36 @@ func (sm *SessionManager) loadRecentChats() {
 			// For now, if it's a new import, use current time.
 			// If it exists in DB, we should probably prefer the DB's time unless we have new info.
 
-			// LOCKING for PQ access
+			// Update PQ under lock, collect DB write for outside
 			sm.mu.Lock()
-			
 			existingConv := sm.convByJID[jidStr]
 
-			var lastMsgTime int64
-			var isPinned bool
-			var unread uint16
-
+			var toUpsert *Conversation
 			if existingConv != nil {
-				lastMsgTime = existingConv.LastMsgTime
-				isPinned = existingConv.IsPinned
-				unread = existingConv.Unread
-				// Update name if changed
-				if name != "" {
+				if name != "" && existingConv.Name != name {
 					existingConv.Name = name
-					// Update in DB
-					sm.db.UpsertConversation(*existingConv)
+					c := *existingConv
+					toUpsert = &c
 				}
 			} else {
-				lastMsgTime = 0 // Default for new import: 0 means no messages, so bottom of list
-				unread = 0
-				isPinned = false
-
 				newConv := &Conversation{
 					JID:         jidStr,
 					Name:        name,
-					LastMsgTime: lastMsgTime,
-					Preview:     "New chat", // Placeholder
-					Unread:      unread,
-					IsPinned:    isPinned,
+					LastMsgTime: 0,
+					Preview:     "New chat",
+					Unread:      0,
+					IsPinned:    false,
 				}
-
-				// Persist to SQLite
-				err := sm.db.UpsertConversation(*newConv)
-				if err != nil {
-					sm.uiHandler.PrintError(fmt.Errorf("failed to upsert conversation %s: %v", jidStr, err))
-				}
-
-				// Add to Priority Queue and index
 				heap.Push(&sm.priorityQueue, newConv)
 				sm.convByJID[newConv.JID] = newConv
+				c := *newConv
+				toUpsert = &c
 			}
-			
 			sm.mu.Unlock()
+
+			if toUpsert != nil {
+				sm.db.UpsertConversation(*toUpsert)
+			}
 
 			chatCount++
 		}
@@ -736,13 +721,12 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	timestamp := uint64(evt.Info.Timestamp.Unix())
 	shouldUpdateList := false
 
-	// Common logic to update PQ
+	// Common logic to update PQ; returns safe list and conversation to persist
 	updatePQ := func(preview string) []*Conversation {
 		eh.sm.mu.Lock()
-		defer eh.sm.mu.Unlock()
-
 		conv := eh.sm.convByJID[chatJID]
 
+		var toUpsert Conversation
 		if conv != nil {
 			conv.LastMsgTime = int64(timestamp)
 			conv.Preview = preview
@@ -750,7 +734,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 				conv.Unread++
 			}
 			eh.sm.priorityQueue.Update(conv, conv.LastMsgTime, conv.IsPinned)
-			eh.sm.db.UpsertConversation(*conv)
+			toUpsert = *conv
 		} else {
 			unread := uint16(0)
 			if !evt.Info.IsFromMe {
@@ -766,10 +750,15 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			}
 			heap.Push(&eh.sm.priorityQueue, newConv)
 			eh.sm.convByJID[chatJID] = newConv
-			eh.sm.db.UpsertConversation(*newConv)
+			toUpsert = *newConv
 		}
 		shouldUpdateList = true
-		return eh.sm.snapshotPQ()
+		safeList := eh.sm.snapshotPQ()
+		eh.sm.mu.Unlock()
+
+		// DB write outside lock
+		eh.sm.db.UpsertConversation(toUpsert)
+		return safeList
 	}
 
 	// 1. Text Messages
