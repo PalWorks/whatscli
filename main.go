@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"sort"
 
 	"code.rocketnine.space/tslocum/cbind"
 	"github.com/gdamore/tcell/v2"
@@ -24,12 +25,11 @@ var currentReceiver messages.Chat = messages.Chat{}
 var curRegions []messages.Message
 
 var textView *tview.TextView
-var treeView *tview.TreeView
+var chatTable *tview.Table
 var textInput *tview.InputField
 var topBar *tview.TextView
 var infoBar *tview.TextView
 
-var chatRoot *tview.TreeNode
 var app *tview.Application
 
 var sessionManager *messages.SessionManager
@@ -37,6 +37,11 @@ var sessionManager *messages.SessionManager
 var keyBindings *cbind.Configuration
 
 var uiHandler messages.UiMessageHandler
+
+// Chat list state for lazy loading
+var allChats []*messages.Conversation
+var chatLimit int = 50
+const batchSize = 50
 
 func main() {
 	err := config.InitConfig()
@@ -119,7 +124,7 @@ func main() {
 
 	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
 	gridLayout.AddItem(infoBar, 2, 0, 1, 1, 0, 0, false)
-	gridLayout.AddItem(MakeTree(), 1, 0, 1, 1, 0, 0, false)
+	gridLayout.AddItem(MakeTable(), 1, 0, 1, 1, 0, 0, false)
 	gridLayout.AddItem(textView, 1, 1, 1, 3, 0, 0, false)
 	gridLayout.AddItem(textInput, 2, 1, 1, 3, 0, 0, false)
 
@@ -134,34 +139,52 @@ func main() {
 	sessionManager.Shutdown()
 }
 
-// creates the TreeView for chats
-func MakeTree() *tview.TreeView {
-	rootDir := "Chats"
-	chatRoot = tview.NewTreeNode(rootDir).
-		SetColor(tcell.ColorNames[config.Config.Colors.ListHeader])
-	treeView = tview.NewTreeView().
-		SetRoot(chatRoot).
-		SetCurrentNode(chatRoot)
-	treeView.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+// creates the Table for chats
+func MakeTable() *tview.Table {
+	chatTable = tview.NewTable().
+		SetSelectable(true, false)
+	chatTable.SetBorder(true).
+		SetTitle("Chats")
+	
+	chatTable.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 
-	// If a chat was selected, open it.
-	treeView.SetChangedFunc(func(node *tview.TreeNode) {
-		reference := node.GetReference()
-		if reference == nil {
-			SetDisplayedChat(messages.Chat{"", false, "", 0, 0})
-			return // Selecting the root node does nothing.
+	// Selection Changed Func (Navigation)
+	chatTable.SetSelectionChangedFunc(func(row, column int) {
+		cell := chatTable.GetCell(row, column)
+		if cell == nil {
+			return
 		}
-		children := node.GetChildren()
-		if len(children) == 0 {
-			// Load and show files in this directory.
-			recv := reference.(messages.Chat)
-			SetDisplayedChat(recv)
-		} else {
-			// Collapse if visible, expand if collapsed.
-			node.SetExpanded(!node.IsExpanded())
+		ref := cell.GetReference()
+		if ref == nil {
+			return
+		}
+		
+		conv := ref.(*messages.Conversation)
+		
+		// Map struct Conversation to legacy Chat for SetDisplayedChat
+		// Note: Unread count might be outdated in legacy Chat struct used by SetDisplayedChat
+		// but SetDisplayedChat mainly needs Name and ID.
+		legacyChat := messages.Chat{
+			Id:      conv.JID,
+			IsGroup: strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+			Name:    conv.Name,
+			Unread:  int(conv.Unread),
+		}
+		
+		SetDisplayedChat(legacyChat)
+
+		// Infinite scroll trigger: if we are near the bottom, load more
+		if row >= chatLimit-5 && chatLimit < len(allChats) {
+			chatLimit += batchSize
+			RenderChatTable()
+			// Restore focus/selection logic is partly handled by tview, 
+			// but we might need to ensure we don't jump top if not needed.
+			// RenderChatTable handles data update. tview Table usually keeps selection 
+			// if the row still exists.
 		}
 	})
-	return treeView
+	
+	return chatTable
 }
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {
@@ -184,8 +207,8 @@ func handleFocusInput(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleFocusContacts(ev *tcell.EventKey) *tcell.EventKey {
 	ResetMsgSelection()
-	if !treeView.HasFocus() {
-		app.SetFocus(treeView)
+	if !chatTable.HasFocus() {
+		app.SetFocus(chatTable)
 	}
 	return nil
 }
@@ -195,7 +218,7 @@ func handleSwitchPanels(ev *tcell.EventKey) *tcell.EventKey {
 	if !textInput.HasFocus() {
 		app.SetFocus(textInput)
 	} else {
-		app.SetFocus(treeView)
+		app.SetFocus(chatTable)
 	}
 	return nil
 }
@@ -277,12 +300,19 @@ func handleMessagesMove(amount int) func(ev *tcell.EventKey) *tcell.EventKey {
 }
 
 func handleChatPanelUp(ev *tcell.EventKey) *tcell.EventKey {
-	//TODO: scroll selection in treeView? or chatRoot? How?
-	return ev
+	row, _ := chatTable.GetSelection()
+	if row > 0 {
+		chatTable.Select(row-1, 0)
+	}
+	return nil
 }
 
 func handleChatPanelDown(ev *tcell.EventKey) *tcell.EventKey {
-	return ev
+	row, _ := chatTable.GetSelection()
+	if row < chatTable.GetRowCount()-1 {
+		chatTable.Select(row+1, 0)
+	}
+	return nil
 }
 
 func handleMessagesLast(ev *tcell.EventKey) *tcell.EventKey {
@@ -391,7 +421,7 @@ func LoadShortcuts() {
 	keysChatPanel := cbind.NewConfiguration()
 	keysChatPanel.SetRune(tcell.ModCtrl, 'u', handleChatPanelUp)
 	keysChatPanel.SetRune(tcell.ModCtrl, 'd', handleChatPanelDown)
-	treeView.SetInputCapture(keysChatPanel.Capture)
+	chatTable.SetInputCapture(keysChatPanel.Capture)
 }
 
 // prints help to chat view
@@ -673,42 +703,99 @@ func (u UiHandler) NewScreen(msgs []messages.Message) {
 	})
 }
 
-// loads the chat data from storage to the TreeView
-func (u UiHandler) SetChats(ids []messages.Chat) {
+// UpdateChatList updates the table with the PriorityQueue content
+func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 	go app.QueueUpdateDraw(func() {
-		chatRoot.ClearChildren()
-		oldId := currentReceiver.Id
-		for _, element := range ids {
-			name := element.Name
-			if name == "" {
-				name = strings.TrimSuffix(strings.TrimSuffix(element.Id, messages.GROUPSUFFIX), messages.CONTACTSUFFIX)
+		// Update the store
+		allChats = make([]*messages.Conversation, len(pq))
+		copy(allChats, pq)
+		
+		// Sort the full list once
+		sort.Slice(allChats, func(i, j int) bool {
+			a, b := allChats[i], allChats[j]
+			
+			// Pinned check
+			if a.IsPinned && !b.IsPinned {
+				return true
 			}
-			if element.Unread > 0 {
-				name += " ([" + config.Config.Colors.UnreadCount + "]" + fmt.Sprint(element.Unread) + "[-])"
-				//tim := time.Unix(element.LastMessage, 0)
-				//sin := time.Since(tim)
-				//since := fmt.Sprintf("%s", sin)
-				//time := tim.Format("02-01-06 15:04:05")
-				//name += since
+			if !a.IsPinned && b.IsPinned {
+				return false
 			}
-			node := tview.NewTreeNode(name).
-				SetReference(element).
-				SetSelectable(true)
-			if element.IsGroup {
-				node.SetColor(tcell.ColorNames[config.Config.Colors.ListGroup])
-			} else {
-				node.SetColor(tcell.ColorNames[config.Config.Colors.ListContact])
-			}
-			// store new currentReceiver, else the selection on the left goes off
-			if element.Id == oldId {
-				currentReceiver = element
-			}
-			chatRoot.AddChild(node)
-			if element.Id == currentReceiver.Id {
-				treeView.SetCurrentNode(node)
-			}
-		}
+			
+			// Time check (descending)
+			return a.LastMsgTime > b.LastMsgTime
+		})
+		
+		// Reset limit if list seems to be refreshed significantly, or keep it?
+		// For now, let's keep it to grow naturally, but maybe reset on big reloads?
+		// If we reload everything (e.g. startup), reset to batchSize.
+		// A simple heuristic: if limit is huge but len is small, reset?
+		// Or just always reset on full update? User might lose position if we reset 
+		// and they were scrolled down. 
+		// BUT `UpdateChatList` is usually called on sync/init.
+		// Let's reset limit to batchSize on full update to keep it clean.
+		chatLimit = batchSize
+		
+		RenderChatTable()
 	})
+}
+
+// RenderChatTable renders the table based on allChats and chatLimit
+func RenderChatTable() {
+	// Snapshot current selection
+	row, col := chatTable.GetSelection()
+
+	displayList := allChats
+	if len(displayList) > chatLimit {
+		displayList = displayList[:chatLimit]
+	}
+
+	chatTable.Clear()
+	
+	for i, conv := range displayList {
+		// Name cell
+		name := conv.Name
+		if name == "" {
+			name = conv.JID // Fallback
+		}
+		
+		// Unread status
+		if conv.Unread > 0 {
+			name += " ([" + config.Config.Colors.UnreadCount + "]" + fmt.Sprint(conv.Unread) + "[-])"
+		}
+		
+		// Pinned indicator
+		if conv.IsPinned {
+			name = "📌 " + name
+		}
+		
+		cell := tview.NewTableCell(name).
+			SetReference(conv).
+			SetExpansion(1).
+			SetSelectable(true)
+			
+		// Color
+		isGroup := strings.HasSuffix(conv.JID, messages.GROUPSUFFIX)
+		if isGroup {
+			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListGroup])
+		} else {
+			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListContact])
+		}
+		
+		chatTable.SetCell(i, 0, cell)
+	}
+	
+	// Restore selection
+	if row < chatTable.GetRowCount() {
+		chatTable.Select(row, col)
+	} else if chatTable.GetRowCount() > 0 {
+		chatTable.Select(chatTable.GetRowCount()-1, 0)
+	}
+}
+
+// Deprecated: loads the chat data from storage to the TreeView - Kept for interface compat
+func (u UiHandler) SetChats(ids []messages.Chat) {
+	// No-op for now, as we moved to Table
 }
 
 func (u UiHandler) PrintError(err error) {

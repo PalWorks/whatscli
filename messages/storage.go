@@ -1,67 +1,115 @@
 package messages
 
 import (
-	"fmt"
+	"database/sql"
 	"encoding/gob"
+	"fmt"
 	"os"
-	"sort"
-	"strings"
 	"sync"
-	"time"
+
+	_ "github.com/mattn/go-sqlite3"
+	"github.com/normen/whatscli/config"
 )
 
 // MessageDatabase stores messages and contact data
 type MessageDatabase struct {
-	messages      map[string][]Message
-	messagesById  map[string]Message
-	chats         map[string]Chat
-	contacts      map[string]Contact
-	contactLock   sync.RWMutex
-	chatLock      sync.RWMutex
-	messageLock   sync.RWMutex
-	saveLock      sync.Mutex
-	dirty         bool
-	dirtyLock     sync.RWMutex
+	db *sql.DB
+
+	// Legacy maps provided for backward compatibility during refactor phases
+	// In the future, these should be removed or replaced by DB access
+	messages     map[string][]Message
+	messagesById map[string]Message
+	chats        map[string]Chat // Deprecated: use conversations table
+
+	// Locks for legacy maps
+	chatLock    sync.RWMutex
+	messageLock sync.RWMutex
+	saveLock    sync.Mutex
+	dirty       bool
+	dirtyLock   sync.RWMutex
 }
 
-// Data dump struct for gob encoding
 type storageDump struct {
 	Messages     map[string][]Message
 	MessagesById map[string]Message
 	Chats        map[string]Chat
-	Contacts     map[string]Contact
 }
 
-// Initializes the message database
+// Initializes the message database with SQLite
 func (md *MessageDatabase) Init() {
+	// Initialize legacy maps for now to prevent nil pointer panics in existing code
 	md.messages = make(map[string][]Message)
 	md.messagesById = make(map[string]Message)
 	md.chats = make(map[string]Chat)
-	md.contacts = make(map[string]Contact)
+
+
+	// Initialize SQLite
+	dbPath := config.GetSessionFilePath() + "_meta.db"
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to open metadata db: %v", err))
+	}
+	md.db = db
+
+	// Create conversations table
+	query := `
+	CREATE TABLE IF NOT EXISTS conversations (
+		jid TEXT PRIMARY KEY,
+		name TEXT,
+		last_msg_time INTEGER,
+		preview TEXT,
+		unread INTEGER,
+		is_pinned BOOLEAN
+	);
+	`
+	_, err = md.db.Exec(query)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create conversations table: %v", err))
+	}
+
+	// Create messages table (Phase 5)
+	queryMsgs := `
+	CREATE TABLE IF NOT EXISTS messages (
+		id TEXT PRIMARY KEY,
+		chat_id TEXT,
+		contact_id TEXT,
+		contact_name TEXT,
+		contact_short TEXT,
+		timestamp INTEGER,
+		from_me BOOLEAN,
+		forwarded BOOLEAN,
+		text TEXT
+	);
+	CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+	`
+	_, err = md.db.Exec(queryMsgs)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create messages table: %v", err))
+	}
 }
 
-// Checks if database needs saving
+// Checks if database needs saving (Legacy support)
 func (md *MessageDatabase) IsDirty() bool {
 	md.dirtyLock.RLock()
 	defer md.dirtyLock.RUnlock()
 	return md.dirty
 }
 
-// Marks database as clean
+// Marks database as clean (Legacy support)
 func (md *MessageDatabase) MarkClean() {
 	md.dirtyLock.Lock()
 	defer md.dirtyLock.Unlock()
 	md.dirty = false
 }
 
-// Marks database as dirty
+// Marks database as dirty (Legacy support)
 func (md *MessageDatabase) MarkDirty() {
 	md.dirtyLock.Lock()
 	defer md.dirtyLock.Unlock()
 	md.dirty = true
 }
 
-// Save persists the database to a file
+// Save persists the database to a file (Legacy support - Gob for maps)
 func (md *MessageDatabase) Save(filePath string) error {
 	md.saveLock.Lock()
 	defer md.saveLock.Unlock()
@@ -70,14 +118,13 @@ func (md *MessageDatabase) Save(filePath string) error {
 	defer md.messageLock.RUnlock()
 	md.chatLock.RLock()
 	defer md.chatLock.RUnlock()
-	md.contactLock.RLock()
-	defer md.contactLock.RUnlock()
+
 
 	data := storageDump{
 		Messages:     md.messages,
 		MessagesById: md.messagesById,
 		Chats:        md.chats,
-		Contacts:     md.contacts,
+
 	}
 
 	file, err := os.Create(filePath)
@@ -94,7 +141,7 @@ func (md *MessageDatabase) Save(filePath string) error {
 	return err
 }
 
-// Load restores the database from a file
+// Load restores the database from a file (Legacy support - Gob for maps)
 func (md *MessageDatabase) Load(filePath string) error {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -115,129 +162,197 @@ func (md *MessageDatabase) Load(filePath string) error {
 	defer md.messageLock.Unlock()
 	md.chatLock.Lock()
 	defer md.chatLock.Unlock()
-	md.contactLock.Lock()
-	defer md.contactLock.Unlock()
 
-	if data.Messages != nil {
-		md.messages = data.Messages
-	}
-	if data.MessagesById != nil {
-		md.messagesById = data.MessagesById
-	}
+
+	// Phase 6: DO NOT load messages into memory.
+	// We rely on SQLite now.
+	// if data.Messages != nil {
+	// 	md.messages = data.Messages
+	// }
+	// if data.MessagesById != nil {
+	// 	md.messagesById = data.MessagesById
+	// }
+
 	if data.Chats != nil {
 		md.chats = data.Chats
 	}
-	if data.Contacts != nil {
-		md.contacts = data.Contacts
-	}
+
 
 	return nil
 }
 
+// --- Message Persistence (Phase 5) ---
+
+// Migration function to move messages from memory to SQLite
+func (md *MessageDatabase) MigrateToSQLite() {
+	// 1. Migrate Chats/Conversations
+	// If conversations table is empty, try to populate from legacy md.chats
+	rowC := md.db.QueryRow("SELECT COUNT(*) FROM conversations")
+	var countC int
+	errC := rowC.Scan(&countC)
+	if errC == nil && countC == 0 && len(md.chats) > 0 {
+		fmt.Println("Migrating chats to conversations table...")
+		tx, _ := md.db.Begin()
+		stmt, _ := tx.Prepare(`INSERT OR IGNORE INTO conversations (jid, name, last_msg_time, preview, unread, is_pinned) VALUES (?, ?, ?, ?, ?, ?)`)
+		for _, chat := range md.chats {
+			_, _ = stmt.Exec(chat.Id, chat.Name, 0, "", chat.Unread, false)
+		}
+		tx.Commit()
+		stmt.Close()
+	}
+
+	// 2. Migrate Messages
+	// Check if already populated
+	row := md.db.QueryRow("SELECT COUNT(*) FROM messages")
+	var count int
+	err := row.Scan(&count)
+	if err == nil && count > 0 {
+		return // Already populated
+	}
+
+	fmt.Println("Migrating messages to SQLite...")
+
+	// If md.messages is empty (because Load skipped it), we need to read the Gob file again just for migration
+	sourceMessages := md.messages
+	if len(sourceMessages) == 0 {
+		filePath := config.GetSessionFilePath() + ".gob"
+		file, err := os.Open(filePath)
+		if err == nil {
+			defer file.Close()
+			var data storageDump
+			decoder := gob.NewDecoder(file)
+			if err := decoder.Decode(&data); err == nil {
+				sourceMessages = data.Messages
+			}
+		}
+	}
+
+	if len(sourceMessages) == 0 {
+		return // Nothing to migrate
+	}
+	
+	md.messageLock.RLock()
+	defer md.messageLock.RUnlock()
+	
+	count = 0
+	tx, err := md.db.Begin()
+	if err != nil {
+		fmt.Printf("Migration failed to start transaction: %v\n", err)
+		return
+	}
+	
+	stmt, err := tx.Prepare(`
+		INSERT OR IGNORE INTO messages 
+		(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text) 
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`)
+	if err != nil {
+		fmt.Printf("Migration failed to prepare statement: %v\n", err)
+		return
+	}
+	defer stmt.Close()
+	
+	for _, msgs := range sourceMessages {
+		for _, msg := range msgs {
+			_, err := stmt.Exec(
+				msg.Id, msg.ChatId, msg.ContactId, msg.ContactName, 
+				msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
+			)
+			if err != nil {
+				fmt.Printf("Failed to migrate message %s: %v\n", msg.Id, err)
+			} else {
+				count++
+			}
+		}
+	}
+	
+	err = tx.Commit()
+	if err != nil {
+		fmt.Printf("Migration failed to commit: %v\n", err)
+	} else {
+		fmt.Printf("Migrated %d messages to SQLite\n", count)
+	}
+}
+
+// AddMessageToDB persists a message to SQLite (unchanged)
+func (md *MessageDatabase) AddMessageToDB(msg Message) error {
+	query := `
+	INSERT OR IGNORE INTO messages 
+	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text) 
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`
+	_, err := md.db.Exec(query, 
+		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName, 
+		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
+	)
+	return err
+}
+
+
+// --- Legacy Methods (Kept for compatibility until Phase 3/6) ---
+
 // Adds a message to the database
 func (md *MessageDatabase) AddMessage(msg Message) bool {
-	md.messageLock.Lock()
-	defer md.messageLock.Unlock()
-	
-	// Check if we already have this message
-	if _, ok := md.messagesById[msg.Id]; ok {
+	// Phase 6: Only write to SQLite
+	err := md.AddMessageToDB(msg)
+	if err != nil {
+		fmt.Printf("Error adding message to DB: %v\n", err)
+		// We return true anyway as failure here shouldn't crash caller if DB is momentarily quirky,
+		// but ideally we bubble error. Legacy signature returns bool.
 		return false
 	}
-	
-	// Add to message ID lookup
-	md.messagesById[msg.Id] = msg
-	
-	// Create or get message array for chat
-	msgs, ok := md.messages[msg.ChatId]
-	if !ok {
-		msgs = []Message{}
-	}
-	
-	// Add message to chat
-	msgs = append(msgs, msg)
-	
-	// Sort by timestamp
-	sort.Slice(msgs, func(i, j int) bool {
-		return msgs[i].Timestamp > msgs[j].Timestamp
-	})
-	
-	// Store updated messages
-	md.messages[msg.ChatId] = msgs
-	
-	// Update or create chat
-	md.updateChatFromMessage(msg)
-	
-	md.MarkDirty()
 	return true
 }
-
-// Update or create a chat based on a message
-func (md *MessageDatabase) updateChatFromMessage(msg Message) {
-	md.chatLock.Lock()
-	defer md.chatLock.Unlock()
-	
-	chat, exists := md.chats[msg.ChatId]
-	if !exists {
-		// Create new chat
-		isGroup := strings.Contains(msg.ChatId, GROUPSUFFIX)
-		chat = Chat{
-			Id:          msg.ChatId,
-			IsGroup:     isGroup,
-			Name:        msg.ContactName,
-			Unread:      0,
-			LastMessage: int64(msg.Timestamp),
-		}
-	} else {
-		// Update last message time
-		chat.LastMessage = int64(msg.Timestamp)
-	}
-	
-	// If this is a new message and not from us, increment unread
-	timeNow := time.Now().Unix()
-	if int64(msg.Timestamp) > timeNow-30 && !msg.FromMe {
-		chat.Unread++
-	}
-	
-	md.chats[msg.ChatId] = chat
-	
-	// Add contact if we don't have it yet
-	if msg.ContactId != "" {
-		md.contactLock.Lock()
-		defer md.contactLock.Unlock()
-		
-		_, exists := md.contacts[msg.ContactId]
-		if !exists {
-			contact := Contact{
-				Id:    msg.ContactId,
-				Name:  msg.ContactName,
-				Short: msg.ContactShort,
-			}
-			md.contacts[msg.ContactId] = contact
-		}
-	}
+// UpsertConversation updates or inserts a conversation
+func (md *MessageDatabase) UpsertConversation(c Conversation) error {
+	query := `
+	INSERT INTO conversations (jid, name, last_msg_time, preview, unread, is_pinned)
+	VALUES (?, ?, ?, ?, ?, ?)
+	ON CONFLICT(jid) DO UPDATE SET
+		name=excluded.name,
+		last_msg_time=excluded.last_msg_time,
+		preview=excluded.preview,
+		unread=excluded.unread,
+		is_pinned=excluded.is_pinned;
+	`
+	_, err := md.db.Exec(query, c.JID, c.Name, c.LastMsgTime, c.Preview, c.Unread, c.IsPinned)
+	return err
 }
 
-// Add chat to database
+// GetConversations retrieves all conversations from the DB
+func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
+	rows, err := md.db.Query("SELECT jid, name, last_msg_time, preview, unread, is_pinned FROM conversations")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var convs []Conversation
+	for rows.Next() {
+		var c Conversation
+		if err := rows.Scan(&c.JID, &c.Name, &c.LastMsgTime, &c.Preview, &c.Unread, &c.IsPinned); err != nil {
+			return nil, err
+		}
+		convs = append(convs, c)
+	}
+	return convs, nil
+}
+
+// --- Legacy Methods (Kept for compatibility until Phase 3/6) ---
+
+
+
+// Add chat to database (Legacy)
 func (md *MessageDatabase) AddChat(chat Chat) {
 	md.chatLock.Lock()
 	defer md.chatLock.Unlock()
 	md.chats[chat.Id] = chat
-	md.dirtyLock.Lock()
-	md.dirty = true
-	md.dirtyLock.Unlock()
+	md.MarkDirty()
 }
 
-// Add contact to database
-func (md *MessageDatabase) AddContact(contact Contact) {
-	md.contactLock.Lock()
-	defer md.contactLock.Unlock()
-	md.contacts[contact.Id] = contact
-	md.dirtyLock.Lock()
-	md.dirty = true
-	md.dirtyLock.Unlock()
-}
 
-// NewUnreadChat marks a chat as having unread messages
+
+// NewUnreadChat marks a chat as having unread messages (Legacy)
 func (md *MessageDatabase) NewUnreadChat(chatId string) {
 	md.chatLock.Lock()
 	defer md.chatLock.Unlock()
@@ -248,100 +363,55 @@ func (md *MessageDatabase) NewUnreadChat(chatId string) {
 	}
 }
 
-// get sorted chat ids
+// get sorted chat ids (Legacy)
 func (md *MessageDatabase) GetChatIds() []Chat {
 	md.chatLock.RLock()
 	defer md.chatLock.RUnlock()
-	
+
 	allChats := []Chat{}
-	
-	// Build a single slice with all chats
 	for _, val := range md.chats {
 		allChats = append(allChats, val)
 	}
-	
-	// Sort all chats by LastMessage timestamp (most recent first)
-	sort.Slice(allChats, func(i, j int) bool {
-		return allChats[i].LastMessage > allChats[j].LastMessage
-	})
-	
 	return allChats
 }
 
-// get all messages for a chat id
+// get all messages for a chat id (Legacy + Phase 5)
 func (md *MessageDatabase) GetMessages(wid string) []Message {
-	md.messageLock.RLock()
-	defer md.messageLock.RUnlock()
-	
-	// Return empty array if no messages
-	msgs, ok := md.messages[wid]
-	if !ok {
+	// Try to get from SQLite first (Phase 5/6)
+	return md.GetMessagesFromDB(wid)
+}
+
+func (md *MessageDatabase) GetMessagesFromDB(chatId string) []Message {
+	if md.db == nil {
 		return []Message{}
 	}
-	
+	rows, err := md.db.Query(`SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text FROM messages WHERE chat_id = ? ORDER BY timestamp ASC`, chatId)
+	if err != nil {
+		// Table might not exist yet or other error
+		return []Message{}
+	}
+	defer rows.Close()
+
+	var msgs []Message
+	for rows.Next() {
+		var msg Message
+		var ts int64
+		err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text)
+		if err != nil {
+			continue
+		}
+		msg.Timestamp = uint64(ts)
+		msgs = append(msgs, msg)
+	}
 	return msgs
 }
 
-// get info for message
+// get info for message (Legacy)
 func (md *MessageDatabase) GetMessageInfo(wid string) string {
-	md.messageLock.RLock()
-	defer md.messageLock.RUnlock()
-	
-	msg, ok := md.messagesById[wid]
-	if !ok {
-		return "Message not found"
-	}
-	
-	name := md.GetIdName(msg.ContactId)
-	short := md.GetIdShort(msg.ContactId)
-	
-	var direction string
-	if msg.FromMe {
-		direction = "→"
-	} else {
-		direction = "←"
-	}
-	
-	timeStr := time.Unix(int64(msg.Timestamp), 0).Format(time.RFC1123)
-	
-	info := fmt.Sprintf("ID: %s\nFrom: %s (%s) %s\nTime: %s\nChat: %s", 
-		msg.Id, name, short, direction, timeStr, msg.ChatId)
-	
-	return info
+	// Simplified stub for now
+	return "Info not available in legacy transition"
 }
 
-// get contact id name
-func (md *MessageDatabase) GetIdName(wid string) string {
-	if wid == "" {
-		return "Unknown"
-	}
-	
-	md.contactLock.RLock()
-	defer md.contactLock.RUnlock()
-	
-	if cont, ok := md.contacts[wid]; ok {
-		if cont.Name != "" {
-			return cont.Name
-		}
-	}
-	
-	return wid
-}
 
-// get contact id short name
-func (md *MessageDatabase) GetIdShort(wid string) string {
-	if wid == "" {
-		return "Unknown"
-	}
-	
-	md.contactLock.RLock()
-	defer md.contactLock.RUnlock()
-	
-	if cont, ok := md.contacts[wid]; ok {
-		if cont.Short != "" {
-			return cont.Short
-		}
-	}
-	
-	return wid
-}
+
+

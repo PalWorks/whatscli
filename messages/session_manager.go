@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"container/heap"
 	"context"
 	"errors"
 	"fmt"
@@ -35,7 +36,6 @@ type SessionManager struct {
 	StatusChannel   chan StatusMsg
 	CommandChannel  chan Command
 	ChatChannel     chan Chat
-	ContactChannel  chan Contact
 	TextChannel     chan *waProto.Message
 	statusInfo      SessionStatus
 	lastSent        time.Time
@@ -43,6 +43,7 @@ type SessionManager struct {
 	stop            chan struct{}
 	eventHandler    *eventHandler
 	mu              sync.RWMutex
+	priorityQueue   PriorityQueue
 }
 
 // initialize the SessionManager
@@ -51,12 +52,34 @@ func (sm *SessionManager) Init(handler UiMessageHandler) {
 	sm.db.Init()
 	// Load existing data
 	sm.db.Load(config.GetSessionFilePath() + ".gob")
+	
+	// Phase 5: Ensure messages are migrated to SQLite
+	// This performs a one-time migration of loaded Gob data to SQLite
+	sm.db.MigrateToSQLite()
+	
+	// Initialize Priority Queue
+	sm.priorityQueue = make(PriorityQueue, 0)
+	heap.Init(&sm.priorityQueue)
+	
+	// Load conversations from SQLite into PriorityQueue
+	convs, err := sm.db.GetConversations()
+	if err == nil {
+		for _, c := range convs {
+			// We need to pass pointers to the PQ
+			// Make a copy to avoid pointing to loop variable
+			conv := c 
+			heap.Push(&sm.priorityQueue, &conv)
+		}
+	} else {
+		// Log error but don't crash, potentially first run
+		fmt.Printf("Failed to load conversations for PQ: %v\n", err)
+	}
+
 	sm.uiHandler = handler
 	sm.BatteryChannel = make(chan BatteryMsg, 10)
 	sm.StatusChannel = make(chan StatusMsg, 10)
 	sm.CommandChannel = make(chan Command, 10)
 	sm.ChatChannel = make(chan Chat, 10)
-	sm.ContactChannel = make(chan Contact, 10)
 	sm.TextChannel = make(chan *waProto.Message, 10)
 	sm.eventHandler = &eventHandler{sm: sm}
 }
@@ -84,10 +107,13 @@ func (sm *SessionManager) runManager() error {
 		return errors.New("could not establish WhatsApp connection")
 	}
 	
-	err = sm.loginWithConnection(client)
-	if err != nil {
-		sm.uiHandler.PrintError(err)
-	}
+	// Run login asynchronously to allow command processing
+	go func() {
+		err = sm.loginWithConnection(client)
+		if err != nil {
+			sm.uiHandler.PrintError(err)
+		}
+	}()
 	
 	// Start auto-saver
 	go sm.startAutoSaver()
@@ -296,6 +322,11 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 		case evt := <-qrChan:
 			if evt.Event == "code" {
 				qrCount++
+				if qrCount > 6 {
+					sm.uiHandler.PrintText("QR code attempt limit reached. Login timed out.")
+					sm.StatusChannel <- StatusMsg{false, errors.New("login timed out")}
+					return errors.New("QR code limit reached")
+				}
 
 				// Convert to ASCII QR code and print
 				terminal := qrcode.New()
@@ -339,17 +370,12 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 
 // loadRecentChats fetches recent chats from WhatsApp and adds them to the database
 func (sm *SessionManager) loadRecentChats() {
+	sm.uiHandler.PrintText("Loading chats...")
 	if sm.client == nil || !sm.client.IsConnected() {
 		sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 		return
 	}
-	
 
-	
-	// Load contacts first to ensure proper name display
-	// sm.loadContacts() // Postpone until HistorySync
-
-	
 	// Capture client pointer safely
 	sm.mu.RLock()
 	client := sm.client
@@ -369,6 +395,10 @@ func (sm *SessionManager) loadRecentChats() {
 		
 		// Process each contact as a potential chat
 		chatCount := 0
+		
+		// Map to track what we've processed to avoid duplicates in PQ if reloading
+		processed := make(map[string]bool)
+
 		for jid, contact := range contacts {
 			if !contact.Found {
 				continue
@@ -380,14 +410,12 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 			
 			jidStr := jid.String()
+			processed[jidStr] = true
 			
-			// Create a Chat object
-			isGroup := jid.Server == "g.us"
-			
-			// Pick the best name available
+			// Determine name
 			var name string
+			isGroup := jid.Server == "g.us"
 			if isGroup {
-				// For groups, try to get the group info
 				groupInfo, err := sm.client.GetGroupInfo(context.Background(), jid)
 				if err == nil && groupInfo.Name != "" {
 					name = groupInfo.Name
@@ -395,7 +423,6 @@ func (sm *SessionManager) loadRecentChats() {
 					name = "Group: " + jid.User
 				}
 			} else {
-				// For contacts, use the full name first, then pushname, then JID
 				name = contact.FullName
 				if name == "" {
 					name = contact.PushName
@@ -404,76 +431,86 @@ func (sm *SessionManager) loadRecentChats() {
 					name = jid.User
 				}
 			}
+
+			// Create/Update Conversation struct
+			// In a real sync, we might want to check the actual last message time.
+			// For now, if it's a new import, use current time. 
+			// If it exists in DB, we should probably prefer the DB's time unless we have new info.
 			
+			// Check if exists in PQ (which was loaded from DB) specifically to preserve LastMsgTime
+			var existingConv *Conversation
+			for _, item := range sm.priorityQueue {
+				if item.JID == jidStr {
+					existingConv = item
+					break
+				}
+			}
+
+			var lastMsgTime int64
+			var isPinned bool
+			var unread uint16
+
+			if existingConv != nil {
+				lastMsgTime = existingConv.LastMsgTime
+				isPinned = existingConv.IsPinned
+				unread = existingConv.Unread
+				// Update name if changed
+				if name != "" {
+					existingConv.Name = name
+					// Update in DB
+					sm.db.UpsertConversation(*existingConv)
+				}
+			} else {
+				lastMsgTime = 0 // Default for new import: 0 means no messages, so bottom of list
+				unread = 0
+				isPinned = false
+				
+				newConv := &Conversation{
+					JID:         jidStr,
+					Name:        name,
+					LastMsgTime: lastMsgTime,
+					Preview:     "New chat", // Placeholder
+					Unread:      unread,
+					IsPinned:    isPinned,
+				}
+				
+				// Persist to SQLite
+				err := sm.db.UpsertConversation(*newConv)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to upsert conversation %s: %v", jidStr, err))
+				}
+				
+				// Add to Priority Queue
+				heap.Push(&sm.priorityQueue, newConv)
+			}
+			
+			// Legacy support: Add to old maps for now (until Phase 6)
 			chatObj := Chat{
 				Id:          jidStr,
 				IsGroup:     isGroup,
 				Name:        name,
-				Unread:      0, // We don't have unread info here
-				LastMessage: time.Now().Unix(),
+				Unread:      int(unread),
+				LastMessage: lastMsgTime,
 			}
-			
-			// Add to database
 			sm.db.AddChat(chatObj)
-			chatCount++
 			
-			// Load recent messages for this chat in the background
-			go sm.loadRecentMessages(jidStr)
+			chatCount++
 		}
 		
-		// Update UI with the new chat list
-		sm.uiHandler.SetChats(sm.db.GetChatIds())
+		// Update UI with the new chat list (legacy way for now, Phase 4 uses PQ)
+		// sm.uiHandler.SetChats(sm.db.GetChatIds()) 
 		
-		sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d contacts as chats", chatCount))
+		// Phase 4: Use UpdateChatList with PQ
+		// casting PriorityQueue (which is []*Conversation) to []*Conversation
+		sm.uiHandler.UpdateChatList([]*Conversation(sm.priorityQueue))
+		
+		sm.uiHandler.PrintText("Chats loaded.")
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
 	}
 }
 
-// loadContacts loads contacts from the WhatsApp address book
-func (sm *SessionManager) loadContacts() {
-	if sm.client == nil || sm.client.Store == nil {
-		return
-	}
-	
-	// Get all contacts from the store - GetAllContacts returns contacts and an error
-	contactCount := 0
-	contacts, err := sm.client.Store.Contacts.GetAllContacts(context.Background())
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load contacts: %v", err))
-		return
-	}
-	
-	for jid, contact := range contacts {
-		if !contact.Found {
-			continue
-		}
-		
-		// Determine best name to use
-		name := contact.FullName
-		if name == "" {
-			name = contact.PushName
-		}
-		if name == "" {
-			name = jid.User
-		}
-		
-		// Create Contact object
-		contactObj := Contact{
-			Id:    jid.String(),
-			Name:  name,
-			Short: contact.PushName,
-		}
-		
-		// Add to database
-		sm.db.AddContact(contactObj)
-		contactCount++
-	}
-	
-	if contactCount > 0 {
-		sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d contacts", contactCount))
-	}
-}
+
 
 // loadRecentMessages loads the most recent messages for a chat
 func (sm *SessionManager) loadRecentMessages(chatJID string) {
@@ -539,8 +576,8 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 		}
 	}
 	
-	// Fallback to JID
-	return sm.db.GetIdName(jid.String())
+	// Fallback to JID User (Phone Number)
+	return jid.User
 }
 
 // disconnects the session
@@ -935,49 +972,91 @@ func (eh *eventHandler) Handle(evt interface{}) {
 func (eh *eventHandler) handleMessage(evt *events.Message) {
 	chatJID := evt.Info.Chat.String()
 	timestamp := uint64(evt.Info.Timestamp.Unix())
-	
-	// For simplicity, we'll only handle text messages for now
+	shouldUpdateList := false
+
+	// Common logic to update PQ
+	updatePQ := func(preview string) {
+		eh.sm.mu.Lock()
+		defer eh.sm.mu.Unlock()
+		
+		var conv *Conversation
+		for _, item := range eh.sm.priorityQueue {
+			if item.JID == chatJID {
+				conv = item
+				break
+			}
+		}
+
+		if conv != nil {
+			conv.LastMsgTime = int64(timestamp)
+			conv.Preview = preview
+			if !evt.Info.IsFromMe {
+				conv.Unread++
+			}
+			eh.sm.priorityQueue.Update(conv, conv.LastMsgTime, conv.IsPinned)
+			eh.sm.db.UpsertConversation(*conv)
+		} else {
+			unread := uint16(0)
+			if !evt.Info.IsFromMe {
+				unread = 1
+			}
+			newConv := &Conversation{
+				JID:         chatJID,
+				Name:        eh.sm.getChatName(evt.Info.Chat),
+				LastMsgTime: int64(timestamp),
+				Preview:     preview,
+				Unread:      unread,
+				IsPinned:    false,
+			}
+			heap.Push(&eh.sm.priorityQueue, newConv)
+			eh.sm.db.UpsertConversation(*newConv)
+		}
+		shouldUpdateList = true
+	}
+
+	// 1. Text Messages
 	if evt.Message.GetConversation() != "" {
 		text := evt.Message.GetConversation()
 		
-		// Create a Message struct that our application can use
 		msg := Message{
-			Id:          evt.Info.ID,
-			ChatId:      chatJID,
-			FromMe:      evt.Info.IsFromMe,
-			Timestamp:   timestamp,
-			Text:        text,
-			ContactId:   evt.Info.Sender.String(),
-			ContactName: eh.getContactName(evt.Info.Sender),
+			Id:           evt.Info.ID,
+			ChatId:       chatJID,
+			FromMe:       evt.Info.IsFromMe,
+			Timestamp:    timestamp,
+			Text:         text,
+			ContactId:    evt.Info.Sender.String(),
+			ContactName:  eh.getContactName(evt.Info.Sender),
 			ContactShort: eh.getContactShort(evt.Info.Sender),
 		}
 		
-		// Add to database
-		// Add to database
+		// Legacy DB
 		eh.sm.db.AddMessage(msg)
+
+		// Update PQ
+		updatePQ(text)
 		
-		// If this is for the current chat, update the UI
+		// UI Update for Chat
 		eh.sm.mu.RLock()
 		isCurrent := chatJID == eh.sm.currentReceiver
 		eh.sm.mu.RUnlock()
 
 		if isCurrent {
 			eh.sm.uiHandler.NewMessage(msg)
-		} else {
-			// Notify if message is recent and not in focus
-			if timestamp > uint64(time.Now().Unix()-30) && !evt.Info.IsFromMe {
+		} else if !evt.Info.IsFromMe {
+			if timestamp > uint64(time.Now().Unix()-30) {
 				eh.sm.db.NewUnreadChat(chatJID)
-				err := notify(eh.getContactShort(evt.Info.Sender), text)
+				senderName := eh.getContactShort(evt.Info.Sender)
+				if senderName == "" {
+					senderName = "New Message"
+				}
+				err := notify(senderName, text)
 				if err != nil {
 					eh.sm.uiHandler.PrintError(err)
 				}
 			}
 		}
-	}
-	
-	// Handle media messages (images, documents, etc.)
-	// This is a simplified version; we just create a text message with a media indicator
-	if evt.Message.GetImageMessage() != nil {
+	} else if evt.Message.GetImageMessage() != nil {
+		// 2. Image Messages
 		imgMsg := evt.Message.GetImageMessage()
 		caption := imgMsg.GetCaption()
 		if caption == "" {
@@ -987,17 +1066,20 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		}
 		
 		msg := Message{
-			Id:          evt.Info.ID,
-			ChatId:      chatJID,
-			FromMe:      evt.Info.IsFromMe,
-			Timestamp:   timestamp,
-			Text:        caption,
-			ContactId:   evt.Info.Sender.String(),
-			ContactName: eh.getContactName(evt.Info.Sender),
+			Id:           evt.Info.ID,
+			ChatId:       chatJID,
+			FromMe:       evt.Info.IsFromMe,
+			Timestamp:    timestamp,
+			Text:         caption,
+			ContactId:    evt.Info.Sender.String(),
+			ContactName:  eh.getContactName(evt.Info.Sender),
 			ContactShort: eh.getContactShort(evt.Info.Sender),
 		}
 		
 		eh.sm.db.AddMessage(msg)
+		
+		// Update PQ
+		updatePQ(caption)
 		
 		eh.sm.mu.RLock()
 		isCurrent := chatJID == eh.sm.currentReceiver
@@ -1009,7 +1091,9 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	}
 	
 	// Make sure to update the chat list with new ordering
-	eh.sm.uiHandler.SetChats(eh.sm.db.GetChatIds())
+	if shouldUpdateList {
+		eh.sm.uiHandler.UpdateChatList([]*Conversation(eh.sm.priorityQueue))
+	}
 }
 
 // Helper to get contact name
@@ -1021,8 +1105,8 @@ func (eh *eventHandler) getContactName(jid types.JID) string {
 		}
 	}
 	
-	// Fallback to the database
-	return eh.sm.db.GetIdName(jid.String())
+	// Fallback to JID User (Phone Number)
+	return jid.User
 }
 
 // Helper to get short contact name
@@ -1034,6 +1118,6 @@ func (eh *eventHandler) getContactShort(jid types.JID) string {
 		}
 	}
 	
-	// Fallback to the database
-	return eh.sm.db.GetIdShort(jid.String())
+	// Fallback to JID User (Phone Number)
+	return jid.User
 }
