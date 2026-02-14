@@ -43,6 +43,7 @@ type SessionManager struct {
 	eventHandler    *eventHandler
 	mu              sync.RWMutex
 	priorityQueue   PriorityQueue
+	convByJID       map[string]*Conversation
 }
 
 // initialize the SessionManager
@@ -58,22 +59,19 @@ func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	// This performs a one-time migration of loaded Gob data to SQLite
 	sm.db.MigrateToSQLite()
 
-	// Initialize Priority Queue
+	// Initialize Priority Queue and lookup map
 	sm.priorityQueue = make(PriorityQueue, 0)
 	heap.Init(&sm.priorityQueue)
+	sm.convByJID = make(map[string]*Conversation)
 
 	// Load conversations from SQLite into PriorityQueue
 	convs, err := sm.db.GetConversations()
 	if err == nil {
 		for _, c := range convs {
-			// We need to pass pointers to the PQ
-			// Make a copy to avoid pointing to loop variable
 			conv := c
 			heap.Push(&sm.priorityQueue, &conv)
+			sm.convByJID[conv.JID] = &conv
 		}
-	} else {
-		// Log error but don't crash, potentially first run
-		// fmt.Printf("Failed to load conversations for PQ: %v\n", err)
 	}
 
 	sm.uiHandler = handler
@@ -227,6 +225,16 @@ func (sm *SessionManager) getClient() *whatsmeow.Client {
 	sm.mu.RLock()
 	defer sm.mu.RUnlock()
 	return sm.client
+}
+
+// snapshotPQ returns a deep copy of the priority queue. Caller must hold sm.mu.
+func (sm *SessionManager) snapshotPQ() []*Conversation {
+	safeList := make([]*Conversation, len(sm.priorityQueue))
+	for i, item := range sm.priorityQueue {
+		c := *item
+		safeList[i] = &c
+	}
+	return safeList
 }
 
 // login logs in the user. It tries to see if a session already exists. If not, tries to create a
@@ -443,14 +451,7 @@ func (sm *SessionManager) loadRecentChats() {
 			// LOCKING for PQ access
 			sm.mu.Lock()
 			
-			// Check if exists in PQ (which was loaded from DB) specifically to preserve LastMsgTime
-			var existingConv *Conversation
-			for _, item := range sm.priorityQueue {
-				if item.JID == jidStr {
-					existingConv = item
-					break
-				}
-			}
+			existingConv := sm.convByJID[jidStr]
 
 			var lastMsgTime int64
 			var isPinned bool
@@ -486,8 +487,9 @@ func (sm *SessionManager) loadRecentChats() {
 					sm.uiHandler.PrintError(fmt.Errorf("failed to upsert conversation %s: %v", jidStr, err))
 				}
 
-				// Add to Priority Queue
+				// Add to Priority Queue and index
 				heap.Push(&sm.priorityQueue, newConv)
+				sm.convByJID[newConv.JID] = newConv
 			}
 			
 			sm.mu.Unlock()
@@ -506,21 +508,9 @@ func (sm *SessionManager) loadRecentChats() {
 			chatCount++
 		}
 
-		// Update UI with the new chat list (legacy way for now, Phase 4 uses PQ)
-		// sm.uiHandler.SetChats(sm.db.GetChatIds())
-
-		// Phase 4: Use UpdateChatList with PQ
-		// casting PriorityQueue (which is []*Conversation) to []*Conversation
 		sm.mu.Lock()
-		safeList := make([]*Conversation, len(sm.priorityQueue))
-		for i, item := range sm.priorityQueue {
-			// Deep copy with new allocation
-			copiedItem := new(Conversation)
-			*copiedItem = *item
-			safeList[i] = copiedItem
-		}
+		safeList := sm.snapshotPQ()
 		sm.mu.Unlock()
-		
 		sm.uiHandler.UpdateChatList(safeList)
 
 		sm.uiHandler.PrintText("Chats loaded.")
@@ -808,13 +798,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		eh.sm.mu.Lock()
 		defer eh.sm.mu.Unlock()
 
-		var conv *Conversation
-		for _, item := range eh.sm.priorityQueue {
-			if item.JID == chatJID {
-				conv = item
-				break
-			}
-		}
+		conv := eh.sm.convByJID[chatJID]
 
 		if conv != nil {
 			conv.LastMsgTime = int64(timestamp)
@@ -838,19 +822,11 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 				IsPinned:    false,
 			}
 			heap.Push(&eh.sm.priorityQueue, newConv)
+			eh.sm.convByJID[chatJID] = newConv
 			eh.sm.db.UpsertConversation(*newConv)
 		}
 		shouldUpdateList = true
-		
-		// Create safe copy
-		safeList := make([]*Conversation, len(eh.sm.priorityQueue))
-		for i, item := range eh.sm.priorityQueue {
-			// Deep copy with new allocation
-			copiedItem := new(Conversation)
-			*copiedItem = *item
-			safeList[i] = copiedItem
-		}
-		return safeList
+		return eh.sm.snapshotPQ()
 	}
 
 	// 1. Text Messages

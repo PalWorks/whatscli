@@ -184,15 +184,8 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 				name = "Unknown Group"
 			}
 
-			// Check if exists/Update logic similar to loadRecentChats
 			sm.mu.Lock()
-			var existingConv *Conversation
-			for _, item := range sm.priorityQueue {
-				if item.JID == jid {
-					existingConv = item
-					break
-				}
-			}
+			existingConv := sm.convByJID[jid]
 
 			if existingConv != nil {
 				if existingConv.Name != name {
@@ -203,36 +196,21 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 				newConv := &Conversation{
 					JID:         jid,
 					Name:        name,
-					LastMsgTime: 0, // No messages yet
+					LastMsgTime: 0,
 					Preview:     "Group synced",
 					Unread:      0,
 					IsPinned:    false,
 				}
 				heap.Push(&sm.priorityQueue, newConv)
+				sm.convByJID[jid] = newConv
 				sm.db.UpsertConversation(*newConv)
 			}
 			sm.mu.Unlock()
-
-			// Legacy DB support
-			chatObj := Chat{
-				Id:          jid,
-				IsGroup:     true,
-				Name:        name,
-				Unread:      0,
-				LastMessage: 0,
-			}
-			sm.db.AddChat(chatObj)
 			count++
 		}
 
-		// Create safe copy of PQ for UI update
 		sm.mu.Lock()
-		safeList := make([]*Conversation, len(sm.priorityQueue))
-		for i, item := range sm.priorityQueue {
-			copiedItem := new(Conversation)
-			*copiedItem = *item
-			safeList[i] = copiedItem
-		}
+		safeList := sm.snapshotPQ()
 		sm.mu.Unlock()
 
 		sm.uiHandler.UpdateChatList(safeList)
