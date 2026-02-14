@@ -15,6 +15,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	"go.mau.fi/whatsmeow/types/events"
@@ -715,138 +716,215 @@ func (eh *eventHandler) Handle(evt interface{}) {
 	}
 }
 
-// Handle incoming messages
-func (eh *eventHandler) handleMessage(evt *events.Message) {
+// extractMessageContent extracts display text and chat-list preview from a
+// whatsmeow Message proto. This is a pure function with no side effects,
+// making it easy to test.
+func extractMessageContent(msg *waE2E.Message) (text, preview string) {
+	if msg == nil {
+		return "", ""
+	}
+
+	// 1. Extended text (replies, link previews, formatted text)
+	if ext := msg.GetExtendedTextMessage(); ext != nil {
+		t := ext.GetText()
+		if t != "" {
+			return t, truncatePreview(t)
+		}
+	}
+
+	// 2. Image
+	if img := msg.GetImageMessage(); img != nil {
+		c := img.GetCaption()
+		if c != "" {
+			return "[IMAGE] " + c, "[IMAGE] " + c
+		}
+		return "[IMAGE]", "[IMAGE]"
+	}
+
+	// 3. Video / GIF
+	if vid := msg.GetVideoMessage(); vid != nil {
+		tag := "[VIDEO]"
+		if vid.GetGifPlayback() {
+			tag = "[GIF]"
+		}
+		c := vid.GetCaption()
+		if c != "" {
+			return tag + " " + c, tag + " " + c
+		}
+		return tag, tag
+	}
+
+	// 4. Audio / Voice note
+	if aud := msg.GetAudioMessage(); aud != nil {
+		if aud.GetPTT() {
+			secs := aud.GetSeconds()
+			if secs > 0 {
+				t := fmt.Sprintf("[VOICE NOTE] %ds", secs)
+				return t, t
+			}
+			return "[VOICE NOTE]", "[VOICE NOTE]"
+		}
+		secs := aud.GetSeconds()
+		if secs > 0 {
+			t := fmt.Sprintf("[AUDIO] %ds", secs)
+			return t, t
+		}
+		return "[AUDIO]", "[AUDIO]"
+	}
+
+	// 5. Document
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		name := doc.GetFileName()
+		if name == "" {
+			name = doc.GetTitle()
+		}
+		if name != "" {
+			return "[DOCUMENT] " + name, "[DOCUMENT] " + name
+		}
+		return "[DOCUMENT]", "[DOCUMENT]"
+	}
+
+	// 6. Sticker
+	if msg.GetStickerMessage() != nil {
+		return "[STICKER]", "[STICKER]"
+	}
+
+	// 7. Contact
+	if con := msg.GetContactMessage(); con != nil {
+		name := con.GetDisplayName()
+		if name != "" {
+			return "[CONTACT] " + name, "[CONTACT] " + name
+		}
+		return "[CONTACT]", "[CONTACT]"
+	}
+
+	// 8. Location
+	if loc := msg.GetLocationMessage(); loc != nil {
+		name := loc.GetName()
+		if name == "" {
+			name = loc.GetAddress()
+		}
+		if name != "" {
+			t := fmt.Sprintf("[LOCATION] %s (%.4f, %.4f)", name, loc.GetDegreesLatitude(), loc.GetDegreesLongitude())
+			return t, "[LOCATION] " + name
+		}
+		t := fmt.Sprintf("[LOCATION] (%.4f, %.4f)", loc.GetDegreesLatitude(), loc.GetDegreesLongitude())
+		return t, t
+	}
+
+	// 9. Reaction
+	if react := msg.GetReactionMessage(); react != nil {
+		emoji := react.GetText()
+		if emoji != "" {
+			return "[REACTION] " + emoji, "[REACTION] " + emoji
+		}
+		return "[REACTION]", "[REACTION]"
+	}
+
+	// 10. Plain text (fallback — must come last)
+	if t := msg.GetConversation(); t != "" {
+		return t, truncatePreview(t)
+	}
+
+	return "", ""
+}
+
+// truncatePreview shortens text for the chat list preview column.
+func truncatePreview(s string) string {
+	const maxLen = 80
+	r := []rune(s)
+	if len(r) <= maxLen {
+		return s
+	}
+	return string(r[:maxLen]) + "…"
+}
+
+// processIncomingMessage handles all common steps for any received message:
+// build Message struct → persist to DB → update PQ → UI update → notification.
+func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, preview string) {
+	if text == "" {
+		return // nothing to process
+	}
+
 	chatJID := evt.Info.Chat.String()
 	timestamp := uint64(evt.Info.Timestamp.Unix())
-	shouldUpdateList := false
 
-	// Common logic to update PQ; returns safe list and conversation to persist
-	updatePQ := func(preview string) []*Conversation {
-		eh.sm.mu.Lock()
-		conv := eh.sm.convByJID[chatJID]
-
-		var toUpsert Conversation
-		if conv != nil {
-			conv.LastMsgTime = int64(timestamp)
-			conv.Preview = preview
-			if !evt.Info.IsFromMe {
-				conv.Unread++
-			}
-			eh.sm.priorityQueue.Update(conv, conv.LastMsgTime, conv.IsPinned)
-			toUpsert = *conv
-		} else {
-			unread := uint16(0)
-			if !evt.Info.IsFromMe {
-				unread = 1
-			}
-			newConv := &Conversation{
-				JID:         chatJID,
-				Name:        eh.sm.getChatName(evt.Info.Chat),
-				LastMsgTime: int64(timestamp),
-				Preview:     preview,
-				Unread:      unread,
-				IsPinned:    false,
-			}
-			heap.Push(&eh.sm.priorityQueue, newConv)
-			eh.sm.convByJID[chatJID] = newConv
-			toUpsert = *newConv
-		}
-		shouldUpdateList = true
-		safeList := eh.sm.snapshotPQ()
-		eh.sm.mu.Unlock()
-
-		// DB write outside lock
-		eh.sm.db.UpsertConversation(toUpsert)
-		return safeList
+	msg := Message{
+		Id:           evt.Info.ID,
+		ChatId:       chatJID,
+		FromMe:       evt.Info.IsFromMe,
+		Timestamp:    timestamp,
+		Text:         text,
+		ContactId:    evt.Info.Sender.String(),
+		ContactName:  eh.getContactName(evt.Info.Sender),
+		ContactShort: eh.getContactShort(evt.Info.Sender),
 	}
 
-	// 1. Text Messages
-	if evt.Message.GetConversation() != "" {
-		text := evt.Message.GetConversation()
+	// Persist message
+	eh.sm.db.AddMessage(msg)
 
-		msg := Message{
-			Id:           evt.Info.ID,
-			ChatId:       chatJID,
-			FromMe:       evt.Info.IsFromMe,
-			Timestamp:    timestamp,
-			Text:         text,
-			ContactId:    evt.Info.Sender.String(),
-			ContactName:  eh.getContactName(evt.Info.Sender),
-			ContactShort: eh.getContactShort(evt.Info.Sender),
+	// Update priority queue and conversation
+	eh.sm.mu.Lock()
+	conv := eh.sm.convByJID[chatJID]
+	var toUpsert Conversation
+	if conv != nil {
+		conv.LastMsgTime = int64(timestamp)
+		conv.Preview = preview
+		if !evt.Info.IsFromMe {
+			conv.Unread++
 		}
+		eh.sm.priorityQueue.Update(conv, conv.LastMsgTime, conv.IsPinned)
+		toUpsert = *conv
+	} else {
+		unread := uint16(0)
+		if !evt.Info.IsFromMe {
+			unread = 1
+		}
+		newConv := &Conversation{
+			JID:         chatJID,
+			Name:        eh.sm.getChatName(evt.Info.Chat),
+			LastMsgTime: int64(timestamp),
+			Preview:     preview,
+			Unread:      unread,
+			IsPinned:    false,
+		}
+		heap.Push(&eh.sm.priorityQueue, newConv)
+		eh.sm.convByJID[chatJID] = newConv
+		toUpsert = *newConv
+	}
+	safeList := eh.sm.snapshotPQ()
+	eh.sm.mu.Unlock()
 
-		// Legacy DB
-		eh.sm.db.AddMessage(msg)
+	// DB write outside lock
+	eh.sm.db.UpsertConversation(toUpsert)
 
-		// Update PQ
-		safeList := updatePQ(text)
+	// UI: show in current chat or send notification
+	eh.sm.mu.RLock()
+	isCurrent := chatJID == eh.sm.currentReceiver
+	eh.sm.mu.RUnlock()
 
-		// UI Update for Chat
-		eh.sm.mu.RLock()
-		isCurrent := chatJID == eh.sm.currentReceiver
-		eh.sm.mu.RUnlock()
-
-		if isCurrent {
-			eh.sm.uiHandler.NewMessage(msg)
-		} else if !evt.Info.IsFromMe {
-			if timestamp > uint64(time.Now().Unix()-30) {
-				senderName := eh.getContactShort(evt.Info.Sender)
-				if senderName == "" {
-					senderName = "New Message"
-				}
-				err := notify(senderName, text)
-				if err != nil {
-					eh.sm.uiHandler.PrintError(err)
-				}
+	if isCurrent {
+		eh.sm.uiHandler.NewMessage(msg)
+	} else if !evt.Info.IsFromMe {
+		if timestamp > uint64(time.Now().Unix()-30) {
+			senderName := eh.getContactShort(evt.Info.Sender)
+			if senderName == "" {
+				senderName = "New Message"
 			}
-		}
-		
-		if shouldUpdateList {
-			eh.sm.uiHandler.UpdateChatList(safeList)
-		}
-	} else if evt.Message.GetImageMessage() != nil {
-		// 2. Image Messages
-		imgMsg := evt.Message.GetImageMessage()
-		caption := imgMsg.GetCaption()
-		if caption == "" {
-			caption = "[IMAGE]"
-		} else {
-			caption = "[IMAGE] " + caption
-		}
-
-		msg := Message{
-			Id:           evt.Info.ID,
-			ChatId:       chatJID,
-			FromMe:       evt.Info.IsFromMe,
-			Timestamp:    timestamp,
-			Text:         caption,
-			ContactId:    evt.Info.Sender.String(),
-			ContactName:  eh.getContactName(evt.Info.Sender),
-			ContactShort: eh.getContactShort(evt.Info.Sender),
-		}
-
-		eh.sm.db.AddMessage(msg)
-
-		// Update PQ
-		safeList := updatePQ(caption)
-
-		eh.sm.mu.RLock()
-		isCurrent := chatJID == eh.sm.currentReceiver
-		eh.sm.mu.RUnlock()
-
-		if isCurrent {
-			eh.sm.uiHandler.NewMessage(msg)
-		}
-		
-		if shouldUpdateList {
-			eh.sm.uiHandler.UpdateChatList(safeList)
+			if err := notify(senderName, text); err != nil {
+				eh.sm.uiHandler.PrintError(err)
+			}
 		}
 	}
 
-	// Make sure to update the chat list with new ordering
-	// logic moved inside specific message handlers to use safeList
+	// Update chat list ordering
+	eh.sm.uiHandler.UpdateChatList(safeList)
+}
 
+// Handle incoming messages — dispatches to extractMessageContent then processIncomingMessage.
+func (eh *eventHandler) handleMessage(evt *events.Message) {
+	text, preview := extractMessageContent(evt.Message)
+	eh.processIncomingMessage(evt, text, preview)
 }
 
 // Helper to get contact name
