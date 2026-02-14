@@ -437,6 +437,9 @@ func (sm *SessionManager) loadRecentChats() {
 			// For now, if it's a new import, use current time.
 			// If it exists in DB, we should probably prefer the DB's time unless we have new info.
 
+			// LOCKING for PQ access
+			sm.mu.Lock()
+			
 			// Check if exists in PQ (which was loaded from DB) specifically to preserve LastMsgTime
 			var existingConv *Conversation
 			for _, item := range sm.priorityQueue {
@@ -483,6 +486,9 @@ func (sm *SessionManager) loadRecentChats() {
 				// Add to Priority Queue
 				heap.Push(&sm.priorityQueue, newConv)
 			}
+			
+			sm.mu.Unlock()
+			// END LOCKING
 
 			// Legacy support: Add to old maps for now (until Phase 6)
 			chatObj := Chat{
@@ -502,7 +508,17 @@ func (sm *SessionManager) loadRecentChats() {
 
 		// Phase 4: Use UpdateChatList with PQ
 		// casting PriorityQueue (which is []*Conversation) to []*Conversation
-		sm.uiHandler.UpdateChatList([]*Conversation(sm.priorityQueue))
+		sm.mu.Lock()
+		safeList := make([]*Conversation, len(sm.priorityQueue))
+		for i, item := range sm.priorityQueue {
+			// Deep copy with new allocation
+			copiedItem := new(Conversation)
+			*copiedItem = *item
+			safeList[i] = copiedItem
+		}
+		sm.mu.Unlock()
+		
+		sm.uiHandler.UpdateChatList(safeList)
 
 		sm.uiHandler.PrintText("Chats loaded.")
 	} else {
@@ -657,8 +673,6 @@ func (sm *SessionManager) execCommand(command Command) {
 		sm.uiHandler.PrintText("[" + config.Config.Colors.Negative + "]Unknown command: [-]" + cmd)
 	case "help":
 		sm.uiHandler.PrintHelp()
-	case "commands":
-		sm.uiHandler.PrintCommands()
 	case "quit":
 		sm.uiHandler.Quit()
 	case "backlog":
@@ -733,40 +747,55 @@ func (sm *SessionManager) execCommand(command Command) {
 				}
 			}
 
-			// 3. Last resort: try history sync notification
+			// 3. Proper method: Use BuildHistorySyncRequest
 			if !messagesFetched && sm.client != nil && sm.client.IsConnected() {
-				sm.uiHandler.PrintText("Trying final method...")
+				sm.uiHandler.PrintText("Requesting history sync from WhatsApp servers...")
 
-				// Create context with timeout
-				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-				defer cancel()
-
-				// Create a basic history sync notification
-				historyMsg := &waProto.Message{
-					ProtocolMessage: &waProto.ProtocolMessage{
-						HistorySyncNotification: &waProto.HistorySyncNotification{
-							ChunkOrder:    proto.Uint32(0),
-							FileLength:    proto.Uint64(0),
-							FileEncSHA256: []byte{},
+				var anchor *types.MessageInfo
+				msgs := sm.db.GetMessages(sm.currentReceiver)
+				if len(msgs) > 0 {
+					oldest := msgs[0]
+					chatJID, _ := types.ParseJID(oldest.ChatId)
+					senderJID, _ := types.ParseJID(oldest.ContactId)
+					
+					// Construct anchor message info
+					anchor = &types.MessageInfo{
+						ID: oldest.Id,
+						MessageSource: types.MessageSource{
+							Chat:     chatJID,
+							Sender:   senderJID,
+							IsFromMe: oldest.FromMe,
 						},
-						Type: waProto.ProtocolMessage_HISTORY_SYNC_NOTIFICATION.Enum(),
-					},
-				}
-
-				// Send it and ignore errors (it may not work)
-				if sm.client != nil {
-					sm.client.SendMessage(ctx, jid, historyMsg)
-				}
-
-				// Wait a bit longer for any messages to arrive
-				time.Sleep(3 * time.Second)
-
-				// Final check if we got any new messages
-				finalMessages := sm.db.GetMessages(sm.currentReceiver)
-				if len(finalMessages) > len(existingMessages) {
-					sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-len(existingMessages)))
+						Timestamp: time.Unix(int64(oldest.Timestamp), 0),
+					}
+					sm.uiHandler.PrintText(fmt.Sprintf("Requesting 50 messages before: %s (%s)", oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
 				} else {
-					sm.uiHandler.PrintText("No additional messages found. WhatsApp may limit history access.")
+					sm.uiHandler.PrintText("Requesting latest 50 messages...")
+				}
+
+				// BuildHistorySyncRequest takes (message *types.MessageInfo, limit int) and returns *waProto.Message
+				req := sm.client.BuildHistorySyncRequest(anchor, 50)
+				
+				// Send to self (primary device)
+				// sm.client.Store.ID is our JID. We want to send to the phone (Device 0 usually implicits to User JID)
+				target := *sm.client.Store.ID
+				target.Device = 0
+				
+				resp, err := sm.client.SendMessage(context.Background(), target, req)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
+				} else {
+					sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for server response...")
+					// History sync comes as an async event, so we just wait a bit to see if DB updates
+					time.Sleep(5 * time.Second)
+					
+					// Check if we got any new messages
+					finalMessages := sm.db.GetMessages(sm.currentReceiver)
+					if len(finalMessages) > len(existingMessages) {
+						sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-len(existingMessages)))
+					} else {
+						sm.uiHandler.PrintText("No immediate history received. It may arrive in the background.")
+					}
 				}
 			}
 
@@ -844,6 +873,82 @@ func (sm *SessionManager) execCommand(command Command) {
 		} else {
 			sm.printCommandUsage("read", "-> only works in a chat")
 		}
+	case "sync-groups":
+		sm.uiHandler.PrintText("Fetching joined groups from WhatsApp servers...")
+		go func() {
+			if sm.client == nil {
+				sm.uiHandler.PrintError(errors.New("not connected"))
+				return
+			}
+			groups, err := sm.client.GetJoinedGroups(context.Background())
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("failed to fetch groups: %v", err))
+				return
+			}
+
+			count := 0
+			for _, group := range groups {
+				// Convert to Conversation/Chat format and save
+				jid := group.JID.String()
+				name := group.Name
+				if name == "" {
+					name = "Unknown Group"
+				}
+
+				// Check if exists/Update logic similar to loadRecentChats
+				sm.mu.Lock()
+				var existingConv *Conversation
+				for _, item := range sm.priorityQueue {
+					if item.JID == jid {
+						existingConv = item
+						break
+					}
+				}
+
+				if existingConv != nil {
+					if existingConv.Name != name {
+						existingConv.Name = name
+						sm.db.UpsertConversation(*existingConv)
+					}
+				} else {
+					newConv := &Conversation{
+						JID:         jid,
+						Name:        name,
+						LastMsgTime: 0, // No messages yet
+						Preview:     "Group synced",
+						Unread:      0,
+						IsPinned:    false,
+					}
+					heap.Push(&sm.priorityQueue, newConv)
+					sm.db.UpsertConversation(*newConv)
+				}
+				sm.mu.Unlock()
+
+				// Legacy DB support
+				chatObj := Chat{
+					Id:          jid,
+					IsGroup:     true,
+					Name:        name,
+					Unread:      0,
+					LastMessage: 0,
+				}
+				sm.db.AddChat(chatObj)
+				count++
+			}
+
+			// Create safe copy of PQ for UI update
+			sm.mu.Lock()
+			safeList := make([]*Conversation, len(sm.priorityQueue))
+			for i, item := range sm.priorityQueue {
+				copiedItem := new(Conversation)
+				*copiedItem = *item
+				safeList[i] = copiedItem
+			}
+			sm.mu.Unlock()
+
+			sm.uiHandler.UpdateChatList(safeList)
+			sm.uiHandler.PrintText(fmt.Sprintf("Synced %d groups.", count))
+		}()
 	case "info":
 		if checkParam(command.Params, 1) {
 			sm.uiHandler.PrintText(sm.db.GetMessageInfo(command.Params[0]))
@@ -854,6 +959,250 @@ func (sm *SessionManager) execCommand(command Command) {
 		sm.uiHandler.ShowColorList()
 	case "more":
 		sm.uiHandler.PrintText("More command not implemented yet with the new backend")
+	case "create":
+		if checkParam(command.Params, 2) {
+			// /create <phones> <subject>
+			// phones is a comma-separated list
+			phones := strings.Split(command.Params[0], ",")
+			subject := strings.Join(command.Params[1:], " ")
+			
+			participants := []types.JID{}
+			for _, phone := range phones {
+				participant, err := types.ParseJID(phone + "@s.whatsapp.net")
+				if err == nil {
+					participants = append(participants, participant)
+				}
+			}
+
+			if sm.client != nil {
+				resp, err := sm.client.CreateGroup(context.Background(), whatsmeow.ReqCreateGroup{
+					Name:         subject,
+					Participants: participants,
+				})
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to create group: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Group created: " + resp.JID.String())
+				}
+			}
+		} else {
+			sm.printCommandUsage("create", "<phone1,phone2> <subject>")
+		}
+	case "subject":
+		if checkParam(command.Params, 1) {
+			subject := strings.Join(command.Params, " ")
+			sm.mu.RLock()
+			jidStr := sm.currentReceiver
+			sm.mu.RUnlock()
+
+			jid, _ := types.ParseJID(jidStr)
+			if sm.client != nil {
+				err := sm.client.SetGroupName(context.Background(), jid, subject)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to set subject: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Subject updated")
+				}
+			}
+		} else {
+			sm.printCommandUsage("subject", "<new subject>")
+		}
+	case "leave":
+		sm.mu.RLock()
+		jidStr := sm.currentReceiver
+		sm.mu.RUnlock()
+		jid, _ := types.ParseJID(jidStr)
+		if sm.client != nil {
+			err := sm.client.LeaveGroup(context.Background(), jid)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("failed to leave group: %v", err))
+			} else {
+				sm.uiHandler.PrintText("Left group")
+			}
+		}
+	case "add":
+		if checkParam(command.Params, 1) {
+			user := command.Params[0]
+			// Ensure format
+			if !strings.Contains(user, "@") {
+				user += "@s.whatsapp.net"
+			}
+			participant, _ := types.ParseJID(user)
+			sm.mu.RLock()
+			groupJIDStr := sm.currentReceiver
+			sm.mu.RUnlock()
+			groupJID, _ := types.ParseJID(groupJIDStr)
+
+			if sm.client != nil {
+				_, err := sm.client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeAdd)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to add participant: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Added " + user)
+				}
+			}
+		} else {
+			sm.printCommandUsage("add", "<userid>")
+		}
+	case "remove":
+		if checkParam(command.Params, 1) {
+			user := command.Params[0]
+			if !strings.Contains(user, "@") {
+				user += "@s.whatsapp.net"
+			}
+			participant, _ := types.ParseJID(user)
+			sm.mu.RLock()
+			groupJIDStr := sm.currentReceiver
+			sm.mu.RUnlock()
+			groupJID, _ := types.ParseJID(groupJIDStr)
+
+			if sm.client != nil {
+				_, err := sm.client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeRemove)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to remove participant: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Removed " + user)
+				}
+			}
+		} else {
+			sm.printCommandUsage("remove", "<userid>")
+		}
+	case "admin", "promote":
+		if checkParam(command.Params, 1) {
+			user := command.Params[0]
+			if !strings.Contains(user, "@") {
+				user += "@s.whatsapp.net"
+			}
+			participant, _ := types.ParseJID(user)
+			sm.mu.RLock()
+			groupJIDStr := sm.currentReceiver
+			sm.mu.RUnlock()
+			groupJID, _ := types.ParseJID(groupJIDStr)
+
+			if sm.client != nil {
+				_, err := sm.client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangePromote)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to promote participant: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Promoted " + user)
+				}
+			}
+		} else {
+			sm.printCommandUsage("admin", "<userid>")
+		}
+	case "removeadmin", "demote":
+		if checkParam(command.Params, 1) {
+			user := command.Params[0]
+			if !strings.Contains(user, "@") {
+				user += "@s.whatsapp.net"
+			}
+			participant, _ := types.ParseJID(user)
+			sm.mu.RLock()
+			groupJIDStr := sm.currentReceiver
+			sm.mu.RUnlock()
+			groupJID, _ := types.ParseJID(groupJIDStr)
+
+			if sm.client != nil {
+				_, err := sm.client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeDemote)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to demote participant: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Demoted " + user)
+				}
+			}
+		} else {
+			sm.printCommandUsage("removeadmin", "<userid>")
+		}
+	case "upload", "sendimage", "sendvideo", "sendaudio":
+		if checkParam(command.Params, 1) {
+			filePath := strings.Join(command.Params, " ")
+			sm.mu.RLock()
+			receiver := sm.currentReceiver
+			sm.mu.RUnlock()
+			
+			jid, err := types.ParseJID(receiver)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
+				return
+			}
+			
+			if sm.client != nil {
+				data, err := os.ReadFile(filePath)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to read file: %v", err))
+					return
+				}
+				
+				var msg *waProto.Message
+				uploaded, err := sm.client.Upload(context.Background(), data, whatsmeow.MediaImage) 
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to upload: %v", err))
+					return
+				}
+				
+				switch cmd {
+				case "sendimage":
+					msg = &waProto.Message{
+						ImageMessage: &waProto.ImageMessage{
+							URL:           proto.String(uploaded.URL),
+							DirectPath:    proto.String(uploaded.DirectPath),
+							MediaKey:      uploaded.MediaKey,
+							Mimetype:      proto.String("image/jpeg"), 
+							FileEncSHA256: uploaded.FileEncSHA256,
+							FileSHA256:    uploaded.FileSHA256,
+							FileLength:    proto.Uint64(uint64(len(data))),
+						},
+					}
+				case "sendvideo":
+					msg = &waProto.Message{
+						VideoMessage: &waProto.VideoMessage{
+							URL:           proto.String(uploaded.URL),
+							DirectPath:    proto.String(uploaded.DirectPath),
+							MediaKey:      uploaded.MediaKey,
+							Mimetype:      proto.String("video/mp4"),
+							FileEncSHA256: uploaded.FileEncSHA256,
+							FileSHA256:    uploaded.FileSHA256,
+							FileLength:    proto.Uint64(uint64(len(data))),
+						},
+					}
+				case "sendaudio":
+					msg = &waProto.Message{
+						AudioMessage: &waProto.AudioMessage{
+							URL:           proto.String(uploaded.URL),
+							DirectPath:    proto.String(uploaded.DirectPath),
+							MediaKey:      uploaded.MediaKey,
+							Mimetype:      proto.String("audio/ogg; codecs=opus"), 
+							FileEncSHA256: uploaded.FileEncSHA256,
+							FileSHA256:    uploaded.FileSHA256,
+							FileLength:    proto.Uint64(uint64(len(data))),
+							PTT:           proto.Bool(true), 
+						},
+					}
+				default: 
+					msg = &waProto.Message{
+						DocumentMessage: &waProto.DocumentMessage{
+							URL:           proto.String(uploaded.URL),
+							DirectPath:    proto.String(uploaded.DirectPath),
+							MediaKey:      uploaded.MediaKey,
+							Mimetype:      proto.String("application/octet-stream"), 
+							FileEncSHA256: uploaded.FileEncSHA256,
+							FileSHA256:    uploaded.FileSHA256,
+							FileLength:    proto.Uint64(uint64(len(data))),
+							FileName:      proto.String(filePath),
+						},
+					}
+				}
+
+				resp, err := sm.client.SendMessage(context.Background(), jid, msg)
+				if err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("failed to send media: %v", err))
+				} else {
+					sm.uiHandler.PrintText("Media sent: " + resp.ID)
+				}
+			}
+		} else {
+			sm.printCommandUsage(cmd, "<filepath>")
+		}
 	}
 }
 
@@ -977,7 +1326,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	shouldUpdateList := false
 
 	// Common logic to update PQ
-	updatePQ := func(preview string) {
+	updatePQ := func(preview string) []*Conversation {
 		eh.sm.mu.Lock()
 		defer eh.sm.mu.Unlock()
 
@@ -1014,6 +1363,16 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			eh.sm.db.UpsertConversation(*newConv)
 		}
 		shouldUpdateList = true
+		
+		// Create safe copy
+		safeList := make([]*Conversation, len(eh.sm.priorityQueue))
+		for i, item := range eh.sm.priorityQueue {
+			// Deep copy with new allocation
+			copiedItem := new(Conversation)
+			*copiedItem = *item
+			safeList[i] = copiedItem
+		}
+		return safeList
 	}
 
 	// 1. Text Messages
@@ -1035,7 +1394,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		eh.sm.db.AddMessage(msg)
 
 		// Update PQ
-		updatePQ(text)
+		safeList := updatePQ(text)
 
 		// UI Update for Chat
 		eh.sm.mu.RLock()
@@ -1056,6 +1415,10 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 					eh.sm.uiHandler.PrintError(err)
 				}
 			}
+		}
+		
+		if shouldUpdateList {
+			eh.sm.uiHandler.UpdateChatList(safeList)
 		}
 	} else if evt.Message.GetImageMessage() != nil {
 		// 2. Image Messages
@@ -1081,7 +1444,7 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		eh.sm.db.AddMessage(msg)
 
 		// Update PQ
-		updatePQ(caption)
+		safeList := updatePQ(caption)
 
 		eh.sm.mu.RLock()
 		isCurrent := chatJID == eh.sm.currentReceiver
@@ -1090,12 +1453,15 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		if isCurrent {
 			eh.sm.uiHandler.NewMessage(msg)
 		}
+		
+		if shouldUpdateList {
+			eh.sm.uiHandler.UpdateChatList(safeList)
+		}
 	}
 
 	// Make sure to update the chat list with new ordering
-	if shouldUpdateList {
-		eh.sm.uiHandler.UpdateChatList([]*Conversation(eh.sm.priorityQueue))
-	}
+	// logic moved inside specific message handlers to use safeList
+
 }
 
 // Helper to get contact name
