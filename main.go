@@ -22,7 +22,6 @@ import (
 
 var VERSION string = "v1.0.42"
 
-var sndTxt string = ""
 var currentReceiver messages.Chat = messages.Chat{}
 var curRegions []messages.Message
 
@@ -31,12 +30,8 @@ var leftPane *tview.Flex
 var chatTable *tview.Table
 var groupTable *tview.Table
 var statusTable *tview.Table
-var chatHeader *tview.TextView
-var groupHeader *tview.TextView
 var textInput *tview.InputField
 var topBar *tview.TextView
-
-// var topBar *tview.TextView // Removed duplicate
 
 var app *tview.Application
 var mouseState bool = true // Track mouse state
@@ -101,9 +96,6 @@ func main() {
 	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	textInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background]) // Matches background, removing blue fill
 	textInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
-	textInput.SetChangedFunc(func(change string) {
-		sndTxt = change
-	})
 	textInput.SetDoneFunc(EnterCommand)
 	textInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyTab {
