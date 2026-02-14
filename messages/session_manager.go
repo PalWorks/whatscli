@@ -224,7 +224,9 @@ func (sm *SessionManager) getConnection() (*whatsmeow.Client, error) {
 // new one using qr scanned on the terminal.
 func (sm *SessionManager) login() error {
 	// Clear any existing connection for retry
+	sm.mu.Lock()
 	sm.client = nil
+	sm.mu.Unlock()
 
 	client, err := sm.getConnection()
 	if err != nil {
@@ -272,11 +274,13 @@ func (sm *SessionManager) loginWithConnection(client *whatsmeow.Client) error {
 				return fmt.Errorf("failed to clear expired session: %v", err)
 			}
 
-			// Recreate the client
+			// Recreate the client — set nil under lock, then call
+			// getConnection which acquires its own lock
 			sm.mu.Lock()
 			sm.client = nil
-			client, err = sm.getConnection()
 			sm.mu.Unlock()
+
+			client, err = sm.getConnection()
 			if err != nil {
 				return fmt.Errorf("failed to create new connection: %v", err)
 			}
