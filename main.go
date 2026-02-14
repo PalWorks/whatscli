@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -18,7 +20,7 @@ import (
 	"github.com/skratchdot/open-golang/open"
 )
 
-var VERSION string = "v1.0.40"
+var VERSION string = "v1.0.42"
 
 var sndTxt string = ""
 var currentReceiver messages.Chat = messages.Chat{}
@@ -673,65 +675,60 @@ func LoadShortcuts() {
 }
 
 // prints help to chat view
+// prints help to chat view
 func PrintHelp() {
 	cmdPrefix := config.Config.General.CmdPrefix
-	fmt.Fprintln(textView, "[::b]Keys:[::-]")
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "Global")
-	fmt.Fprintln(textView, "[::b] Up/Down[::-] = Scroll history/chats")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.SwitchPanels, "[::-] = Switch input/chats")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.FocusMessages, "[::-] = Focus message panel")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.FocusMessages, "[::-] = Focus message panel")
-	fmt.Fprintln(textView, "[::b] Ctrl+p [::-] = Toggle Mouse (Enable/Disable for text selection)")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.CommandQuit, "[::-] = Exit app")
+	fmt.Fprintln(textView, "[::b]Application & Connection[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"connect / "+config.Config.Keymap.CommandConnect, "(Re)Connect"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"disconnect", "Disconnect"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"logout", "Logout & Delete Data"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"quit / "+config.Config.Keymap.CommandQuit, "Exit"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[-::-]Message panel[-::-]")
-	fmt.Fprintln(textView, "[::b] Up/Down[::-] = select message")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageDownload, "[::-] = Download attachment")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageOpen, "[::-] = Download & open attachment")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageShow, "[::-] = Download & show image using", config.Config.General.ShowCommand)
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageUrl, "[::-] = Find URL in message and open it")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageRevoke, "[::-] = Revoke message")
-	fmt.Fprintln(textView, "[::b]", config.Config.Keymap.MessageInfo, "[::-] = Info about message")
-	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "Config file in ->", config.GetConfigFilePath())
-	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "Type [::b]"+cmdPrefix+"commands[::-] to see all commands")
-	fmt.Fprintln(textView, "Version:", VERSION)
-}
 
-// prints help to chat view
-func PrintCommands() {
-	cmdPrefix := config.Config.General.CmdPrefix
+	fmt.Fprintln(textView, "[::b]Navigation & View[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Up/Down", "Scroll Chats/History"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.SwitchPanels, "Switch Panel"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.FocusMessages, "Focus Messages"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Ctrl+p", "Toggle Mouse"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[::b]Commands:[::-]")
+
+	fmt.Fprintln(textView, "[::b]Chat & Messages[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"backlog / "+config.Config.Keymap.CommandBacklog, "Load Backlog"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"read / "+config.Config.Keymap.CommandRead, "Mark Read"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Up/Down", "Select Message"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageDownload, "Download"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageOpen, "Download & Open"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageShow, "Show Image ("+config.Config.General.ShowCommand+")"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageUrl, "Open URL"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageRevoke, "Revoke"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageInfo, "Info"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[-::-]Global[-::-]")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"connect [::-]or[::b]", config.Config.Keymap.CommandConnect, "[::-] = (Re)Connect to server")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"disconnect[::-]  = Close the connection")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"logout[::-]  = Remove login data from computer")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"quit [::-]or[::b]", config.Config.Keymap.CommandQuit, "[::-] = Exit app")
+
+	fmt.Fprintln(textView, "[::b]Media[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"upload <path>", "Send File"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendimage <path>", "Send Image"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendvideo <path>", "Send Video"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendaudio <path>", "Send Audio"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[-::-]Chat[-::-]")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"backlog [::-]or[::b]", config.Config.Keymap.CommandBacklog, "[::-] = load next", config.Config.General.BacklogMsgQuantity, "previous messages")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"read [::-]or[::b]", config.Config.Keymap.CommandRead, "[::-] = mark new messages in chat as read")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"upload[::-] /path/to/file  = Upload any file as document")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"sendimage[::-] /path/to/file  = Send image message")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"sendvideo[::-] /path/to/file  = Send video message")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"sendaudio[::-] /path/to/file  = Send audio message")
+
+	fmt.Fprintln(textView, "[::b]Groups[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"create <nums> <subj>", "Create"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"subject <subj>", "Subject"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"leave", "Leave"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"add <userid>", "Add"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"remove <userid>", "Kick"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"admin <userid>", "Promote"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"removeadmin <userid>", "Demote"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "[-::-]Groups[-::-]")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"leave[::-]  = Leave group")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"create[::-] [user-id[] [user-id[] Group Subject  = Create group with users")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"subject[::-] New Subject  = Change subject of group")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"add[::-] [user-id[]  = Add user to group")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"remove[::-] [user-id[]  = Remove user from group")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"admin[::-] [user-id[]  = Set admin role for user in group")
-	fmt.Fprintln(textView, "[::b] "+cmdPrefix+"removeadmin[::-] [user-id[]  = Remove admin role for user in group")
+
+	fmt.Fprintln(textView, "[::b]Clipboard[::-]")
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.Copyuser, "Copy UserID"))
+	fmt.Fprintln(textView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.Pasteuser, "Paste UserID"))
 	fmt.Fprintln(textView, "")
-	fmt.Fprintln(textView, "Use[::b]", config.Config.Keymap.Copyuser, "[::-]to copy a selected user id to clipboard")
-	fmt.Fprintln(textView, "Use[::b]", config.Config.Keymap.Pasteuser, "[::-]to paste clipboard to text input")
-	fmt.Fprintln(textView, "")
+
+	fmt.Fprintln(textView, "Config: ", config.GetConfigFilePath())
+	fmt.Fprintln(textView, "Verify: ", VERSION)
 }
 
 // EnterCommand is the DoneFunc for the input field
@@ -816,9 +813,30 @@ func PrintErrorMsg(text string, err error) {
 
 // prints an image attachment to the TextView (by message id)
 func PrintImage(path string) {
-	var err error
+	// Sanitize path to prevent command injection / path traversal
+	cleanPath := filepath.Clean(path)
+	absPath, err := filepath.Abs(cleanPath)
+	if err != nil {
+		PrintError(fmt.Errorf("invalid file path: %v", err))
+		return
+	}
+
+	// Verify the file exists
+	if _, err := os.Stat(absPath); err != nil {
+		PrintError(fmt.Errorf("file not found: %v", err))
+		return
+	}
+
+	// Verify the path is under the configured download or preview directory
+	downloadDir := filepath.Clean(config.Config.General.DownloadPath)
+	previewDir := filepath.Clean(config.Config.General.PreviewPath)
+	if !strings.HasPrefix(absPath, downloadDir) && !strings.HasPrefix(absPath, previewDir) {
+		PrintError(fmt.Errorf("file path outside allowed directories"))
+		return
+	}
+
 	cmdParts := strings.Split(config.Config.General.ShowCommand, " ")
-	cmdParts = append(cmdParts, path)
+	cmdParts = append(cmdParts, absPath)
 	var cmd *exec.Cmd
 	size := len(cmdParts)
 	if size > 1 {
@@ -958,14 +976,8 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 		})
 
 		// Reset limit if list seems to be refreshed significantly, or keep it?
-		// For now, let's keep it to grow naturally, but maybe reset on big reloads?
-		// If we reload everything (e.g. startup), reset to batchSize.
-		// A simple heuristic: if limit is huge but len is small, reset?
-		// Or just always reset on full update? User might lose position if we reset
-		// and they were scrolled down.
-		// BUT `UpdateChatList` is usually called on sync/init.
-		// Let's reset limit to batchSize on full update to keep it clean.
-		chatLimit = batchSize
+		// REMOVED: chatLimit = batchSize to prevent jumping to top on new message events while scrolled down.
+		// We trust the user's scroll expansion.
 
 		RenderChatTable()
 	})
@@ -973,10 +985,32 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 
 // RenderChatTable renders the table based on allChats and chatLimit
 func RenderChatTable() {
-	// Snapshot current selection ??
-	rowS, _ := statusTable.GetSelection()
-	rowC, _ := chatTable.GetSelection()
-	rowG, _ := groupTable.GetSelection()
+	// Snapshot current selection by JID
+	var selectedStatusJID string
+	var selectedChatJID string
+	var selectedGroupJID string
+
+	if rowS, _ := statusTable.GetSelection(); rowS >= 0 && rowS < statusTable.GetRowCount() {
+		if cell := statusTable.GetCell(rowS, 0); cell != nil {
+			if ref := cell.GetReference(); ref != nil {
+				selectedStatusJID = ref.(*messages.Conversation).JID
+			}
+		}
+	}
+	if rowC, _ := chatTable.GetSelection(); rowC >= 0 && rowC < chatTable.GetRowCount() {
+		if cell := chatTable.GetCell(rowC, 0); cell != nil {
+			if ref := cell.GetReference(); ref != nil {
+				selectedChatJID = ref.(*messages.Conversation).JID
+			}
+		}
+	}
+	if rowG, _ := groupTable.GetSelection(); rowG >= 0 && rowG < groupTable.GetRowCount() {
+		if cell := groupTable.GetCell(rowG, 0); cell != nil {
+			if ref := cell.GetReference(); ref != nil {
+				selectedGroupJID = ref.(*messages.Conversation).JID
+			}
+		}
+	}
 
 	displayList := allChats
 	if len(displayList) > chatLimit {
@@ -990,6 +1024,11 @@ func RenderChatTable() {
 	sIdx := 0
 	cIdx := 0
 	gIdx := 0
+
+	// Indexes to restore
+	newRowS := 0
+	newRowC := 0
+	newRowG := 0
 
 	for _, conv := range displayList {
 		// Name cell
@@ -1018,43 +1057,40 @@ func RenderChatTable() {
 			// Status
 			cell.SetTextColor(tcell.ColorYellow) // Distinct color
 			statusTable.SetCell(sIdx, 0, cell)
+			if conv.JID == selectedStatusJID {
+				newRowS = sIdx
+			}
 			sIdx++
 		} else if strings.HasSuffix(conv.JID, messages.GROUPSUFFIX) {
 			// Group
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListGroup])
 			groupTable.SetCell(gIdx, 0, cell)
+			if conv.JID == selectedGroupJID {
+				newRowG = gIdx
+			}
 			gIdx++
 		} else {
 			// Contact
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListContact])
 			chatTable.SetCell(cIdx, 0, cell)
+			if conv.JID == selectedChatJID {
+				newRowC = cIdx
+			}
 			cIdx++
 		}
 	}
 
 	// Restore selection
 	if statusTable.GetRowCount() > 0 {
-		if rowS < statusTable.GetRowCount() {
-			statusTable.Select(rowS, 0)
-		} else {
-			statusTable.Select(0, 0)
-		}
+		statusTable.Select(newRowS, 0)
 	}
 
 	if chatTable.GetRowCount() > 0 {
-		if rowC < chatTable.GetRowCount() {
-			chatTable.Select(rowC, 0)
-		} else {
-			chatTable.Select(0, 0)
-		}
+		chatTable.Select(newRowC, 0)
 	}
 
 	if groupTable.GetRowCount() > 0 {
-		if rowG < groupTable.GetRowCount() {
-			groupTable.Select(rowG, 0)
-		} else {
-			groupTable.Select(0, 0)
-		}
+		groupTable.Select(newRowG, 0)
 	}
 }
 
@@ -1112,11 +1148,7 @@ func (u UiHandler) Clear() {
 	})
 }
 
-func (u UiHandler) PrintCommands() {
-	go app.QueueUpdateDraw(func() {
-		PrintCommands()
-	})
-}
+
 
 func (u UiHandler) PrintHelp() {
 	go app.QueueUpdateDraw(func() {
@@ -1154,5 +1186,8 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 
 		// 4. Atomic Write (Standard Writer)
 		fmt.Fprint(textView, output)
+
+        // 5. Ensure input field is focused and cleared so commands can be entered
+        app.SetFocus(textInput)
 	})
 }
