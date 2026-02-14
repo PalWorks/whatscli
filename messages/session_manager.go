@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sync"
 	"time"
 
@@ -52,12 +51,6 @@ func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	if err := sm.db.Init(); err != nil {
 		return fmt.Errorf("database initialization failed: %w", err)
 	}
-	// Load existing data
-	sm.db.Load(config.GetSessionFilePath() + ".gob")
-
-	// Phase 5: Ensure messages are migrated to SQLite
-	// This performs a one-time migration of loaded Gob data to SQLite
-	sm.db.MigrateToSQLite()
 
 	// Initialize Priority Queue and lookup map
 	sm.priorityQueue = make(PriorityQueue, 0)
@@ -115,9 +108,6 @@ func (sm *SessionManager) runManager() error {
 		}
 	}()
 
-	// Start auto-saver
-	go sm.startAutoSaver()
-
 	for {
 		select {
 		case <-sm.stop:
@@ -158,27 +148,6 @@ func (sm *SessionManager) runManager() error {
 	}
 }
 
-// Background routine to save database periodically
-func (sm *SessionManager) startAutoSaver() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-sm.stop:
-			return
-		case <-ticker.C:
-			if sm.db != nil && sm.db.IsDirty() {
-				err := sm.db.Save(config.GetSessionFilePath() + ".gob")
-				if err != nil {
-					sm.uiHandler.PrintError(fmt.Errorf("auto-save failed: %v", err))
-				}
-			}
-		}
-	}
-}
-
-// set the currently selected chat
 // set the currently selected chat
 func (sm *SessionManager) setCurrentReceiver(id string) {
 	sm.mu.Lock()
@@ -493,17 +462,6 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 			
 			sm.mu.Unlock()
-			// END LOCKING
-
-			// Legacy support: Add to old maps for now (until Phase 6)
-			chatObj := Chat{
-				Id:          jidStr,
-				IsGroup:     isGroup,
-				Name:        name,
-				Unread:      int(unread),
-				LastMessage: lastMsgTime,
-			}
-			sm.db.AddChat(chatObj)
 
 			chatCount++
 		}
@@ -593,17 +551,9 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 
 // disconnects the session
 func (sm *SessionManager) disconnect() error {
-	// Remove the GOB file
-	gobPath := config.GetSessionFilePath() + ".gob"
-	os.Remove(gobPath)
-
 	if client := sm.getClient(); client != nil && client.IsConnected() {
 		client.Disconnect()
 		sm.StatusChannel <- StatusMsg{false, nil}
-	}
-	// Save database on disconnect
-	if sm.db != nil {
-		sm.db.Save(config.GetSessionFilePath() + ".gob")
 	}
 	return nil
 }
@@ -617,9 +567,6 @@ func (sm *SessionManager) Shutdown() {
 	}
 	sm.mu.Unlock()
 
-	if sm.db != nil {
-		sm.db.Save(config.GetSessionFilePath() + ".gob")
-	}
 	// Disconnect is handled by the runManager loop via channel close,
 	// but we can ensure it here too just in case
 	if client := sm.getClient(); client != nil && client.IsConnected() {
@@ -648,10 +595,6 @@ func (sm *SessionManager) logout() error {
 			sm.uiHandler.PrintText("Warning: Couldn't properly remove session: " + err.Error())
 		}
 	}
-
-	// Remove the GOB file
-	gobPath := config.GetSessionFilePath() + ".gob"
-	os.Remove(gobPath)
 
 	// Reset client
 	sm.client = nil
@@ -859,7 +802,6 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 			eh.sm.uiHandler.NewMessage(msg)
 		} else if !evt.Info.IsFromMe {
 			if timestamp > uint64(time.Now().Unix()-30) {
-				eh.sm.db.NewUnreadChat(chatJID)
 				senderName := eh.getContactShort(evt.Info.Sender)
 				if senderName == "" {
 					senderName = "New Message"

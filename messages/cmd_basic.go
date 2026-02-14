@@ -20,7 +20,7 @@ func cmdMore(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 
 func cmdInfo(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
 	if checkParam(params, 1) {
-		sm.uiHandler.PrintText(sm.db.GetMessageInfo(params[0]))
+		sm.uiHandler.PrintText("Message info not yet implemented")
 	} else {
 		sm.printCommandUsage(cmdName, "[message-id]")
 	}
