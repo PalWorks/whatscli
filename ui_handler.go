@@ -129,6 +129,12 @@ func (u UiHandler) PrintHelp() {
 	})
 }
 
+func (u UiHandler) PrintCommands() {
+	go app.QueueUpdateDraw(func() {
+		PrintHelp()
+	})
+}
+
 func (u UiHandler) Quit() {
 	go app.QueueUpdateDraw(func() {
 		app.Stop()

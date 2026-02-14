@@ -13,16 +13,22 @@ type MessageDatabase struct {
 	db *sql.DB
 }
 
-// Init initializes the message database with SQLite
+// Init initializes the message database with a file-based SQLite connection.
 func (md *MessageDatabase) Init() error {
 	dbPath := config.GetSessionFilePath() + "_meta.db"
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return fmt.Errorf("failed to open metadata db: %w", err)
 	}
+	return md.InitWithDB(db)
+}
+
+// InitWithDB initializes the database schema using the provided *sql.DB.
+// This allows tests to inject an in-memory SQLite instance.
+func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 	md.db = db
 
-	_, err = md.db.Exec(`
+	_, err := md.db.Exec(`
 	CREATE TABLE IF NOT EXISTS conversations (
 		jid TEXT PRIMARY KEY,
 		name TEXT,
@@ -125,7 +131,7 @@ func (md *MessageDatabase) GetMessages(chatId string) []Message {
 	}
 	defer rows.Close()
 
-	var msgs []Message
+	msgs := make([]Message, 0)
 	for rows.Next() {
 		var msg Message
 		var ts int64
