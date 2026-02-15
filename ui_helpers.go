@@ -113,6 +113,7 @@ func UpdateStatusBar(statusInfo messages.SessionStatus) {
 	}
 	out += ")[::-] "
 	out += statusInfo.LastSeen
+	ctx.TopBar.SetText(out)
 }
 
 // sets the current chat, loads text from storage to TextView

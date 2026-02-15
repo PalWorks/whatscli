@@ -72,6 +72,7 @@ func cmdReset(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 	sm.mu.Lock()
 	sm.convByJID = make(map[string]*Conversation)
 	sm.priorityQueue = make(PriorityQueue, 0)
+	sm.loggedOut = false // Clear so auto-reconnect works on next /connect
 	sm.mu.Unlock()
 
 	sm.uiHandler.PrintText("Session reset. Use /connect to reconnect with a new QR code.")

@@ -114,7 +114,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 						FileEncSHA256: uploaded.FileEncSHA256,
 						FileSHA256:    uploaded.FileSHA256,
 						FileLength:    proto.Uint64(uint64(len(data))),
-						FileName:      proto.String(filePath),
+						FileName:      proto.String(filepath.Base(filePath)),
 					},
 				}
 			}

@@ -111,6 +111,11 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 	go func() {
 		time.Sleep(5 * time.Second)
 
+		// Re-read currentReceiver — user may have switched chats during wait.
+		sm.mu.RLock()
+		curReceiver := sm.currentReceiver
+		sm.mu.RUnlock()
+
 		finalMessages, err := sm.db.GetMessages(receiver)
 		if err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to reload messages: %v", err))
@@ -120,9 +125,11 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 			sm.uiHandler.PrintText("No immediate history received. Messages may arrive in the background.")
 		}
 
-		// Refresh screen with whatever we have
-		screen := sm.getMessages(receiver)
-		sm.uiHandler.NewScreen(screen)
+		// Only refresh screen if user is still viewing the same chat.
+		if curReceiver == receiver {
+			screen := sm.getMessages(receiver)
+			sm.uiHandler.NewScreen(screen)
+		}
 	}()
 }
 

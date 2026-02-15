@@ -204,6 +204,11 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to save message: %v", err))
 	}
 
+	// Resolve chat name BEFORE acquiring the write lock. getChatName()
+	// internally calls getClient() which acquires mu.RLock — calling it
+	// under mu.Lock would deadlock.
+	chatName := eh.sm.getChatName(evt.Info.Chat)
+
 	// Update priority queue and conversation
 	eh.sm.mu.Lock()
 	conv := eh.sm.convByJID[chatJID]
@@ -223,7 +228,7 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		}
 		newConv := &Conversation{
 			JID:         chatJID,
-			Name:        eh.sm.getChatName(evt.Info.Chat),
+			Name:        chatName,
 			LastMsgTime: int64(timestamp),
 			Preview:     preview,
 			Unread:      unread,

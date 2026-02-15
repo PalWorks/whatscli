@@ -191,7 +191,7 @@ func PrintImage(path string) {
 	}
 
 	cmdParts := strings.Split(config.Config.General.ShowCommand, " ")
-	cmdParts = append(cmdParts, absPath)
+	cmdParts = append(cmdParts, resolvedPath)
 	var cmd *exec.Cmd
 	size := len(cmdParts)
 	if size > 1 {

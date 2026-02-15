@@ -215,5 +215,8 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 		msg.Timestamp = uint64(ts)
 		msgs = append(msgs, msg)
 	}
+	if err := rows.Err(); err != nil {
+		return msgs, fmt.Errorf("error iterating message rows: %w", err)
+	}
 	return msgs, nil
 }
