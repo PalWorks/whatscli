@@ -14,22 +14,21 @@ import (
 type UiHandler struct{}
 
 func (u UiHandler) NewMessage(msg messages.Message) {
-	//TODO: its stupid to "go" this as its supposed to run
-	//on the ui thread anyway. But QueueUpdate blocks...?
-	go app.QueueUpdateDraw(func() {
-		curRegions = append(curRegions, msg)
+	// QueueUpdateDraw must be called from a goroutine to avoid blocking the caller.
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.CurRegions = append(ctx.CurRegions, msg)
 		PrintText(getTextMessageString(&msg))
 	})
 }
 
 func (u UiHandler) NewScreen(msgs []messages.Message) {
-	go app.QueueUpdateDraw(func() {
-		textView.Clear()
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.TextView.Clear()
 		screen := getMessagesString(msgs)
-		textView.SetText(screen)
-		curRegions = msgs
+		ctx.TextView.SetText(screen)
+		ctx.CurRegions = msgs
 		if screen == "" {
-			if currentReceiver.Id == "" {
+			if ctx.CurrentReceiver.Id == "" {
 				PrintHelp()
 			} else {
 				PrintText("[::d] ~~~ no messages, press " + config.Config.Keymap.CommandBacklog + " to load backlog if available ~~~[::-]")
@@ -40,14 +39,14 @@ func (u UiHandler) NewScreen(msgs []messages.Message) {
 
 // UpdateChatList updates the table with the PriorityQueue content
 func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		// Update the store
-		allChats = make([]*messages.Conversation, len(pq))
-		copy(allChats, pq)
+		ctx.AllChats = make([]*messages.Conversation, len(pq))
+		copy(ctx.AllChats, pq)
 
 		// Sort the full list once
-		sort.Slice(allChats, func(i, j int) bool {
-			a, b := allChats[i], allChats[j]
+		sort.Slice(ctx.AllChats, func(i, j int) bool {
+			a, b := ctx.AllChats[i], ctx.AllChats[j]
 
 			// Pinned check
 			if a.IsPinned && !b.IsPinned {
@@ -61,39 +60,33 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 			return a.LastMsgTime > b.LastMsgTime
 		})
 
-		// Reset limit if list seems to be refreshed significantly, or keep it?
-		// REMOVED: chatLimit = batchSize to prevent jumping to top on new message events while scrolled down.
-		// We trust the user's scroll expansion.
-
 		RenderChatTable()
 	})
 }
 
-// Deprecated: loads the chat data from storage to the TreeView - Kept for interface compat
-func (u UiHandler) SetChats(ids []messages.Chat) {
-	// No-op for now, as we moved to Table
-}
+// SetChats is a legacy no-op kept for UiMessageHandler interface compatibility.
+func (u UiHandler) SetChats(ids []messages.Chat) {}
 
 func (u UiHandler) PrintError(err error) {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		PrintError(err)
 	})
 }
 
 func (u UiHandler) PrintText(msg string) {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		PrintText(msg)
 	})
 }
 
 func (u UiHandler) PrintQR(qr string) {
-	go app.QueueUpdateDraw(func() {
-		fmt.Fprint(tview.ANSIWriter(textView), qr+"\n")
+	go ctx.App.QueueUpdateDraw(func() {
+		fmt.Fprint(tview.ANSIWriter(ctx.TextView), qr+"\n")
 	})
 }
 
 func (u UiHandler) PrintFile(path string) {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		PrintImage(path)
 	})
 }
@@ -103,7 +96,7 @@ func (u UiHandler) OpenFile(path string) {
 }
 
 func (u UiHandler) SetStatus(status messages.SessionStatus) {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		UpdateStatusBar(status)
 	})
 }
@@ -117,27 +110,27 @@ func (u UiHandler) ShowColorList() {
 }
 
 func (u UiHandler) Clear() {
-	go app.QueueUpdateDraw(func() {
-		textView.Clear()
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.TextView.Clear()
 		PrintHelp()
 	})
 }
 
 func (u UiHandler) PrintHelp() {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		PrintHelp()
 	})
 }
 
 func (u UiHandler) PrintCommands() {
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		PrintHelp()
 	})
 }
 
 func (u UiHandler) Quit() {
-	go app.QueueUpdateDraw(func() {
-		app.Stop()
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.App.Stop()
 	})
 }
 
@@ -146,9 +139,9 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 	// Translate ANSI codes in the QR string to tview tags to avoid using ANSIWriter during draw
 	qtTrans := tview.TranslateANSI(qr)
 
-	go app.QueueUpdateDraw(func() {
+	go ctx.App.QueueUpdateDraw(func() {
 		// 1. Clear Screen
-		textView.Clear()
+		ctx.TextView.Clear()
 
 		// 2. Print Help
 		PrintHelp()
@@ -164,9 +157,9 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 		output += qtTrans + "\n"
 
 		// 4. Atomic Write (Standard Writer)
-		fmt.Fprint(textView, output)
+		fmt.Fprint(ctx.TextView, output)
 
 		// 5. Ensure input field is focused and cleared so commands can be entered
-		app.SetFocus(textInput)
+		ctx.App.SetFocus(ctx.TextInput)
 	})
 }

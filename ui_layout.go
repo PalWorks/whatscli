@@ -12,32 +12,32 @@ import (
 // SetupLeftPane initializes the left panel with Status, Chats, and Groups
 func SetupLeftPane() *tview.Flex {
 	// 1. Status Section
-	statusTable = tview.NewTable()
-	statusTable.SetSelectable(true, false)
-	statusTable.SetBorder(true)
-	statusTable.SetTitle(" Status ")
-	statusTable.SetTitleAlign(tview.AlignCenter)
-	statusTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
+	ctx.StatusTable = tview.NewTable()
+	ctx.StatusTable.SetSelectable(true, false)
+	ctx.StatusTable.SetBorder(true)
+	ctx.StatusTable.SetTitle(" Status ")
+	ctx.StatusTable.SetTitleAlign(tview.AlignCenter)
+	ctx.StatusTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
 
 	// 2. Chats Section
-	chatTable = tview.NewTable()
-	chatTable.SetSelectable(true, false)
-	chatTable.SetBorder(true)
-	chatTable.SetTitle(" Chats ")
-	chatTable.SetTitleAlign(tview.AlignCenter)
-	chatTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
+	ctx.ChatTable = tview.NewTable()
+	ctx.ChatTable.SetSelectable(true, false)
+	ctx.ChatTable.SetBorder(true)
+	ctx.ChatTable.SetTitle(" Chats ")
+	ctx.ChatTable.SetTitleAlign(tview.AlignCenter)
+	ctx.ChatTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
 
 	// 3. Groups Section
-	groupTable = tview.NewTable()
-	groupTable.SetSelectable(true, false)
-	groupTable.SetBorder(true)
-	groupTable.SetTitle(" Groups ")
-	groupTable.SetTitleAlign(tview.AlignCenter)
-	groupTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
+	ctx.GroupTable = tview.NewTable()
+	ctx.GroupTable.SetSelectable(true, false)
+	ctx.GroupTable.SetBorder(true)
+	ctx.GroupTable.SetTitle(" Groups ")
+	ctx.GroupTable.SetTitleAlign(tview.AlignCenter)
+	ctx.GroupTable.SetBorderColor(tcell.ColorNames[config.Config.Colors.Borders])
 
 	// Helper to update focus appearance (mutually exclusive)
 	setActiveTable := func(active *tview.Table) {
-		tables := []*tview.Table{statusTable, chatTable, groupTable}
+		tables := []*tview.Table{ctx.StatusTable, ctx.ChatTable, ctx.GroupTable}
 		for _, t := range tables {
 			if t == active {
 				t.SetSelectable(true, false)
@@ -51,8 +51,8 @@ func SetupLeftPane() *tview.Flex {
 
 	// Define selection handlers
 	statusSelectFunc := func(row, column int) {
-		if statusTable.HasFocus() && row >= 0 && row < statusTable.GetRowCount() {
-			cell := statusTable.GetCell(row, column)
+		if ctx.StatusTable.HasFocus() && row >= 0 && row < ctx.StatusTable.GetRowCount() {
+			cell := ctx.StatusTable.GetCell(row, column)
 			if cell != nil {
 				ref := cell.GetReference()
 				if ref != nil {
@@ -71,8 +71,8 @@ func SetupLeftPane() *tview.Flex {
 	}
 
 	chatSelectFunc := func(row, column int) {
-		if chatTable.HasFocus() && row >= 0 && row < chatTable.GetRowCount() {
-			cell := chatTable.GetCell(row, column)
+		if ctx.ChatTable.HasFocus() && row >= 0 && row < ctx.ChatTable.GetRowCount() {
+			cell := ctx.ChatTable.GetCell(row, column)
 			if cell != nil {
 				ref := cell.GetReference()
 				if ref != nil {
@@ -89,15 +89,15 @@ func SetupLeftPane() *tview.Flex {
 			}
 		}
 		// Infinite scroll trigger for contacts
-		if row >= chatTable.GetRowCount()-5 && chatLimit < len(allChats) {
-			chatLimit += batchSize
+		if row >= ctx.ChatTable.GetRowCount()-5 && ctx.ChatLimit < len(ctx.AllChats) {
+			ctx.ChatLimit += batchSize
 			RenderChatTable()
 		}
 	}
 
 	groupSelectFunc := func(row, column int) {
-		if groupTable.HasFocus() && row >= 0 && row < groupTable.GetRowCount() {
-			cell := groupTable.GetCell(row, column)
+		if ctx.GroupTable.HasFocus() && row >= 0 && row < ctx.GroupTable.GetRowCount() {
+			cell := ctx.GroupTable.GetCell(row, column)
 			if cell != nil {
 				ref := cell.GetReference()
 				if ref != nil {
@@ -116,36 +116,36 @@ func SetupLeftPane() *tview.Flex {
 	}
 
 	// Selection Changed Funcs
-	statusTable.SetSelectionChangedFunc(statusSelectFunc)
-	statusTable.SetFocusFunc(func() {
-		setActiveTable(statusTable)
-		row, col := statusTable.GetSelection()
+	ctx.StatusTable.SetSelectionChangedFunc(statusSelectFunc)
+	ctx.StatusTable.SetFocusFunc(func() {
+		setActiveTable(ctx.StatusTable)
+		row, col := ctx.StatusTable.GetSelection()
 		statusSelectFunc(row, col)
 	})
 
-	chatTable.SetSelectionChangedFunc(chatSelectFunc)
-	chatTable.SetFocusFunc(func() {
-		setActiveTable(chatTable)
-		row, col := chatTable.GetSelection()
+	ctx.ChatTable.SetSelectionChangedFunc(chatSelectFunc)
+	ctx.ChatTable.SetFocusFunc(func() {
+		setActiveTable(ctx.ChatTable)
+		row, col := ctx.ChatTable.GetSelection()
 		chatSelectFunc(row, col)
 	})
 
-	groupTable.SetSelectionChangedFunc(groupSelectFunc)
-	groupTable.SetFocusFunc(func() {
-		setActiveTable(groupTable)
-		row, col := groupTable.GetSelection()
+	ctx.GroupTable.SetSelectionChangedFunc(groupSelectFunc)
+	ctx.GroupTable.SetFocusFunc(func() {
+		setActiveTable(ctx.GroupTable)
+		row, col := ctx.GroupTable.GetSelection()
 		groupSelectFunc(row, col)
 	})
 
 	// Initialize styles (start with all inactive)
 	setActiveTable(nil)
 
-	leftPane = tview.NewFlex().SetDirection(tview.FlexRow)
+	ctx.LeftPane = tview.NewFlex().SetDirection(tview.FlexRow)
 	// Status: Border top + 1 row + Border bottom = 3 lines
-	leftPane.AddItem(statusTable, 3, 1, false)
+	ctx.LeftPane.AddItem(ctx.StatusTable, 3, 1, false)
 
-	leftPane.AddItem(chatTable, 0, 1, true)
-	leftPane.AddItem(groupTable, 0, 1, false)
+	ctx.LeftPane.AddItem(ctx.ChatTable, 0, 1, true)
+	ctx.LeftPane.AddItem(ctx.GroupTable, 0, 1, false)
 
-	return leftPane
+	return ctx.LeftPane
 }

@@ -36,130 +36,83 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 	receiver := sm.currentReceiver
 	sm.mu.RUnlock()
 
-	if receiver != "" {
-		// First approach: Try to use the direct conversation query method
-		jid, err := types.ParseJID(receiver)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
-			return
-		}
-
-		sm.uiHandler.PrintText("Retrieving message history...")
-
-		// Get existing messages to compare later
-		existingMessages := sm.db.GetMessages(receiver)
-
-		// Find the ID of the oldest message we have - not used currently but could be in future
-		var oldestTimestamp uint64 = ^uint64(0) // Maximum uint64 value
-		for _, msg := range existingMessages {
-			if msg.Timestamp < oldestTimestamp {
-				oldestTimestamp = msg.Timestamp
-			}
-		}
-
-		// Try multiple approaches:
-		var messagesFetched bool
-
-		// 1. First try direct message fetch
-		if client != nil && client.IsConnected() {
-			sm.uiHandler.PrintText("Attempting to fetch older messages...")
-
-			// Try to send a simpler read receipt which sometimes triggers history sync
-			receiptType := types.ReceiptTypeRead
-			err := client.MarkRead(context.Background(), []types.MessageID{}, time.Now(), jid, jid, receiptType)
-			if err != nil {
-				sm.uiHandler.PrintText(fmt.Sprintf("Note: Could not send read receipt: %v", err))
-			}
-
-			// Wait a bit
-			time.Sleep(2 * time.Second)
-
-			// Check if we got any new messages
-			updatedMessages := sm.db.GetMessages(sm.currentReceiver)
-			if len(updatedMessages) > len(existingMessages) {
-				messagesFetched = true
-				sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(updatedMessages)-len(existingMessages)))
-			}
-		}
-
-		// 2. If that didn't work, try a presence update which can trigger history sync
-		if !messagesFetched && client != nil && client.IsConnected() {
-			sm.uiHandler.PrintText("Trying alternative method...")
-
-			// Send chat presence - using ChatPresence constants from the types package
-			err = client.SendChatPresence(context.Background(), jid, types.ChatPresenceComposing, types.ChatPresenceMediaText)
-			if err != nil {
-				sm.uiHandler.PrintText(fmt.Sprintf("Note: Could not send chat presence: %v", err))
-			}
-
-			// Wait a bit longer for any messages to arrive
-			time.Sleep(3 * time.Second)
-
-			// Check if we got any new messages
-			updatedMessages := sm.db.GetMessages(sm.currentReceiver)
-			if len(updatedMessages) > len(existingMessages) {
-				messagesFetched = true
-				sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(updatedMessages)-len(existingMessages)))
-			}
-		}
-
-		// 3. Proper method: Use BuildHistorySyncRequest
-		if !messagesFetched && client != nil && client.IsConnected() {
-			sm.uiHandler.PrintText("Requesting history sync from WhatsApp servers...")
-
-			var anchor *types.MessageInfo
-			msgs := sm.db.GetMessages(sm.currentReceiver)
-			if len(msgs) > 0 {
-				oldest := msgs[0]
-				chatJID, _ := types.ParseJID(oldest.ChatId)
-				senderJID, _ := types.ParseJID(oldest.ContactId)
-
-				// Construct anchor message info
-				anchor = &types.MessageInfo{
-					ID: oldest.Id,
-					MessageSource: types.MessageSource{
-						Chat:     chatJID,
-						Sender:   senderJID,
-						IsFromMe: oldest.FromMe,
-					},
-					Timestamp: time.Unix(int64(oldest.Timestamp), 0),
-				}
-				sm.uiHandler.PrintText(fmt.Sprintf("Requesting 50 messages before: %s (%s)", oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
-			} else {
-				sm.uiHandler.PrintText("Requesting latest 50 messages...")
-			}
-
-			// BuildHistorySyncRequest takes (message *types.MessageInfo, limit int) and returns *waProto.Message
-			req := client.BuildHistorySyncRequest(anchor, 50)
-
-			// Send to self (primary device)
-			target := *client.Store.ID
-			target.Device = 0
-
-			resp, err := client.SendMessage(context.Background(), target, req)
-			if err != nil {
-				sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
-			} else {
-				sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for server response...")
-				// History sync comes as an async event, so we just wait a bit to see if DB updates
-				time.Sleep(5 * time.Second)
-
-				// Check if we got any new messages
-				finalMessages := sm.db.GetMessages(sm.currentReceiver)
-				if len(finalMessages) > len(existingMessages) {
-					sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-len(existingMessages)))
-				} else {
-					sm.uiHandler.PrintText("No immediate history received. It may arrive in the background.")
-				}
-			}
-		}
-
-		// Show the updated message list
-		screen := sm.getMessages(receiver)
-		sm.uiHandler.NewScreen(screen)
-	} else {
+	if receiver == "" {
 		sm.printCommandUsage(cmdName, "-> only works in a chat")
+		return
 	}
+
+	if client == nil || !client.IsConnected() {
+		sm.uiHandler.PrintError(errors.New("not connected"))
+		return
+	}
+
+	jid, err := types.ParseJID(receiver)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
+		return
+	}
+	_ = jid // used for anchor construction
+
+	sm.uiHandler.PrintText("Requesting message history from WhatsApp servers...")
+
+	// Build anchor from oldest known message (if any)
+	var anchor *types.MessageInfo
+	msgs, err := sm.db.GetMessages(receiver)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
+		return
+	}
+	existingCount := len(msgs)
+
+	if existingCount > 0 {
+		oldest := msgs[0]
+		chatJID, _ := types.ParseJID(oldest.ChatId)
+		senderJID, _ := types.ParseJID(oldest.ContactId)
+
+		anchor = &types.MessageInfo{
+			ID: oldest.Id,
+			MessageSource: types.MessageSource{
+				Chat:     chatJID,
+				Sender:   senderJID,
+				IsFromMe: oldest.FromMe,
+			},
+			Timestamp: time.Unix(int64(oldest.Timestamp), 0),
+		}
+		sm.uiHandler.PrintText(fmt.Sprintf("Requesting 50 messages before: %s (%s)",
+			oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
+	} else {
+		sm.uiHandler.PrintText("Requesting latest 50 messages...")
+	}
+
+	req := client.BuildHistorySyncRequest(anchor, 50)
+
+	// Send to primary device (self)
+	target := *client.Store.ID
+	target.Device = 0
+
+	resp, err := client.SendMessage(context.Background(), target, req)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
+		return
+	}
+
+	sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
+
+	// History sync arrives asynchronously; wait briefly then check
+	time.Sleep(5 * time.Second)
+
+	finalMessages, err := sm.db.GetMessages(receiver)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to reload messages: %v", err))
+	} else if len(finalMessages) > existingCount {
+		sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-existingCount))
+	} else {
+		sm.uiHandler.PrintText("No immediate history received. Messages may arrive in the background.")
+	}
+
+	// Refresh screen with whatever we have
+	screen := sm.getMessages(receiver)
+	sm.uiHandler.NewScreen(screen)
 }
 
 func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {

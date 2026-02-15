@@ -27,7 +27,6 @@ func getMessagesString(msgs []messages.Message) string {
 }
 
 // create a formatted string with regions based on message ID from a text message
-// TODO: optimize, use Sprintf etc
 func getTextMessageString(msg *messages.Message) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
@@ -50,43 +49,43 @@ func getTextMessageString(msg *messages.Message) string {
 	return out
 }
 
-// RenderChatTable renders the table based on allChats and chatLimit
+// RenderChatTable renders the table based on ctx.AllChats and ctx.ChatLimit
 func RenderChatTable() {
 	// Snapshot current selection by JID
 	var selectedStatusJID string
 	var selectedChatJID string
 	var selectedGroupJID string
 
-	if rowS, _ := statusTable.GetSelection(); rowS >= 0 && rowS < statusTable.GetRowCount() {
-		if cell := statusTable.GetCell(rowS, 0); cell != nil {
+	if rowS, _ := ctx.StatusTable.GetSelection(); rowS >= 0 && rowS < ctx.StatusTable.GetRowCount() {
+		if cell := ctx.StatusTable.GetCell(rowS, 0); cell != nil {
 			if ref := cell.GetReference(); ref != nil {
 				selectedStatusJID = ref.(*messages.Conversation).JID
 			}
 		}
 	}
-	if rowC, _ := chatTable.GetSelection(); rowC >= 0 && rowC < chatTable.GetRowCount() {
-		if cell := chatTable.GetCell(rowC, 0); cell != nil {
+	if rowC, _ := ctx.ChatTable.GetSelection(); rowC >= 0 && rowC < ctx.ChatTable.GetRowCount() {
+		if cell := ctx.ChatTable.GetCell(rowC, 0); cell != nil {
 			if ref := cell.GetReference(); ref != nil {
 				selectedChatJID = ref.(*messages.Conversation).JID
 			}
 		}
 	}
-	if rowG, _ := groupTable.GetSelection(); rowG >= 0 && rowG < groupTable.GetRowCount() {
-		if cell := groupTable.GetCell(rowG, 0); cell != nil {
+	if rowG, _ := ctx.GroupTable.GetSelection(); rowG >= 0 && rowG < ctx.GroupTable.GetRowCount() {
+		if cell := ctx.GroupTable.GetCell(rowG, 0); cell != nil {
 			if ref := cell.GetReference(); ref != nil {
 				selectedGroupJID = ref.(*messages.Conversation).JID
 			}
 		}
 	}
 
-	displayList := allChats
-	if len(displayList) > chatLimit {
-		displayList = displayList[:chatLimit]
+	displayList := ctx.AllChats
+	if len(displayList) > ctx.ChatLimit {
+		displayList = displayList[:ctx.ChatLimit]
 	}
 
-	statusTable.Clear()
-	chatTable.Clear()
-	groupTable.Clear()
+	ctx.StatusTable.Clear()
+	ctx.ChatTable.Clear()
+	ctx.GroupTable.Clear()
 
 	sIdx := 0
 	cIdx := 0
@@ -123,7 +122,7 @@ func RenderChatTable() {
 		if conv.JID == messages.STATUSSUFFIX {
 			// Status
 			cell.SetTextColor(tcell.ColorYellow) // Distinct color
-			statusTable.SetCell(sIdx, 0, cell)
+			ctx.StatusTable.SetCell(sIdx, 0, cell)
 			if conv.JID == selectedStatusJID {
 				newRowS = sIdx
 			}
@@ -131,7 +130,7 @@ func RenderChatTable() {
 		} else if strings.HasSuffix(conv.JID, messages.GROUPSUFFIX) {
 			// Group
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListGroup])
-			groupTable.SetCell(gIdx, 0, cell)
+			ctx.GroupTable.SetCell(gIdx, 0, cell)
 			if conv.JID == selectedGroupJID {
 				newRowG = gIdx
 			}
@@ -139,7 +138,7 @@ func RenderChatTable() {
 		} else {
 			// Contact
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListContact])
-			chatTable.SetCell(cIdx, 0, cell)
+			ctx.ChatTable.SetCell(cIdx, 0, cell)
 			if conv.JID == selectedChatJID {
 				newRowC = cIdx
 			}
@@ -148,16 +147,16 @@ func RenderChatTable() {
 	}
 
 	// Restore selection
-	if statusTable.GetRowCount() > 0 {
-		statusTable.Select(newRowS, 0)
+	if ctx.StatusTable.GetRowCount() > 0 {
+		ctx.StatusTable.Select(newRowS, 0)
 	}
 
-	if chatTable.GetRowCount() > 0 {
-		chatTable.Select(newRowC, 0)
+	if ctx.ChatTable.GetRowCount() > 0 {
+		ctx.ChatTable.Select(newRowC, 0)
 	}
 
-	if groupTable.GetRowCount() > 0 {
-		groupTable.Select(newRowG, 0)
+	if ctx.GroupTable.GetRowCount() > 0 {
+		ctx.GroupTable.Select(newRowG, 0)
 	}
 }
 
@@ -198,7 +197,7 @@ func PrintImage(path string) {
 	if stdout, err = cmd.StdoutPipe(); err == nil {
 		if err = cmd.Start(); err == nil {
 			reader := bufio.NewReader(stdout)
-			io.Copy(tview.ANSIWriter(textView), reader)
+			io.Copy(tview.ANSIWriter(ctx.TextView), reader)
 			return
 		}
 	}

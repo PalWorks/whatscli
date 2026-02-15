@@ -2,6 +2,7 @@ package messages
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -19,6 +20,14 @@ func newTestDB(t *testing.T) *MessageDatabase {
 		t.Fatalf("InitWithDB failed: %v", err)
 	}
 	return md
+}
+
+// addTestMsg is a helper that calls AddMessage and fails the test on error.
+func addTestMsg(t *testing.T, md *MessageDatabase, msg Message) {
+	t.Helper()
+	if err := md.AddMessage(msg); err != nil {
+		t.Fatalf("AddMessage failed for %s: %v", msg.Id, err)
+	}
 }
 
 func TestInit_CreatesTables(t *testing.T) {
@@ -44,6 +53,27 @@ func TestInit_CreatesTables(t *testing.T) {
 	}
 }
 
+func TestClose(t *testing.T) {
+	md := newTestDB(t)
+
+	if err := md.Close(); err != nil {
+		t.Fatalf("Close() returned error: %v", err)
+	}
+
+	// After close, queries should fail
+	_, err := md.db.Query("SELECT 1")
+	if err == nil {
+		t.Error("expected error after Close(), got nil")
+	}
+}
+
+func TestClose_NilDB(t *testing.T) {
+	md := &MessageDatabase{} // db is nil
+	if err := md.Close(); err != nil {
+		t.Fatalf("Close() on nil db should not error, got: %v", err)
+	}
+}
+
 func TestAddMessage_AndGetMessages(t *testing.T) {
 	md := newTestDB(t)
 
@@ -55,12 +85,13 @@ func TestAddMessage_AndGetMessages(t *testing.T) {
 	}
 
 	for _, msg := range msgs {
-		if !md.AddMessage(msg) {
-			t.Fatalf("AddMessage failed for %s", msg.Id)
-		}
+		addTestMsg(t, md, msg)
 	}
 
-	result := md.GetMessages(chatID)
+	result, err := md.GetMessages(chatID)
+	if err != nil {
+		t.Fatalf("GetMessages error: %v", err)
+	}
 	if len(result) != 3 {
 		t.Fatalf("expected 3 messages, got %d", len(result))
 	}
@@ -84,15 +115,16 @@ func TestAddMessage_DuplicateIgnored(t *testing.T) {
 
 	msg := Message{Id: "dup1", ChatId: "chat1", ContactId: "c1", Timestamp: 1000, Text: "original"}
 
-	if !md.AddMessage(msg) {
-		t.Fatal("first AddMessage failed")
-	}
+	addTestMsg(t, md, msg)
 
 	// Insert duplicate with different text — should be ignored (INSERT OR IGNORE)
 	msg.Text = "duplicate"
-	md.AddMessage(msg) // may return false, that's fine
+	_ = md.AddMessage(msg) // no error expected for IGNORE
 
-	result := md.GetMessages("chat1")
+	result, err := md.GetMessages("chat1")
+	if err != nil {
+		t.Fatalf("GetMessages error: %v", err)
+	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 message after duplicate insert, got %d", len(result))
 	}
@@ -175,9 +207,9 @@ func TestGetConversations_Multiple(t *testing.T) {
 func TestGetMessages_EmptyChat(t *testing.T) {
 	md := newTestDB(t)
 
-	result := md.GetMessages("nonexistent@s.whatsapp.net")
-	if result == nil {
-		t.Error("expected empty slice, got nil")
+	result, err := md.GetMessages("nonexistent@s.whatsapp.net")
+	if err != nil {
+		t.Fatalf("GetMessages error: %v", err)
 	}
 	if len(result) != 0 {
 		t.Errorf("expected 0 messages, got %d", len(result))
@@ -197,11 +229,12 @@ func TestGetMessages_SpecialChars(t *testing.T) {
 		Text:        "Hello 🌍! \"Quotes\" & 'apostrophes' and\nnewlines",
 	}
 
-	if !md.AddMessage(msg) {
-		t.Fatal("AddMessage with special chars failed")
-	}
+	addTestMsg(t, md, msg)
 
-	result := md.GetMessages(chatID)
+	result, err := md.GetMessages(chatID)
+	if err != nil {
+		t.Fatalf("GetMessages error: %v", err)
+	}
 	if len(result) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(result))
 	}
@@ -210,5 +243,139 @@ func TestGetMessages_SpecialChars(t *testing.T) {
 	}
 	if result[0].ContactName != "O'Brien" {
 		t.Errorf("contact name mismatch: expected O'Brien, got %q", result[0].ContactName)
+	}
+}
+
+// --- Tests for SearchMessages ---
+
+func TestSearchMessages_InChat(t *testing.T) {
+	md := newTestDB(t)
+	chat := "chat1@s.whatsapp.net"
+	addTestMsg(t, md, Message{Id: "s1", ChatId: chat, ContactId: "c1", Timestamp: 1000, Text: "Hello world"})
+	addTestMsg(t, md, Message{Id: "s2", ChatId: chat, ContactId: "c1", Timestamp: 2000, Text: "Goodbye world"})
+	addTestMsg(t, md, Message{Id: "s3", ChatId: chat, ContactId: "c1", Timestamp: 3000, Text: "Hello again"})
+	addTestMsg(t, md, Message{Id: "s4", ChatId: "other@s.whatsapp.net", ContactId: "c2", Timestamp: 4000, Text: "Hello from other chat"})
+
+	results, err := md.SearchMessages(chat, "Hello", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results scoped to chat, got %d", len(results))
+	}
+	// Newest first
+	if results[0].Id != "s3" || results[1].Id != "s1" {
+		t.Errorf("unexpected order: [%s, %s]", results[0].Id, results[1].Id)
+	}
+}
+
+func TestSearchMessages_AllChats(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "a1", ChatId: "c1@s.whatsapp.net", ContactId: "x", Timestamp: 1000, Text: "Project Alpha update"})
+	addTestMsg(t, md, Message{Id: "a2", ChatId: "c2@s.whatsapp.net", ContactId: "y", Timestamp: 2000, Text: "Alpha version released"})
+	addTestMsg(t, md, Message{Id: "a3", ChatId: "c3@g.us", ContactId: "z", Timestamp: 3000, Text: "No match here"})
+
+	results, err := md.SearchMessages("", "Alpha", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 cross-chat results, got %d", len(results))
+	}
+}
+
+func TestSearchMessages_NoResults(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "n1", ChatId: "c1@s.whatsapp.net", ContactId: "x", Timestamp: 1000, Text: "Nothing interesting"})
+
+	results, err := md.SearchMessages("c1@s.whatsapp.net", "xyznonexistent", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(results))
+	}
+}
+
+func TestSearchMessages_EmptyKeyword(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "e1", ChatId: "c1@s.whatsapp.net", ContactId: "x", Timestamp: 1000, Text: "Something"})
+
+	results, err := md.SearchMessages("c1@s.whatsapp.net", "", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("empty keyword should return 0 results, got %d", len(results))
+	}
+}
+
+func TestSearchMessages_Limit(t *testing.T) {
+	md := newTestDB(t)
+	chat := "c@s.whatsapp.net"
+	for i := 0; i < 10; i++ {
+		addTestMsg(t, md, Message{Id: fmt.Sprintf("lim%d", i), ChatId: chat, ContactId: "x", Timestamp: uint64(1000 + i), Text: "match"})
+	}
+
+	results, err := md.SearchMessages(chat, "match", 3)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Errorf("expected 3 results with limit=3, got %d", len(results))
+	}
+}
+
+// --- Tests for GetMessagesPaginated ---
+
+func TestGetMessagesPaginated_Basic(t *testing.T) {
+	md := newTestDB(t)
+	chat := "chat@s.whatsapp.net"
+	for i := 1; i <= 5; i++ {
+		addTestMsg(t, md, Message{Id: fmt.Sprintf("p%d", i), ChatId: chat, ContactId: "c1", Timestamp: uint64(i * 1000), Text: fmt.Sprintf("msg %d", i)})
+	}
+
+	// Get messages before timestamp 4000 (should get p1, p2, p3)
+	results, err := md.GetMessagesPaginated(chat, 4000, 50)
+	if err != nil {
+		t.Fatalf("GetMessagesPaginated error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected 3 messages before ts=4000, got %d", len(results))
+	}
+	// Newest first (DESC order)
+	if results[0].Id != "p3" || results[1].Id != "p2" || results[2].Id != "p1" {
+		t.Errorf("unexpected order: [%s, %s, %s]", results[0].Id, results[1].Id, results[2].Id)
+	}
+}
+
+func TestGetMessagesPaginated_Limit(t *testing.T) {
+	md := newTestDB(t)
+	chat := "chat@s.whatsapp.net"
+	for i := 1; i <= 10; i++ {
+		addTestMsg(t, md, Message{Id: fmt.Sprintf("pl%d", i), ChatId: chat, ContactId: "c1", Timestamp: uint64(i * 100), Text: "msg"})
+	}
+
+	results, err := md.GetMessagesPaginated(chat, 800, 3)
+	if err != nil {
+		t.Fatalf("GetMessagesPaginated error: %v", err)
+	}
+	if len(results) != 3 {
+		t.Errorf("expected 3 messages with limit=3, got %d", len(results))
+	}
+}
+
+func TestGetMessagesPaginated_NoOlderMessages(t *testing.T) {
+	md := newTestDB(t)
+	chat := "chat@s.whatsapp.net"
+	addTestMsg(t, md, Message{Id: "only1", ChatId: chat, ContactId: "c1", Timestamp: 5000, Text: "only message"})
+
+	// Before this message's timestamp — nothing exists
+	results, err := md.GetMessagesPaginated(chat, 5000, 50)
+	if err != nil {
+		t.Fatalf("GetMessagesPaginated error: %v", err)
+	}
+	if len(results) != 0 {
+		t.Errorf("expected 0 older messages, got %d", len(results))
 	}
 }

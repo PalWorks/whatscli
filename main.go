@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 
-	"code.rocketnine.space/tslocum/cbind"
 	"github.com/gdamore/tcell/v2"
 	"github.com/normen/whatscli/config"
 	"github.com/normen/whatscli/messages"
@@ -11,30 +10,6 @@ import (
 )
 
 var VERSION string = "v1.0.42"
-
-var currentReceiver messages.Chat = messages.Chat{}
-var curRegions []messages.Message
-
-var textView *tview.TextView
-var leftPane *tview.Flex
-var chatTable *tview.Table
-var groupTable *tview.Table
-var statusTable *tview.Table
-var textInput *tview.InputField
-var topBar *tview.TextView
-
-var app *tview.Application
-var mouseState bool = true // Track mouse state
-
-var sessionManager *messages.SessionManager
-
-var keyBindings *cbind.Configuration
-
-var uiHandler messages.UiMessageHandler
-
-// Chat list state for lazy loading
-var allChats []*messages.Conversation
-var chatLimit int = 50
 
 const batchSize = 50
 
@@ -44,14 +19,21 @@ func main() {
 		fmt.Printf("Failed to initialize config: %v\n", err)
 		return
 	}
-	uiHandler = UiHandler{}
-	sessionManager = &messages.SessionManager{}
-	if err := sessionManager.Init(uiHandler); err != nil {
+
+	// Initialize the application context (replaces package-level globals)
+	ctx = &AppContext{
+		MouseState: true,
+		ChatLimit:  50,
+	}
+
+	ctx.UiHandler = UiHandler{}
+	ctx.SessionManager = &messages.SessionManager{}
+	if err := ctx.SessionManager.Init(ctx.UiHandler); err != nil {
 		fmt.Printf("Failed to initialize session: %v\n", err)
 		return
 	}
 
-	app = tview.NewApplication()
+	ctx.App = tview.NewApplication()
 
 	sideBarWidth := config.Config.Ui.ChatSidebarWidth
 	gridLayout := tview.NewGrid()
@@ -62,78 +44,78 @@ func main() {
 	gridLayout.SetBordersColor(tcell.ColorNames[config.Config.Colors.Borders])
 
 	cmdPrefix := config.Config.General.CmdPrefix
-	topBar = tview.NewTextView()
-	topBar.SetDynamicColors(true)
-	topBar.SetScrollable(false)
-	topBar.SetText("[::b] WhatsCLI " + VERSION + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
-	topBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	ctx.TopBar = tview.NewTextView()
+	ctx.TopBar.SetDynamicColors(true)
+	ctx.TopBar.SetScrollable(false)
+	ctx.TopBar.SetText("[::b] WhatsCLI " + VERSION + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
+	ctx.TopBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 
-	textView = tview.NewTextView().
+	ctx.TextView = tview.NewTextView().
 		SetDynamicColors(true).
 		SetRegions(true).
 		SetWordWrap(true).
 		SetChangedFunc(func() {
-			app.Draw()
+			ctx.App.Draw()
 		})
-	textView.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
-	textView.SetTextColor(tcell.ColorNames[config.Config.Colors.Text])
+	ctx.TextView.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	ctx.TextView.SetTextColor(tcell.ColorNames[config.Config.Colors.Text])
 
 	PrintHelp()
 
-	textInput = tview.NewInputField()
-	textInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
-	textInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
-	textInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
-	textInput.SetDoneFunc(EnterCommand)
-	textInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+	ctx.TextInput = tview.NewInputField()
+	ctx.TextInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	ctx.TextInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	ctx.TextInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
+	ctx.TextInput.SetDoneFunc(EnterCommand)
+	ctx.TextInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyTab {
-			if statusTable != nil && statusTable.GetRowCount() > 0 {
-				app.SetFocus(statusTable)
+			if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
+				ctx.App.SetFocus(ctx.StatusTable)
 			} else {
-				app.SetFocus(chatTable)
+				ctx.App.SetFocus(ctx.ChatTable)
 			}
 			return nil
 		}
 		if event.Key() == tcell.KeyDown {
-			offset, _ := textView.GetScrollOffset()
+			offset, _ := ctx.TextView.GetScrollOffset()
 			offset += 1
-			textView.ScrollTo(offset, 0)
+			ctx.TextView.ScrollTo(offset, 0)
 			return nil
 		}
 		if event.Key() == tcell.KeyUp {
-			offset, _ := textView.GetScrollOffset()
+			offset, _ := ctx.TextView.GetScrollOffset()
 			offset -= 1
-			textView.ScrollTo(offset, 0)
+			ctx.TextView.ScrollTo(offset, 0)
 			return nil
 		}
 		if event.Key() == tcell.KeyPgDn {
-			offset, _ := textView.GetScrollOffset()
+			offset, _ := ctx.TextView.GetScrollOffset()
 			offset += 10
-			textView.ScrollTo(offset, 0)
+			ctx.TextView.ScrollTo(offset, 0)
 			return nil
 		}
 		if event.Key() == tcell.KeyPgUp {
-			offset, _ := textView.GetScrollOffset()
+			offset, _ := ctx.TextView.GetScrollOffset()
 			offset -= 10
-			textView.ScrollTo(offset, 0)
+			ctx.TextView.ScrollTo(offset, 0)
 			return nil
 		}
 		return event
 	})
 
-	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
+	gridLayout.AddItem(ctx.TopBar, 0, 0, 1, 4, 0, 0, false)
 	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
 
-	gridLayout.AddItem(textView, 1, 1, 1, 3, 0, 0, false)
-	gridLayout.AddItem(textInput, 2, 1, 1, 3, 0, 0, false)
+	gridLayout.AddItem(ctx.TextView, 1, 1, 1, 3, 0, 0, false)
+	gridLayout.AddItem(ctx.TextInput, 2, 1, 1, 3, 0, 0, false)
 
-	app.SetRoot(gridLayout, true)
-	app.EnableMouse(true)
-	app.SetFocus(textInput)
-	if err := sessionManager.StartManager(); err != nil {
+	ctx.App.SetRoot(gridLayout, true)
+	ctx.App.EnableMouse(true)
+	ctx.App.SetFocus(ctx.TextInput)
+	if err := ctx.SessionManager.StartManager(); err != nil {
 		PrintError(err)
 	}
 	LoadShortcuts()
-	app.Run()
-	sessionManager.Shutdown()
+	ctx.App.Run()
+	ctx.SessionManager.Shutdown()
 }

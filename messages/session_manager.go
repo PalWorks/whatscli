@@ -39,6 +39,8 @@ type SessionManager struct {
 	statusInfo      SessionStatus
 	lastSent        time.Time
 	started         bool
+	reconnecting    bool // guards against duplicate reconnect goroutines
+	loggedOut       bool // set on explicit logout to suppress auto-reconnect
 	stop            chan struct{}
 	eventHandler    *eventHandler
 	mu              sync.RWMutex
@@ -558,11 +560,69 @@ func (sm *SessionManager) Shutdown() {
 	if client := sm.getClient(); client != nil && client.IsConnected() {
 		client.Disconnect()
 	}
+
+	// Close the metadata database to release file handles and flush WAL
+	if sm.db != nil {
+		if err := sm.db.Close(); err != nil {
+			fmt.Printf("warning: failed to close metadata db: %v\n", err)
+		}
+	}
+}
+
+// scheduleReconnect attempts to re-establish the WhatsApp connection using
+// exponential backoff: 2s → 4s → 8s → 16s → 30s, max 5 attempts.
+func (sm *SessionManager) scheduleReconnect() {
+	backoff := 2 * time.Second
+	const maxBackoff = 30 * time.Second
+	const maxAttempts = 5
+
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Check if we should still reconnect
+		sm.mu.RLock()
+		abort := sm.loggedOut || !sm.started
+		sm.mu.RUnlock()
+		if abort {
+			sm.mu.Lock()
+			sm.reconnecting = false
+			sm.mu.Unlock()
+			return
+		}
+
+		sm.uiHandler.PrintText(fmt.Sprintf("Reconnecting in %v... (attempt %d/%d)", backoff, attempt, maxAttempts))
+
+		// Wait with backoff — check stop channel to allow clean shutdown
+		select {
+		case <-sm.stop:
+			sm.mu.Lock()
+			sm.reconnecting = false
+			sm.mu.Unlock()
+			return
+		case <-time.After(backoff):
+		}
+
+		if err := sm.login(); err != nil {
+			sm.uiHandler.PrintText(fmt.Sprintf("Reconnect attempt %d failed: %v", attempt, err))
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		// Success — reconnecting flag will be cleared by Connected event
+		return
+	}
+
+	sm.mu.Lock()
+	sm.reconnecting = false
+	sm.mu.Unlock()
+	sm.uiHandler.PrintError(errors.New("auto-reconnect failed after 5 attempts — use /connect to retry"))
 }
 
 // logout logs out the user, deletes session file
 func (sm *SessionManager) logout() error {
 	sm.mu.Lock()
+	sm.loggedOut = true // suppress auto-reconnect
 	if sm.client == nil {
 		sm.StatusChannel <- StatusMsg{false, nil}
 		sm.uiHandler.PrintText("Already logged out")
@@ -618,12 +678,12 @@ func checkParam(arr []string, length int) bool {
 
 // get all messages for one chat id
 func (sm *SessionManager) getMessages(wid string) []Message {
-	msgs := sm.db.GetMessages(wid)
-	ids := []Message{}
-	for _, msg := range msgs {
-		ids = append(ids, msg)
+	msgs, err := sm.db.GetMessages(wid)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
+		return []Message{}
 	}
-	return ids
+	return msgs
 }
 
 // sends text to whatsapp id
@@ -668,7 +728,9 @@ func (sm *SessionManager) sendText(wid string, text string) {
 			ContactShort: "Me",
 		}
 
-		sm.db.AddMessage(newMsg)
+		if err := sm.db.AddMessage(newMsg); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))
+		}
 
 		sm.mu.RLock()
 		isCurrent := sm.currentReceiver == wid
@@ -702,10 +764,27 @@ func (eh *eventHandler) Handle(evt interface{}) {
 	case *events.Message:
 		eh.handleMessage(v)
 	case *events.Connected:
+		eh.sm.mu.Lock()
+		eh.sm.reconnecting = false
+		eh.sm.loggedOut = false
+		eh.sm.mu.Unlock()
 		eh.sm.StatusChannel <- StatusMsg{true, nil}
 	case *events.Disconnected:
 		eh.sm.StatusChannel <- StatusMsg{false, nil}
+		// Attempt auto-reconnect unless logged out or already reconnecting
+		eh.sm.mu.Lock()
+		shouldReconnect := !eh.sm.loggedOut && !eh.sm.reconnecting && eh.sm.started
+		if shouldReconnect {
+			eh.sm.reconnecting = true
+		}
+		eh.sm.mu.Unlock()
+		if shouldReconnect {
+			go eh.sm.scheduleReconnect()
+		}
 	case *events.LoggedOut:
+		eh.sm.mu.Lock()
+		eh.sm.loggedOut = true
+		eh.sm.mu.Unlock()
 		eh.sm.StatusChannel <- StatusMsg{false, nil}
 		reasonText := fmt.Sprintf("%v", v.Reason)
 		eh.sm.uiHandler.PrintText("Logged out: " + reasonText)
@@ -861,7 +940,9 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 	}
 
 	// Persist message
-	eh.sm.db.AddMessage(msg)
+	if err := eh.sm.db.AddMessage(msg); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to save message: %v", err))
+	}
 
 	// Update priority queue and conversation
 	eh.sm.mu.Lock()

@@ -141,11 +141,6 @@ func InitConfig() error {
 			if section, err := cfg.GetSection("colors"); err == nil {
 				section.MapTo(&Config.Colors)
 			}
-			//TODO: only save if changes
-			//newCfg := ini.Empty()
-			//if err = ini.ReflectFromWithMapper(newCfg, &Config, ini.TitleUnderscore); err == nil {
-			//err = newCfg.SaveTo(configFilePath)
-			//}
 		} else {
 			cfg = ini.Empty()
 			cfg.NameMapper = ini.TitleUnderscore

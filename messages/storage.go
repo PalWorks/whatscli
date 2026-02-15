@@ -63,18 +63,21 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 	return nil
 }
 
-// AddMessage persists a message to SQLite
-func (md *MessageDatabase) AddMessage(msg Message) bool {
-	err := md.AddMessageToDB(msg)
-	if err != nil {
-		fmt.Printf("Error adding message to DB: %v\n", err)
-		return false
+// Close closes the underlying SQLite connection.
+// Safe to call on nil or already-closed databases.
+func (md *MessageDatabase) Close() error {
+	if md.db != nil {
+		return md.db.Close()
 	}
-	return true
+	return nil
 }
 
-// AddMessageToDB persists a message to SQLite
-func (md *MessageDatabase) AddMessageToDB(msg Message) error {
+// AddMessage persists a message to SQLite.
+// Returns nil on success, or an error if the insert fails.
+func (md *MessageDatabase) AddMessage(msg Message) error {
+	if md.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
 	_, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
 	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text)
@@ -120,14 +123,15 @@ func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
 	return convs, nil
 }
 
-// GetMessages retrieves all messages for a chat
-func (md *MessageDatabase) GetMessages(chatId string) []Message {
+// GetMessages retrieves all messages for a chat.
+// Returns the messages and any error encountered during the query.
+func (md *MessageDatabase) GetMessages(chatId string) ([]Message, error) {
 	if md.db == nil {
-		return []Message{}
+		return nil, fmt.Errorf("database not initialized")
 	}
 	rows, err := md.db.Query(`SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text FROM messages WHERE chat_id = ? ORDER BY timestamp ASC`, chatId)
 	if err != nil {
-		return []Message{}
+		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
 	defer rows.Close()
 
@@ -135,12 +139,85 @@ func (md *MessageDatabase) GetMessages(chatId string) []Message {
 	for rows.Next() {
 		var msg Message
 		var ts int64
-		err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text)
-		if err != nil {
-			continue
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
+			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)
 		msgs = append(msgs, msg)
 	}
-	return msgs
+	return msgs, nil
+}
+
+// SearchMessages searches for messages containing the keyword.
+// If chatId is non-empty, results are scoped to that chat; otherwise all chats are searched.
+// Results are returned newest-first, capped at limit.
+func (md *MessageDatabase) SearchMessages(chatId, keyword string, limit int) ([]Message, error) {
+	if md.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	if keyword == "" {
+		return []Message{}, nil
+	}
+	likePattern := "%" + keyword + "%"
+
+	var rows *sql.Rows
+	var err error
+	if chatId != "" {
+		rows, err = md.db.Query(`
+			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+			FROM messages
+			WHERE chat_id = ? AND text LIKE ?
+			ORDER BY timestamp DESC LIMIT ?`, chatId, likePattern, limit)
+	} else {
+		rows, err = md.db.Query(`
+			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+			FROM messages
+			WHERE text LIKE ?
+			ORDER BY timestamp DESC LIMIT ?`, likePattern, limit)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to search messages: %w", err)
+	}
+	defer rows.Close()
+
+	msgs := make([]Message, 0)
+	for rows.Next() {
+		var msg Message
+		var ts int64
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
+			return msgs, fmt.Errorf("failed to scan search result row: %w", err)
+		}
+		msg.Timestamp = uint64(ts)
+		msgs = append(msgs, msg)
+	}
+	return msgs, nil
+}
+
+// GetMessagesPaginated returns up to `limit` messages older than `beforeTimestamp` for a chat,
+// ordered newest-first (so caller can reverse for display).
+func (md *MessageDatabase) GetMessagesPaginated(chatId string, beforeTimestamp uint64, limit int) ([]Message, error) {
+	if md.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := md.db.Query(`
+		SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+		FROM messages
+		WHERE chat_id = ? AND timestamp < ?
+		ORDER BY timestamp DESC LIMIT ?`, chatId, beforeTimestamp, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query paginated messages: %w", err)
+	}
+	defer rows.Close()
+
+	msgs := make([]Message, 0)
+	for rows.Next() {
+		var msg Message
+		var ts int64
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
+			return msgs, fmt.Errorf("failed to scan paginated row: %w", err)
+		}
+		msg.Timestamp = uint64(ts)
+		msgs = append(msgs, msg)
+	}
+	return msgs, nil
 }

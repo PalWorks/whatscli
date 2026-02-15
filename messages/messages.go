@@ -1,7 +1,6 @@
 // this package manages the messages
 package messages
 
-// TODO: move these funcs/interface to channels
 type UiMessageHandler interface {
 	NewMessage(Message)
 	NewScreen([]Message)
@@ -68,7 +67,6 @@ type Chat struct {
 	IsGroup bool
 	Name    string
 	Unread  int
-	//TODO: convert to uint64
 	LastMessage int64
 }
 

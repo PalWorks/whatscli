@@ -1,35 +1,34 @@
 # whatscli
 
-A command line interface for whatsapp, based on [go-whatsapp](https://github.com/Rhymen/go-whatsapp) and [tview](https://github.com/rivo/tview)
+A command line interface for WhatsApp, based on [whatsmeow](https://github.com/tulir/whatsmeow) and [tview](https://github.com/rivo/tview)
 
-![whatscli-screenshot](/doc/screenshot.png?raw=true "WhatsCLI 0.6.5")
+![whatscli-screenshot](/doc/screenshot.png?raw=true "WhatsCLI")
 
 ## Features
 
 Things that work.
 
 - Sending and receiving WhatsApp messages in a command line app
-- Connects through the Web App API without a browser
+- Connects through the WhatsApp Web multi-device API without a browser
 - Uses QR code for simple setup
+- **Rich message types**: text, images, video, audio, documents, stickers, contacts, locations, and reactions
 - Allows downloading and opening image/video/audio/document attachments
-- Allows sending documents
+- Allows sending images, video, audio, and documents
 - Allows color customization
-- Allows basic group management
-- Supports desktop notifications
-- Persistence: Chats and messages are saved across restarts
-- Background saving: Data is saved automatically in the background
-- Robust error handling and configuration management
-- Binaries for Windows, Mac, Linux and RaspBerry Pi
+- Allows basic group management (create, add/remove members, sync)
+- Supports desktop notifications and terminal bell
+- **SQLite-backed persistence**: chats and messages are saved across restarts
+- **Auto-reconnect**: automatic reconnection with exponential backoff on disconnect
+- **Search**: full-text search across messages with `/search`
+- **Pagination**: load older messages with `/more` and `/backlog`
+- Binaries for Windows, Mac, Linux and Raspberry Pi
 
 ### Caveats
 
-Heres some things you might expect to work that don't. Plus some other things I should mention.
+Here are some things you might expect to work that don't. Plus some other things I should mention.
 
-- Currently doesn't work (crashes) for many countries / accounts due to changes in the backend server, see issues #72 and #51
-- Only shows existing chats
-- No auto-reconnect when connection drops
 - No automation of messages, no sending of messages through shell commands
-- FaceBook obviously doesn't endorse or like these kinds of apps and they're likely to break when FaceBook changes stuff in their web app
+- Facebook obviously doesn't endorse or like these kinds of apps and they're likely to break when Facebook changes stuff in their web app
 
 ## Similar Apps
 
@@ -63,17 +62,17 @@ Some ways to install via package managers are supported but the installed versio
 
 ## Usage
 
-Most information, all commands and key bindings are availabe through the in-app help, simply type `/help` and/or `/commands`.
+Most information, all commands and key bindings are available through the in-app help, simply type `/help` and/or `/commands`.
 
 ### Login
 
 When starting up, whatscli will immediately try to connect to the WhatsApp server to log in. Keep your phone ready to scan the appearing QR code in WhatsApp on your Phone. If you don't manage to scan the code quick enough just restart the application. If you can not see the whole QR code, reduce the font size of your terminal or increase the window size.
 
-After scanning the QR code the chats should be populated. After you have done this once, whatscli will be able to log into WhatsApp automatically on start. To log out of WhapsApp completely type `/logout`.
+After scanning the QR code the chats should be populated. After you have done this once, whatscli will be able to log into WhatsApp automatically on start. To log out of WhatsApp completely type `/logout`.
 
 ### Messaging / Commands
 
-Select a chat on the left and start typing in the input field at the bottom to send messages. Switch between the chat list and the input fiel with `<Tab>`.
+Select a chat on the left and start typing in the input field at the bottom to send messages. Switch between the chat list and the input field with `<Tab>`.
 
 For issuing commands the same input field is used. By default commands are prefixed with `/`. You can for example use the `/sendimage /path/to/file.jpg` command to send images, see `/help` for more commands.
 
@@ -103,23 +102,52 @@ Most key bindings, colors and other options can be configured in the `whatscli.c
 
 ## Development
 
-This app started as my first attempt at writing something in go. Some areas that are marked with `TODO` can still be improved but work mostly. If you want to contribute features or improve the code thats great, send a PR and we can discuss.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture details and how to add new commands.
 
 ### Building
 
-Using a recent version of go, building should be straightforward. Either use `go build`, `go run` etc. or use the included Makefile.
+Using a recent version of Go, building should be straightforward. Either use `go build`, `go run` etc. or use the included Makefile.
+
+### Testing
+
+```bash
+make test    # runs go test -v ./...
+make vet     # runs go vet ./...
+```
 
 ### Structure Overview
 
-The `main.go` contains most UI elements which are based around a tview app running on the main routine. It uses a keymap configuration based on the tslocum/cbind library. Apart from that it mostly manages the selection of messages in the current chat as well as displaying the messages and chat list that the session manager sends.
+The application is split into two major packages:
 
-The `messages/session_manager.go` runs a separate go routine to receive messages from the Rhymen/go-whatsapp library which in turn runs the websocket connection to the whatsapp server. The session manager receives the messages from go-whatsapp and the commands from the UI via channels that it drains on its main routine. It then updates the UI accordingly using the UiMessageHandler interface. This ensures "thread safe" management of the connection and data while both UI and network connection run separately.
+**Root package (`main`)** — TUI layer using tview:
 
-Session manager is designed "object like", the MessageDatabase in `messages/storage.go` is similar and somewhat linked to the session manager. In theory the session manager could be run multiple times (multiple accounts) or a different implementation of a session manager could connect to a different service like e.g. Telegram.
+| File | Purpose |
+|------|---------|
+| `main.go` | Entry point, initializes config, session, and TUI |
+| `app_context.go` | `AppContext` struct holding all shared UI state |
+| `ui_layout.go` | Layout construction (flex containers, tables, input) |
+| `ui_handler.go` | `UiHandler` implementing `UiMessageHandler` interface |
+| `ui_keybindings.go` | Key binding setup and input handling |
+| `ui_render.go` | Message and chat list rendering |
+| `ui_helpers.go` | Shared UI utility functions |
 
-In `messages/messages.go` most interfaces and data structures for communication are kept.
+**`messages/` package** — Business logic and WhatsApp connection:
 
-The `config/settings.go` keeps a singleton `Config` struct with the config that is loaded via the gopkg.in/ini.v1 library when the app starts. This makes it easy to quickly add new configuration items with default values that can be used across the app.
+| File | Purpose |
+|------|---------|
+| `session_manager.go` | Connection lifecycle, event handling, auto-reconnect |
+| `storage.go` | SQLite-backed message and conversation persistence |
+| `messages.go` | Shared interfaces and data structures |
+| `cmd_registry.go` | Command registration and dispatch |
+| `cmd_basic.go` | Core commands: `/select`, `/read`, `/info`, `/more` |
+| `cmd_chat.go` | `/backlog` — history sync and message loading |
+| `cmd_search.go` | `/search` — full-text message search |
+| `cmd_media.go` | `/sendimage`, `/sendvideo`, `/sendaudio`, `/upload` |
+| `cmd_group.go` | `/create`, `/add`, `/remove`, `/sync-groups` |
+
+**`config/` package** — INI-based configuration with defaults.
+
+**`qrcode/` package** — ANSI QR code rendering for terminal display.
 
 ## License
 

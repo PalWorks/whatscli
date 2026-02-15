@@ -11,10 +11,10 @@ import (
 )
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {
-	if !textView.HasFocus() {
-		app.SetFocus(textView)
-		if curRegions != nil && len(curRegions) > 0 {
-			textView.Highlight(curRegions[len(curRegions)-1].Id)
+	if !ctx.TextView.HasFocus() {
+		ctx.App.SetFocus(ctx.TextView)
+		if ctx.CurRegions != nil && len(ctx.CurRegions) > 0 {
+			ctx.TextView.Highlight(ctx.CurRegions[len(ctx.CurRegions)-1].Id)
 		}
 	}
 	return nil
@@ -22,38 +22,38 @@ func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleFocusInput(ev *tcell.EventKey) *tcell.EventKey {
 	ResetMsgSelection()
-	if !textInput.HasFocus() {
-		app.SetFocus(textInput)
+	if !ctx.TextInput.HasFocus() {
+		ctx.App.SetFocus(ctx.TextInput)
 	}
 	return nil
 }
 
 func handleFocusContacts(ev *tcell.EventKey) *tcell.EventKey {
 	ResetMsgSelection()
-	if !chatTable.HasFocus() {
-		app.SetFocus(chatTable)
+	if !ctx.ChatTable.HasFocus() {
+		ctx.App.SetFocus(ctx.ChatTable)
 	}
 	return nil
 }
 
 func handleSwitchPanels(ev *tcell.EventKey) *tcell.EventKey {
 	ResetMsgSelection()
-	focus := app.GetFocus()
-	if focus == textInput {
-		if statusTable != nil && statusTable.GetRowCount() > 0 {
-			app.SetFocus(statusTable)
+	focus := ctx.App.GetFocus()
+	if focus == ctx.TextInput {
+		if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
+			ctx.App.SetFocus(ctx.StatusTable)
 		} else {
-			app.SetFocus(chatTable)
+			ctx.App.SetFocus(ctx.ChatTable)
 		}
-	} else if focus == statusTable {
-		app.SetFocus(chatTable)
-	} else if focus == chatTable {
-		app.SetFocus(groupTable)
+	} else if focus == ctx.StatusTable {
+		ctx.App.SetFocus(ctx.ChatTable)
+	} else if focus == ctx.ChatTable {
+		ctx.App.SetFocus(ctx.GroupTable)
 	} else {
-		if statusTable != nil && statusTable.GetRowCount() > 0 {
-			app.SetFocus(statusTable)
+		if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
+			ctx.App.SetFocus(ctx.StatusTable)
 		} else {
-			app.SetFocus(chatTable)
+			ctx.App.SetFocus(ctx.ChatTable)
 		}
 	}
 	return nil
@@ -61,14 +61,14 @@ func handleSwitchPanels(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleCommand(command string) func(ev *tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		sessionManager.CommandChannel <- messages.Command{Name: command, Params: nil}
+		ctx.SessionManager.CommandChannel <- messages.Command{Name: command, Params: nil}
 		return nil
 	}
 }
 
 func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
-	if hls := textView.GetHighlights(); len(hls) > 0 {
-		for _, val := range curRegions {
+	if hls := ctx.TextView.GetHighlights(); len(hls) > 0 {
+		for _, val := range ctx.CurRegions {
 			if val.Id == hls[0] {
 				err := clipboard.WriteAll(val.ContactId)
 				if err != nil {
@@ -79,12 +79,12 @@ func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
 			}
 		}
 		ResetMsgSelection()
-	} else if currentReceiver.Id != "" {
-		err := clipboard.WriteAll(currentReceiver.Id)
+	} else if ctx.CurrentReceiver.Id != "" {
+		err := clipboard.WriteAll(ctx.CurrentReceiver.Id)
 		if err != nil {
 			PrintText("failed to copy: " + err.Error())
 		} else {
-			PrintText("copied id of " + currentReceiver.Name + " to clipboard")
+			PrintText("copied id of " + ctx.CurrentReceiver.Name + " to clipboard")
 		}
 	}
 	return nil
@@ -96,13 +96,13 @@ func handlePasteUser(ev *tcell.EventKey) *tcell.EventKey {
 		PrintText("failed to paste: " + err.Error())
 		return nil
 	}
-	textInput.SetText(textInput.GetText() + " " + text)
+	ctx.TextInput.SetText(ctx.TextInput.GetText() + " " + text)
 	return nil
 }
 
 func handleQuit(ev *tcell.EventKey) *tcell.EventKey {
-	sessionManager.CommandChannel <- messages.Command{Name: "disconnect", Params: nil}
-	app.Stop()
+	ctx.SessionManager.CommandChannel <- messages.Command{Name: "disconnect", Params: nil}
+	ctx.App.Stop()
 	return nil
 }
 
@@ -112,13 +112,13 @@ func handleHelp(ev *tcell.EventKey) *tcell.EventKey {
 }
 
 func handleToggleMouse(ev *tcell.EventKey) *tcell.EventKey {
-	if mouseState {
-		app.EnableMouse(false)
-		mouseState = false
+	if ctx.MouseState {
+		ctx.App.EnableMouse(false)
+		ctx.MouseState = false
 		PrintText("[::b]Mouse interaction DISABLED (Native selection enabled)[::-]")
 	} else {
-		app.EnableMouse(true)
-		mouseState = true
+		ctx.App.EnableMouse(true)
+		ctx.MouseState = true
 		PrintText("[::b]Mouse interaction ENABLED (App selection enabled)[::-]")
 	}
 	return nil
@@ -126,11 +126,11 @@ func handleToggleMouse(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleMessageCommand(command string) func(ev *tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		hls := textView.GetHighlights()
+		hls := ctx.TextView.GetHighlights()
 		if len(hls) > 0 {
-			sessionManager.CommandChannel <- messages.Command{Name: command, Params: []string{hls[0]}}
+			ctx.SessionManager.CommandChannel <- messages.Command{Name: command, Params: []string{hls[0]}}
 			ResetMsgSelection()
-			app.SetFocus(textInput)
+			ctx.App.SetFocus(ctx.TextInput)
 		}
 		return nil
 	}
@@ -138,75 +138,75 @@ func handleMessageCommand(command string) func(ev *tcell.EventKey) *tcell.EventK
 
 func handleMessagesMove(amount int) func(ev *tcell.EventKey) *tcell.EventKey {
 	return func(ev *tcell.EventKey) *tcell.EventKey {
-		if curRegions == nil || len(curRegions) == 0 {
+		if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 			return nil
 		}
-		hls := textView.GetHighlights()
+		hls := ctx.TextView.GetHighlights()
 		if len(hls) > 0 {
 			newId := GetOffsetMsgId(hls[0], amount)
 			if newId != "" {
-				textView.Highlight(newId)
+				ctx.TextView.Highlight(newId)
 			}
 		} else {
 			if amount < 0 {
-				textView.Highlight(curRegions[0].Id)
+				ctx.TextView.Highlight(ctx.CurRegions[0].Id)
 			} else {
-				textView.Highlight(curRegions[len(curRegions)-1].Id)
+				ctx.TextView.Highlight(ctx.CurRegions[len(ctx.CurRegions)-1].Id)
 			}
 		}
-		textView.ScrollToHighlight()
+		ctx.TextView.ScrollToHighlight()
 		return nil
 	}
 }
 
 func handleChatPanelUp(ev *tcell.EventKey) *tcell.EventKey {
-	row, _ := chatTable.GetSelection()
+	row, _ := ctx.ChatTable.GetSelection()
 	if row > 0 {
-		chatTable.Select(row-1, 0)
+		ctx.ChatTable.Select(row-1, 0)
 	} else {
 		// Jump to Status if at top
-		if statusTable.GetRowCount() > 0 {
-			app.SetFocus(statusTable)
-			statusTable.Select(0, 0)
+		if ctx.StatusTable.GetRowCount() > 0 {
+			ctx.App.SetFocus(ctx.StatusTable)
+			ctx.StatusTable.Select(0, 0)
 		}
 	}
 	return nil
 }
 
 func handleChatPanelDown(ev *tcell.EventKey) *tcell.EventKey {
-	row, _ := chatTable.GetSelection()
-	if row < chatTable.GetRowCount()-1 {
-		chatTable.Select(row+1, 0)
+	row, _ := ctx.ChatTable.GetSelection()
+	if row < ctx.ChatTable.GetRowCount()-1 {
+		ctx.ChatTable.Select(row+1, 0)
 	} else {
 		// Jump to groups if at bottom
-		if groupTable.GetRowCount() > 0 {
-			app.SetFocus(groupTable)
+		if ctx.GroupTable.GetRowCount() > 0 {
+			ctx.App.SetFocus(ctx.GroupTable)
 			// Select first group
-			groupTable.Select(0, 0)
+			ctx.GroupTable.Select(0, 0)
 		}
 	}
 	return nil
 }
 
 func handleGroupPanelUp(ev *tcell.EventKey) *tcell.EventKey {
-	row, _ := groupTable.GetSelection()
+	row, _ := ctx.GroupTable.GetSelection()
 	if row > 0 {
-		groupTable.Select(row-1, 0)
+		ctx.GroupTable.Select(row-1, 0)
 	} else {
 		// Jump back to chats if at top
-		if chatTable.GetRowCount() > 0 {
-			app.SetFocus(chatTable)
+		if ctx.ChatTable.GetRowCount() > 0 {
+			ctx.App.SetFocus(ctx.ChatTable)
 			// Select last chat
-			chatTable.Select(chatTable.GetRowCount()-1, 0)
+			ctx.ChatTable.Select(ctx.ChatTable.GetRowCount()-1, 0)
 		}
 	}
 	return nil
 }
 
 func handleGroupPanelDown(ev *tcell.EventKey) *tcell.EventKey {
-	row, _ := groupTable.GetSelection()
-	if row < groupTable.GetRowCount()-1 {
-		groupTable.Select(row+1, 0)
+	row, _ := ctx.GroupTable.GetSelection()
+	if row < ctx.GroupTable.GetRowCount()-1 {
+		ctx.GroupTable.Select(row+1, 0)
 	}
 	return nil
 }
@@ -219,101 +219,101 @@ func handleStatusPanelUp(ev *tcell.EventKey) *tcell.EventKey {
 
 func handleStatusPanelDown(ev *tcell.EventKey) *tcell.EventKey {
 	// Jump to Chats
-	if chatTable.GetRowCount() > 0 {
-		app.SetFocus(chatTable)
-		chatTable.Select(0, 0)
+	if ctx.ChatTable.GetRowCount() > 0 {
+		ctx.App.SetFocus(ctx.ChatTable)
+		ctx.ChatTable.Select(0, 0)
 	}
 	return nil
 }
 
 func handleStatusPanelTab(ev *tcell.EventKey) *tcell.EventKey {
-	app.SetFocus(chatTable)
+	ctx.App.SetFocus(ctx.ChatTable)
 	return nil
 }
 
 func handleChatPanelTab(ev *tcell.EventKey) *tcell.EventKey {
-	app.SetFocus(groupTable)
+	ctx.App.SetFocus(ctx.GroupTable)
 	return nil
 }
 
 func handleGroupPanelTab(ev *tcell.EventKey) *tcell.EventKey {
-	app.SetFocus(textView)
+	ctx.App.SetFocus(ctx.TextView)
 	return nil
 }
 
 func handleMessagePanelTab(ev *tcell.EventKey) *tcell.EventKey {
-	app.SetFocus(textInput)
+	ctx.App.SetFocus(ctx.TextInput)
 	return nil
 }
 
 func handleMessagesLast(ev *tcell.EventKey) *tcell.EventKey {
-	if curRegions == nil || len(curRegions) == 0 {
+	if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 		return nil
 	}
-	textView.Highlight(curRegions[len(curRegions)-1].Id)
-	textView.ScrollToHighlight()
+	ctx.TextView.Highlight(ctx.CurRegions[len(ctx.CurRegions)-1].Id)
+	ctx.TextView.ScrollToHighlight()
 	return nil
 }
 
 func handleMessagesFirst(ev *tcell.EventKey) *tcell.EventKey {
-	if curRegions == nil || len(curRegions) == 0 {
+	if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 		return nil
 	}
-	textView.Highlight(curRegions[0].Id)
-	textView.ScrollToHighlight()
+	ctx.TextView.Highlight(ctx.CurRegions[0].Id)
+	ctx.TextView.ScrollToHighlight()
 	return nil
 }
 
 func handleExitMessages(ev *tcell.EventKey) *tcell.EventKey {
-	if curRegions == nil || len(curRegions) == 0 {
+	if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 		return nil
 	}
 	ResetMsgSelection()
-	app.SetFocus(textInput)
+	ctx.App.SetFocus(ctx.TextInput)
 	return nil
 }
 
 // load the key map
 func LoadShortcuts() {
 	// global bindings for app
-	keyBindings = cbind.NewConfiguration()
-	if err := keyBindings.Set(config.Config.Keymap.FocusMessages, handleFocusMessage); err != nil {
+	ctx.KeyBindings = cbind.NewConfiguration()
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.FocusMessages, handleFocusMessage); err != nil {
 		PrintErrorMsg("focus_messages:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.FocusInput, handleFocusInput); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.FocusInput, handleFocusInput); err != nil {
 		PrintErrorMsg("focus_input:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.FocusChats, handleFocusContacts); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.FocusChats, handleFocusContacts); err != nil {
 		PrintErrorMsg("focus_contacts:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.SwitchPanels, handleSwitchPanels); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.SwitchPanels, handleSwitchPanels); err != nil {
 		PrintErrorMsg("switch_panels:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.CommandRead, handleCommand("read")); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandRead, handleCommand("read")); err != nil {
 		PrintErrorMsg("command_read:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.Copyuser, handleCopyUser); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.Copyuser, handleCopyUser); err != nil {
 		PrintErrorMsg("copyuser:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.Pasteuser, handlePasteUser); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.Pasteuser, handlePasteUser); err != nil {
 		PrintErrorMsg("pasteuser:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.CommandBacklog, handleCommand("backlog")); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandBacklog, handleCommand("backlog")); err != nil {
 		PrintErrorMsg("command_backlog:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.CommandConnect, handleCommand("login")); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandConnect, handleCommand("login")); err != nil {
 		PrintErrorMsg("command_connect:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.CommandQuit, handleQuit); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandQuit, handleQuit); err != nil {
 		PrintErrorMsg("command_quit:", err)
 	}
-	if err := keyBindings.Set(config.Config.Keymap.CommandHelp, handleHelp); err != nil {
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandHelp, handleHelp); err != nil {
 		PrintErrorMsg("command_help:", err)
 	}
 	// Toggle mouse binding (Hardcoded for now as it's a new feature)
-	keyBindings.SetRune(tcell.ModCtrl, 'p', handleToggleMouse)
+	ctx.KeyBindings.SetRune(tcell.ModCtrl, 'p', handleToggleMouse)
 
-	app.SetInputCapture(keyBindings.Capture)
+	ctx.App.SetInputCapture(ctx.KeyBindings.Capture)
 	// bindings for chat message text view
 	keysMessages := cbind.NewConfiguration()
 	if err := keysMessages.Set(config.Config.Keymap.MessageDownload, handleMessageCommand("download")); err != nil {
@@ -352,14 +352,14 @@ func LoadShortcuts() {
 	keysMessages.SetRune(tcell.ModCtrl, 'u', handleMessagesMove(-10))
 	keysMessages.SetRune(tcell.ModCtrl, 'd', handleMessagesMove(10))
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyTab, handleMessagePanelTab)
-	textView.SetInputCapture(keysMessages.Capture)
+	ctx.TextView.SetInputCapture(keysMessages.Capture)
 	keysChatPanel := cbind.NewConfiguration()
 	keysChatPanel.SetRune(tcell.ModCtrl, 'u', handleChatPanelUp)
 	keysChatPanel.SetRune(tcell.ModCtrl, 'd', handleChatPanelDown)
 	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyUp, handleChatPanelUp)
 	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleChatPanelDown)
 	keysChatPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleChatPanelTab)
-	chatTable.SetInputCapture(keysChatPanel.Capture)
+	ctx.ChatTable.SetInputCapture(keysChatPanel.Capture)
 
 	keysGroupPanel := cbind.NewConfiguration()
 	keysGroupPanel.SetRune(tcell.ModCtrl, 'u', handleGroupPanelUp)
@@ -367,19 +367,19 @@ func LoadShortcuts() {
 	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyUp, handleGroupPanelUp)
 	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleGroupPanelDown)
 	keysGroupPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleGroupPanelTab)
-	groupTable.SetInputCapture(keysGroupPanel.Capture)
+	ctx.GroupTable.SetInputCapture(keysGroupPanel.Capture)
 
 	keysStatusPanel := cbind.NewConfiguration()
 	keysStatusPanel.SetRune(tcell.ModCtrl, 'd', handleStatusPanelDown)
 	keysStatusPanel.SetKey(tcell.ModNone, tcell.KeyDown, handleStatusPanelDown)
 	keysStatusPanel.SetKey(tcell.ModNone, tcell.KeyTab, handleStatusPanelTab)
-	statusTable.SetInputCapture(keysStatusPanel.Capture)
+	ctx.StatusTable.SetInputCapture(keysStatusPanel.Capture)
 }
 
 // EnterCommand is the DoneFunc for the input field
 func EnterCommand(key tcell.Key) {
 	if key == tcell.KeyEnter {
-		cmd := textInput.GetText()
+		cmd := ctx.TextInput.GetText()
 		if len(cmd) == 0 {
 			return
 		}
@@ -392,45 +392,45 @@ func EnterCommand(key tcell.Key) {
 			if len(input) > 1 {
 				params = input[1:]
 			}
-			sessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
+			ctx.SessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
 		} else {
-			if currentReceiver.Id == "" {
+			if ctx.CurrentReceiver.Id == "" {
 				PrintText("no receiver")
-				textInput.SetText("")
+				ctx.TextInput.SetText("")
 				return
 			}
-			sessionManager.CommandChannel <- messages.Command{Name: "send", Params: []string{currentReceiver.Id, cmd}}
+			ctx.SessionManager.CommandChannel <- messages.Command{Name: "send", Params: []string{ctx.CurrentReceiver.Id, cmd}}
 		}
-		textInput.SetText("")
+		ctx.TextInput.SetText("")
 	} else if key == tcell.KeyEsc {
-		textInput.SetText("")
+		ctx.TextInput.SetText("")
 	}
 }
 
 // get the next message id to select (highlighted + offset)
 func GetOffsetMsgId(curId string, offset int) string {
-	if curRegions == nil || len(curRegions) == 0 {
+	if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 		return ""
 	}
-	for idx, val := range curRegions {
+	for idx, val := range ctx.CurRegions {
 		if val.Id == curId {
 			arrPos := idx + offset
-			if len(curRegions) > arrPos && arrPos >= 0 {
-				return curRegions[arrPos].Id
+			if len(ctx.CurRegions) > arrPos && arrPos >= 0 {
+				return ctx.CurRegions[arrPos].Id
 			}
 		}
 	}
 	if offset > 0 {
-		return curRegions[0].Id
+		return ctx.CurRegions[0].Id
 	} else {
-		return curRegions[len(curRegions)-1].Id
+		return ctx.CurRegions[len(ctx.CurRegions)-1].Id
 	}
 }
 
 // resets the selection in the textView and scrolls it down
 func ResetMsgSelection() {
-	if len(textView.GetHighlights()) > 0 {
-		textView.Highlight("")
+	if len(ctx.TextView.GetHighlights()) > 0 {
+		ctx.TextView.Highlight("")
 	}
-	textView.ScrollToEnd()
+	ctx.TextView.ScrollToEnd()
 }

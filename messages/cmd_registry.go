@@ -51,5 +51,9 @@ func init() {
 		"sendimage": cmdMedia,
 		"sendvideo": cmdMedia,
 		"sendaudio": cmdMedia,
+
+		// Search commands (cmd_search.go)
+		"search":         cmdSearch,
+		"search-contact": cmdSearchContact,
 	}
 }
