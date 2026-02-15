@@ -9,7 +9,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-var VERSION string = "v1.0.42"
+var VERSION string = "v1.1.0"
 
 const batchSize = 50
 
