@@ -19,9 +19,11 @@ func cmdCreate(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 		participants := []types.JID{}
 		for _, phone := range phones {
 			participant, err := types.ParseJID(phone + "@s.whatsapp.net")
-			if err == nil {
-				participants = append(participants, participant)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("invalid phone %q: %v", phone, err))
+				continue
 			}
+			participants = append(participants, participant)
 		}
 
 		if client != nil {
@@ -47,7 +49,11 @@ func cmdSubject(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 		jidStr := sm.currentReceiver
 		sm.mu.RUnlock()
 
-		jid, _ := types.ParseJID(jidStr)
+		jid, err := types.ParseJID(jidStr)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid JID %q: %v", jidStr, err))
+			return
+		}
 		if client != nil {
 			err := client.SetGroupName(context.Background(), jid, subject)
 			if err != nil {
@@ -65,7 +71,11 @@ func cmdLeave(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 	sm.mu.RLock()
 	jidStr := sm.currentReceiver
 	sm.mu.RUnlock()
-	jid, _ := types.ParseJID(jidStr)
+	jid, err := types.ParseJID(jidStr)
+	if err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("invalid JID %q: %v", jidStr, err))
+		return
+	}
 	if client != nil {
 		err := client.LeaveGroup(context.Background(), jid)
 		if err != nil {
@@ -83,11 +93,19 @@ func cmdAdd(sm *SessionManager, client *whatsmeow.Client, cmdName string, params
 		if !strings.Contains(user, "@") {
 			user += "@s.whatsapp.net"
 		}
-		participant, _ := types.ParseJID(user)
+		participant, err := types.ParseJID(user)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid user JID %q: %v", user, err))
+			return
+		}
 		sm.mu.RLock()
 		groupJIDStr := sm.currentReceiver
 		sm.mu.RUnlock()
-		groupJID, _ := types.ParseJID(groupJIDStr)
+		groupJID, err := types.ParseJID(groupJIDStr)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid group JID %q: %v", groupJIDStr, err))
+			return
+		}
 
 		if client != nil {
 			_, err := client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeAdd)
@@ -108,11 +126,19 @@ func cmdRemove(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 		if !strings.Contains(user, "@") {
 			user += "@s.whatsapp.net"
 		}
-		participant, _ := types.ParseJID(user)
+		participant, err := types.ParseJID(user)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid user JID %q: %v", user, err))
+			return
+		}
 		sm.mu.RLock()
 		groupJIDStr := sm.currentReceiver
 		sm.mu.RUnlock()
-		groupJID, _ := types.ParseJID(groupJIDStr)
+		groupJID, err := types.ParseJID(groupJIDStr)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid group JID %q: %v", groupJIDStr, err))
+			return
+		}
 
 		if client != nil {
 			_, err := client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeRemove)
@@ -133,11 +159,19 @@ func cmdAdmin(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 		if !strings.Contains(user, "@") {
 			user += "@s.whatsapp.net"
 		}
-		participant, _ := types.ParseJID(user)
+		participant, err := types.ParseJID(user)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid user JID %q: %v", user, err))
+			return
+		}
 		sm.mu.RLock()
 		groupJIDStr := sm.currentReceiver
 		sm.mu.RUnlock()
-		groupJID, _ := types.ParseJID(groupJIDStr)
+		groupJID, err := types.ParseJID(groupJIDStr)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid group JID %q: %v", groupJIDStr, err))
+			return
+		}
 
 		if client != nil {
 			_, err := client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangePromote)
@@ -158,11 +192,19 @@ func cmdRemoveAdmin(sm *SessionManager, client *whatsmeow.Client, cmdName string
 		if !strings.Contains(user, "@") {
 			user += "@s.whatsapp.net"
 		}
-		participant, _ := types.ParseJID(user)
+		participant, err := types.ParseJID(user)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid user JID %q: %v", user, err))
+			return
+		}
 		sm.mu.RLock()
 		groupJIDStr := sm.currentReceiver
 		sm.mu.RUnlock()
-		groupJID, _ := types.ParseJID(groupJIDStr)
+		groupJID, err := types.ParseJID(groupJIDStr)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid group JID %q: %v", groupJIDStr, err))
+			return
+		}
 
 		if client != nil {
 			_, err := client.UpdateGroupParticipants(context.Background(), groupJID, []types.JID{participant}, whatsmeow.ParticipantChangeDemote)

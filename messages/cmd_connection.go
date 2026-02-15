@@ -50,12 +50,29 @@ func cmdReset(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 	sm.container = nil
 	sm.mu.Unlock()
 
-	// Remove the DB file
+	// Remove the WhatsApp session DB file
 	dbPath := config.GetSessionFilePath() + ".db"
 	err := os.Remove(dbPath)
 	if err != nil && !os.IsNotExist(err) {
-		sm.uiHandler.PrintText("Warning: Couldn't remove database file: " + err.Error())
+		sm.uiHandler.PrintText("Warning: Couldn't remove session database: " + err.Error())
 	}
+
+	// Also remove the metadata DB (messages, conversations) — audit R-4.
+	sm.db.Close()
+	metaPath := config.GetSessionFilePath() + "_meta.db"
+	err = os.Remove(metaPath)
+	if err != nil && !os.IsNotExist(err) {
+		sm.uiHandler.PrintText("Warning: Couldn't remove metadata database: " + err.Error())
+	}
+
+	// Re-init the meta DB and clear in-memory state
+	if initErr := sm.db.Init(); initErr != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to re-initialize metadata DB: %v", initErr))
+	}
+	sm.mu.Lock()
+	sm.convByJID = make(map[string]*Conversation)
+	sm.priorityQueue = make(PriorityQueue, 0)
+	sm.mu.Unlock()
 
 	sm.uiHandler.PrintText("Session reset. Use /connect to reconnect with a new QR code.")
 	sm.StatusChannel <- StatusMsg{false, nil}

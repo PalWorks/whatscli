@@ -448,7 +448,9 @@ func (sm *SessionManager) loadRecentChats() {
 			sm.mu.Unlock()
 
 			if toUpsert != nil {
-				sm.db.UpsertConversation(*toUpsert)
+				if err := sm.db.UpsertConversation(*toUpsert); err != nil {
+					sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+				}
 			}
 
 			chatCount++
@@ -977,7 +979,9 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 	eh.sm.mu.Unlock()
 
 	// DB write outside lock
-	eh.sm.db.UpsertConversation(toUpsert)
+	if err := eh.sm.db.UpsertConversation(toUpsert); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+	}
 
 	// UI: show in current chat or send notification
 	eh.sm.mu.RLock()

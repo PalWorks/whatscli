@@ -66,8 +66,16 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 
 	if existingCount > 0 {
 		oldest := msgs[0]
-		chatJID, _ := types.ParseJID(oldest.ChatId)
-		senderJID, _ := types.ParseJID(oldest.ContactId)
+		chatJID, err := types.ParseJID(oldest.ChatId)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid chat JID %q: %v", oldest.ChatId, err))
+			return
+		}
+		senderJID, err := types.ParseJID(oldest.ContactId)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("invalid sender JID %q: %v", oldest.ContactId, err))
+			return
+		}
 
 		anchor = &types.MessageInfo{
 			ID: oldest.Id,
@@ -98,21 +106,24 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 
 	sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
 
-	// History sync arrives asynchronously; wait briefly then check
-	time.Sleep(5 * time.Second)
+	// History sync arrives asynchronously; check in background so the
+	// command loop is not blocked (audit finding P-1).
+	go func() {
+		time.Sleep(5 * time.Second)
 
-	finalMessages, err := sm.db.GetMessages(receiver)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to reload messages: %v", err))
-	} else if len(finalMessages) > existingCount {
-		sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-existingCount))
-	} else {
-		sm.uiHandler.PrintText("No immediate history received. Messages may arrive in the background.")
-	}
+		finalMessages, err := sm.db.GetMessages(receiver)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to reload messages: %v", err))
+		} else if len(finalMessages) > existingCount {
+			sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-existingCount))
+		} else {
+			sm.uiHandler.PrintText("No immediate history received. Messages may arrive in the background.")
+		}
 
-	// Refresh screen with whatever we have
-	screen := sm.getMessages(receiver)
-	sm.uiHandler.NewScreen(screen)
+		// Refresh screen with whatever we have
+		screen := sm.getMessages(receiver)
+		sm.uiHandler.NewScreen(screen)
+	}()
 }
 
 func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
@@ -162,7 +173,9 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 
 		// DB writes outside lock
 		for _, c := range toUpsert {
-			sm.db.UpsertConversation(c)
+			if err := sm.db.UpsertConversation(c); err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+			}
 		}
 
 		sm.uiHandler.UpdateChatList(safeList)

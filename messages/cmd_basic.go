@@ -71,14 +71,22 @@ func cmdRead(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		return
 	}
 
-	// Reset unread counter in PQ and DB
+	// Reset unread counter — copy under lock, DB write outside (audit R-2).
+	var convCopy *Conversation
 	sm.mu.Lock()
 	if conv := sm.convByJID[receiver]; conv != nil {
 		conv.Unread = 0
-		sm.db.UpsertConversation(*conv)
+		c := *conv
+		convCopy = &c
 	}
 	safeList := sm.snapshotPQ()
 	sm.mu.Unlock()
+
+	if convCopy != nil {
+		if err := sm.db.UpsertConversation(*convCopy); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+		}
+	}
 
 	sm.uiHandler.UpdateChatList(safeList)
 	sm.uiHandler.PrintText(fmt.Sprintf("Marked %d messages as read", len(ids)))
