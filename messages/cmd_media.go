@@ -3,7 +3,10 @@ package messages
 import (
 	"context"
 	"fmt"
+	"mime"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"go.mau.fi/whatsmeow"
@@ -26,11 +29,26 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 		}
 
 		if client != nil {
+			// S-3: Check file size before reading to prevent OOM
+			const maxMediaSize = 100 * 1024 * 1024 // 100 MB
+			fi, err := os.Stat(filePath)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("failed to stat file: %v", err))
+				return
+			}
+			if fi.Size() > maxMediaSize {
+				sm.uiHandler.PrintError(fmt.Errorf("file too large: %d MB (max 100 MB)", fi.Size()/(1024*1024)))
+				return
+			}
+
 			data, err := os.ReadFile(filePath)
 			if err != nil {
 				sm.uiHandler.PrintError(fmt.Errorf("failed to read file: %v", err))
 				return
 			}
+
+			// CQ-4: Auto-detect MIME type from file content and extension
+			detectedMIME := detectMIME(filePath, data)
 
 			// Map command to correct media type for upload
 			mediaTypes := map[string]whatsmeow.MediaType{
@@ -55,7 +73,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 						URL:           proto.String(uploaded.URL),
 						DirectPath:    proto.String(uploaded.DirectPath),
 						MediaKey:      uploaded.MediaKey,
-						Mimetype:      proto.String("image/jpeg"),
+						Mimetype:      proto.String(detectedMIME),
 						FileEncSHA256: uploaded.FileEncSHA256,
 						FileSHA256:    uploaded.FileSHA256,
 						FileLength:    proto.Uint64(uint64(len(data))),
@@ -67,7 +85,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 						URL:           proto.String(uploaded.URL),
 						DirectPath:    proto.String(uploaded.DirectPath),
 						MediaKey:      uploaded.MediaKey,
-						Mimetype:      proto.String("video/mp4"),
+						Mimetype:      proto.String(detectedMIME),
 						FileEncSHA256: uploaded.FileEncSHA256,
 						FileSHA256:    uploaded.FileSHA256,
 						FileLength:    proto.Uint64(uint64(len(data))),
@@ -79,7 +97,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 						URL:           proto.String(uploaded.URL),
 						DirectPath:    proto.String(uploaded.DirectPath),
 						MediaKey:      uploaded.MediaKey,
-						Mimetype:      proto.String("audio/ogg; codecs=opus"),
+						Mimetype:      proto.String(detectedMIME),
 						FileEncSHA256: uploaded.FileEncSHA256,
 						FileSHA256:    uploaded.FileSHA256,
 						FileLength:    proto.Uint64(uint64(len(data))),
@@ -92,7 +110,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 						URL:           proto.String(uploaded.URL),
 						DirectPath:    proto.String(uploaded.DirectPath),
 						MediaKey:      uploaded.MediaKey,
-						Mimetype:      proto.String("application/octet-stream"),
+						Mimetype:      proto.String(detectedMIME),
 						FileEncSHA256: uploaded.FileEncSHA256,
 						FileSHA256:    uploaded.FileSHA256,
 						FileLength:    proto.Uint64(uint64(len(data))),
@@ -111,4 +129,21 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 	} else {
 		sm.printCommandUsage(cmdName, "<filepath>")
 	}
+}
+
+// detectMIME returns the MIME type for a file, preferring extension-based
+// detection and falling back to content sniffing (audit CQ-4).
+func detectMIME(path string, data []byte) string {
+	// 1. Try extension-based detection
+	ext := filepath.Ext(path)
+	if ext != "" {
+		if mt := mime.TypeByExtension(ext); mt != "" {
+			return mt
+		}
+	}
+	// 2. Fall back to content sniffing
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }

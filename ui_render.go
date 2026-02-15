@@ -176,10 +176,16 @@ func PrintImage(path string) {
 		return
 	}
 
-	// Verify the path is under the configured download or preview directory
+	// Verify the path is under the configured download or preview directory.
+	// Resolve symlinks to prevent symlink-based directory escape (audit S-2).
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		PrintError(fmt.Errorf("could not resolve path: %v", err))
+		return
+	}
 	downloadDir := filepath.Clean(config.Config.General.DownloadPath)
 	previewDir := filepath.Clean(config.Config.General.PreviewPath)
-	if !strings.HasPrefix(absPath, downloadDir) && !strings.HasPrefix(absPath, previewDir) {
+	if !strings.HasPrefix(resolvedPath, downloadDir) && !strings.HasPrefix(resolvedPath, previewDir) {
 		PrintError(fmt.Errorf("file path outside allowed directories"))
 		return
 	}

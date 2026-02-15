@@ -146,17 +146,7 @@ func (md *MessageDatabase) GetMessages(chatId string) ([]Message, error) {
 	}
 	defer rows.Close()
 
-	msgs := make([]Message, 0)
-	for rows.Next() {
-		var msg Message
-		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
-			return msgs, fmt.Errorf("failed to scan message row: %w", err)
-		}
-		msg.Timestamp = uint64(ts)
-		msgs = append(msgs, msg)
-	}
-	return msgs, nil
+	return collectMessages(rows)
 }
 
 // SearchMessages searches for messages containing the keyword.
@@ -191,17 +181,7 @@ func (md *MessageDatabase) SearchMessages(chatId, keyword string, limit int) ([]
 	}
 	defer rows.Close()
 
-	msgs := make([]Message, 0)
-	for rows.Next() {
-		var msg Message
-		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
-			return msgs, fmt.Errorf("failed to scan search result row: %w", err)
-		}
-		msg.Timestamp = uint64(ts)
-		msgs = append(msgs, msg)
-	}
-	return msgs, nil
+	return collectMessages(rows)
 }
 
 // GetMessagesPaginated returns up to `limit` messages older than `beforeTimestamp` for a chat,
@@ -220,12 +200,17 @@ func (md *MessageDatabase) GetMessagesPaginated(chatId string, beforeTimestamp u
 	}
 	defer rows.Close()
 
+	return collectMessages(rows)
+}
+
+// collectMessages iterates over rows and scans each into a Message (audit CQ-2).
+func collectMessages(rows *sql.Rows) ([]Message, error) {
 	msgs := make([]Message, 0)
 	for rows.Next() {
 		var msg Message
 		var ts int64
 		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
-			return msgs, fmt.Errorf("failed to scan paginated row: %w", err)
+			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)
 		msgs = append(msgs, msg)

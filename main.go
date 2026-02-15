@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 
 	"github.com/gdamore/tcell/v2"
@@ -14,6 +15,10 @@ var VERSION string = "v1.1.0"
 const batchSize = 50
 
 func main() {
+	// T-2: Parse --debug flag before anything else.
+	debugMode := flag.Bool("debug", false, "Enable verbose WhatsApp protocol logging")
+	flag.Parse()
+
 	err := config.InitConfig()
 	if err != nil {
 		fmt.Printf("Failed to initialize config: %v\n", err)
@@ -28,6 +33,7 @@ func main() {
 
 	ctx.UiHandler = UiHandler{}
 	ctx.SessionManager = &messages.SessionManager{}
+	ctx.SessionManager.SetDebug(*debugMode)
 	if err := ctx.SessionManager.Init(ctx.UiHandler); err != nil {
 		fmt.Printf("Failed to initialize session: %v\n", err)
 		return
