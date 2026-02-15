@@ -379,3 +379,69 @@ func TestGetMessagesPaginated_NoOlderMessages(t *testing.T) {
 		t.Errorf("expected 0 older messages, got %d", len(results))
 	}
 }
+
+// ----- Audit fix regression tests (T-1) -----
+
+func TestEscapeLike(t *testing.T) {
+	tests := []struct {
+		input, want string
+	}{
+		{"hello", "hello"},
+		{"100%", `100\%`},
+		{"a_b", `a\_b`},
+		{`c\d`, `c\\d`},
+		{`%_\`, `\%\_\\`},
+	}
+	for _, tt := range tests {
+		got := escapeLike(tt.input)
+		if got != tt.want {
+			t.Errorf("escapeLike(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestSearchMessages_LikeMetacharsEscaped(t *testing.T) {
+	md := newTestDB(t)
+	chat := "chat@s.whatsapp.net"
+
+	// Insert a message with literal % and _ in the text
+	addTestMsg(t, md, Message{Id: "m1", ChatId: chat, ContactId: "c1", Timestamp: 1000, Text: "100% works"})
+	addTestMsg(t, md, Message{Id: "m2", ChatId: chat, ContactId: "c1", Timestamp: 2000, Text: "foo_bar"})
+	addTestMsg(t, md, Message{Id: "m3", ChatId: chat, ContactId: "c1", Timestamp: 3000, Text: "nothing special"})
+
+	// Searching for "%" should only match the message containing literal %
+	results, err := md.SearchMessages(chat, "%", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 1 || results[0].Id != "m1" {
+		t.Errorf("search for '%%': expected [m1], got %v", msgIDs(results))
+	}
+
+	// Searching for "_" should only match the message containing literal _
+	results, err = md.SearchMessages(chat, "_", 50)
+	if err != nil {
+		t.Fatalf("SearchMessages error: %v", err)
+	}
+	if len(results) != 1 || results[0].Id != "m2" {
+		t.Errorf("search for '_': expected [m2], got %v", msgIDs(results))
+	}
+}
+
+func TestInit_CreatesCompositeIndex(t *testing.T) {
+	md := newTestDB(t)
+	row := md.db.QueryRow("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_messages_chat_ts'")
+	var name string
+	if err := row.Scan(&name); err != nil {
+		t.Errorf("composite index idx_messages_chat_ts not found: %v", err)
+	}
+}
+
+// msgIDs is a test helper that extracts message IDs for readable error output.
+func msgIDs(msgs []Message) []string {
+	ids := make([]string, len(msgs))
+	for i, m := range msgs {
+		ids[i] = m.Id
+	}
+	return ids
+}

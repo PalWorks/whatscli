@@ -484,28 +484,6 @@ func (sm *SessionManager) loadRecentMessages(chatJID string) {
 	}
 }
 
-// Helper functions to handle nil pointers safely
-func stringOrEmpty(ptr *string) string {
-	if ptr == nil {
-		return ""
-	}
-	return *ptr
-}
-
-func boolOrFalse(ptr *bool) bool {
-	if ptr == nil {
-		return false
-	}
-	return *ptr
-}
-
-func uint64OrZero(ptr *uint64) uint64 {
-	if ptr == nil {
-		return 0
-	}
-	return *ptr
-}
-
 // getChatName returns the best display name for a chat
 func (sm *SessionManager) getChatName(jid types.JID) string {
 	client := sm.getClient()

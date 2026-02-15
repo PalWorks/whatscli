@@ -129,6 +129,10 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
 	sm.uiHandler.PrintText("Fetching joined groups from WhatsApp servers...")
 	go func() {
+		// Re-fetch client inside the goroutine — the captured parameter
+		// may be stale if the connection dropped between dispatch and
+		// goroutine start (audit R-3).
+		client := sm.getClient()
 		if client == nil {
 			sm.uiHandler.PrintError(errors.New("not connected"))
 			return

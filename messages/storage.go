@@ -3,6 +3,7 @@ package messages
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/normen/whatscli/config"
@@ -55,12 +56,22 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		text TEXT
 	);
 	CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);
+	CREATE INDEX IF NOT EXISTS idx_messages_chat_ts ON messages(chat_id, timestamp);
 	`)
 	if err != nil {
 		return fmt.Errorf("failed to create messages table: %w", err)
 	}
 
 	return nil
+}
+
+// escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
+// treated as literal characters in a LIKE ? ESCAPE '\' clause.
+func escapeLike(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `%`, `\%`)
+	s = strings.ReplaceAll(s, `_`, `\_`)
+	return s
 }
 
 // Close closes the underlying SQLite connection.
@@ -158,7 +169,7 @@ func (md *MessageDatabase) SearchMessages(chatId, keyword string, limit int) ([]
 	if keyword == "" {
 		return []Message{}, nil
 	}
-	likePattern := "%" + keyword + "%"
+	likePattern := "%" + escapeLike(keyword) + "%"
 
 	var rows *sql.Rows
 	var err error
@@ -166,13 +177,13 @@ func (md *MessageDatabase) SearchMessages(chatId, keyword string, limit int) ([]
 		rows, err = md.db.Query(`
 			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
 			FROM messages
-			WHERE chat_id = ? AND text LIKE ?
+			WHERE chat_id = ? AND text LIKE ? ESCAPE '\'
 			ORDER BY timestamp DESC LIMIT ?`, chatId, likePattern, limit)
 	} else {
 		rows, err = md.db.Query(`
 			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
 			FROM messages
-			WHERE text LIKE ?
+			WHERE text LIKE ? ESCAPE '\'
 			ORDER BY timestamp DESC LIMIT ?`, likePattern, limit)
 	}
 	if err != nil {
