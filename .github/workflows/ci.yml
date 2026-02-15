@@ -1,18 +1,44 @@
 name: CI
 
-on: [push, pull_request]
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  build-and-test:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.22', '1.24']
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ matrix.go-version }}
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.24'
-      - name: Build
-        run: go build ./...
-      - name: Vet
+          go-version: ${{ matrix.go-version }}
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc
+
+      - name: Download Go modules
+        run: go mod download
+
+      - name: Verify dependencies
+        run: go mod verify
+
+      - name: Run go vet
         run: go vet ./...
-      - name: Test
-        run: go test -race -v ./...
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Run tests
+        run: go test -v -race -count=1 ./...
