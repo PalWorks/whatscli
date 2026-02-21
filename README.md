@@ -624,8 +624,4 @@ This project is licensed under the [MIT License](LICENSE).
 - **[go-qrcode](https://github.com/skip2/go-qrcode)** — QR code generator used for terminal-rendered login codes
 - **[cbind](https://code.rocketnine.space/tslocum/cbind)** — Key binding configuration library
 
----
 
-<p align="center">
-  <sub>Originally created by <a href="https://github.com/normen">normen</a> · Enhanced and maintained by <a href="https://github.com/PalWorks">PalWorks</a></sub>
-</p>
