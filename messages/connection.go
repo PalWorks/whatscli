@@ -285,27 +285,28 @@ func (sm *SessionManager) logout() error {
 	sm.mu.Lock()
 	sm.loggedOut = true // suppress auto-reconnect
 	if sm.client == nil {
+		sm.mu.Unlock()
 		sm.StatusChannel <- StatusMsg{false, nil}
 		sm.uiHandler.PrintText("Already logged out")
-		sm.mu.Unlock()
 		return nil
 	}
 
-	if sm.client.IsConnected() {
-		sm.client.Disconnect()
+	// Capture and clear client under lock
+	client := sm.client
+	sm.client = nil
+	sm.mu.Unlock()
+
+	// Disconnect + delete session outside lock (avoids blocking other goroutines)
+	if client.IsConnected() {
+		client.Disconnect()
 	}
 
-	// Delete device from store
-	if sm.client.Store != nil {
-		err := sm.client.Store.Delete(context.Background())
+	if client.Store != nil {
+		err := client.Store.Delete(context.Background())
 		if err != nil {
 			sm.uiHandler.PrintText("Warning: Couldn't properly remove session: " + err.Error())
 		}
 	}
-
-	// Reset client
-	sm.client = nil
-	sm.mu.Unlock()
 
 	sm.uiHandler.PrintText("Successfully logged out")
 	sm.StatusChannel <- StatusMsg{false, nil}

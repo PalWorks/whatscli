@@ -39,11 +39,6 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 		}
 
-		// Process each contact as a potential chat
-		chatCount := 0
-
-		// Map to track what we've processed to avoid duplicates in PQ if reloading
-		processed := make(map[string]bool)
 
 		for jid, contact := range contacts {
 			if !contact.Found {
@@ -56,7 +51,6 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 
 			jidStr := jid.String()
-			processed[jidStr] = true
 
 			// Determine name
 			var name string
@@ -77,10 +71,6 @@ func (sm *SessionManager) loadRecentChats() {
 				}
 			}
 
-			// Create/Update Conversation struct
-			// In a real sync, we might want to check the actual last message time.
-			// For now, if it's a new import, use current time.
-			// If it exists in DB, we should probably prefer the DB's time unless we have new info.
 
 			// Update PQ under lock, collect DB write for outside
 			sm.mu.Lock()
@@ -114,8 +104,6 @@ func (sm *SessionManager) loadRecentChats() {
 					sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
 				}
 			}
-
-			chatCount++
 		}
 
 		sm.mu.Lock()

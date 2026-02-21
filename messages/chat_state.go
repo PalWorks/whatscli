@@ -169,7 +169,6 @@ func (sm *SessionManager) sendText(wid string, text string) {
 	}
 
 	// Send message
-	sm.lastSent = time.Now()
 	resp, err := client.SendMessage(context.Background(), receiver, msg)
 
 	if err != nil {

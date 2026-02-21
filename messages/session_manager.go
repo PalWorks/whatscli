@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/gen2brain/beeep"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
@@ -30,7 +29,6 @@ type SessionManager struct {
 	ChatChannel     chan Chat
 	TextChannel     chan *waProto.Message
 	statusInfo      SessionStatus
-	lastSent        time.Time
 	started         bool
 	reconnecting    bool // guards against duplicate reconnect goroutines
 	loggedOut       bool // set on explicit logout to suppress auto-reconnect
@@ -41,8 +39,6 @@ type SessionManager struct {
 	convByJID       map[string]*Conversation
 	debug           bool // T-2: enable verbose WhatsApp protocol logging
 }
-
-
 
 // initialize the SessionManager
 func (sm *SessionManager) Init(handler UiMessageHandler) error {
@@ -147,8 +143,6 @@ func (sm *SessionManager) runManager() error {
 	}
 }
 
-
-
 // Shutdown performs a clean shutdown, saving data and disconnecting
 func (sm *SessionManager) Shutdown() {
 	sm.mu.Lock()
@@ -196,7 +190,6 @@ func checkParam(arr []string, length int) bool {
 	}
 	return true
 }
-
 
 // notify will send a notification via beeep if EnableNotification is true. If
 // UseTerminalBell is true it will send a terminal bell instead.
