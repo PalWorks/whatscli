@@ -1,101 +1,152 @@
 # WhatsCLI — Agent Guide
 
-> This file provides essential context for AI agents working on this project.
+> This file provides essential context for AI agents working on this project.  
+> For tool-specific instructions, see also: [CLAUDE.md](CLAUDE.md), [GEMINI.md](GEMINI.md), [SKILLS.md](SKILLS.md).
 
 ## Project Overview
 
-**WhatsCLI** is a terminal-based WhatsApp client written in Go. It uses the [whatsmeow](https://github.com/tulir/whatsmeow) library for WhatsApp Multi-Device protocol and [tview](https://github.com/rivo/tview) for the TUI.
+**WhatsCLI** is a terminal-based WhatsApp client written in Go 1.24.  
+It uses [whatsmeow](https://github.com/tulir/whatsmeow) for the WhatsApp multi-device protocol and [tview](https://github.com/rivo/tview) for the TUI framework.
+
+**Version:** v1.3.0 · **License:** MIT · **Module:** `github.com/normen/whatscli`
+
+## Quick Reference
+
+```bash
+make build       # go build -o whatscli
+make test        # go test -race ./...
+make vet         # go vet ./...
+make run         # go run .
+whatscli --debug # Verbose WhatsApp protocol logging
+```
+
+**CGO required** — SQLite via `go-sqlite3`. Install gcc: `apt install gcc` (Linux).
 
 ## Architecture
 
 ```
 whatscli/
 ├── main.go              # Entry point, grid layout, main()
-├── ui_handler.go        # UiHandler struct (implements UiMessageHandler interface)
-├── ui_helpers.go        # PrintText, PrintError, PrintHelp, UpdateStatusBar
-├── ui_keybindings.go    # LoadShortcuts, keyboard handler functions
+├── app_context.go       # AppContext struct — centralized shared UI state
 ├── ui_layout.go         # SetupLeftPane, table setup, selection logic
-├── ui_render.go         # RenderChatTable, SetDisplayedChat, message formatting
+├── ui_handler.go        # UiHandler struct (implements UiMessageHandler interface)
+├── ui_keybindings.go    # LoadShortcuts, keyboard handler functions
+├── ui_render.go         # RenderChatTable, message formatting
+├── ui_helpers.go        # PrintText, PrintError, PrintHelp, UpdateStatusBar
 ├── config/
-│   └── settings.go      # INI config via XDG paths
+│   └── settings.go      # INI config via XDG paths (4 sections, 30+ keys)
 ├── messages/
-│   ├── messages.go      # Data types (Message, Chat, Conversation, Command) + UiMessageHandler interface
-│   ├── session_manager.go  # Core backend: auth, connection, event handling, command dispatch
-│   ├── storage.go       # SQLite-only persistence (conversations + messages)
-│   ├── priority_queue.go   # Heap-based chat ordering (pinned first, then by time)
-│   ├── cmd_registry.go  # Central command name → handler map
-│   ├── cmd_basic.go     # help, quit, colorlist, more, info, read
-│   ├── cmd_connection.go   # login/connect, disconnect, logout, reset
-│   ├── cmd_chat.go      # send, select, backlog, sync-groups
-│   ├── cmd_group.go     # create, subject, leave, add, remove, admin, removeadmin
-│   └── cmd_media.go     # upload, sendimage, sendvideo, sendaudio
+│   ├── messages.go      # Data types + UiMessageHandler interface (17 methods)
+│   ├── session_manager.go  # Event loop, command dispatch, lifecycle
+│   ├── connection.go    # WhatsApp login, QR code flow, auto-reconnect
+│   ├── event_handler.go # WhatsApp event processing
+│   ├── history_sync.go  # History synchronization
+│   ├── chat_state.go    # Chat state management
+│   ├── storage.go       # MessageDatabase — SQLite persistence
+│   ├── priority_queue.go # Heap-based chat ordering
+│   ├── cmd_registry.go  # Command name → handler map
+│   ├── cmd_basic.go     # /help, /quit, /colorlist, /more, /info, /read
+│   ├── cmd_connection.go # /login, /connect, /disconnect, /logout, /reset
+│   ├── cmd_chat.go      # /send, /select, /backlog, /sync-groups
+│   ├── cmd_group.go     # /create, /subject, /leave, /add, /remove, /admin, /removeadmin
+│   ├── cmd_media.go     # /upload, /sendimage, /sendvideo, /sendaudio
+│   └── cmd_search.go    # /search, /search-contact
 └── qrcode/
-    └── qrcode.go        # ASCII QR code rendering for login
+    └── qrcode.go        # ANSI QR code rendering for terminal display
 ```
 
-## Key Design Patterns
+**Data flow:** UI → `CommandChannel` → `SessionManager.runManager()` event loop. Backend → `UiMessageHandler` interface → TUI updates.
 
-### Command Registry
-Commands are dispatched via `commandRegistry` in `cmd_registry.go`. Each handler has the signature:
+## Concurrency Rules (Non-Negotiable)
+
+| Rule | Details |
+|------|---------|
+| **Client access** | Always use `sm.getClient()` — never read `sm.client` directly |
+| **Lock discipline** | Hold `sm.mu` only for PQ/map mutations. Release before SQLite writes |
+| **PQ snapshots** | Use `snapshotPQ()` for safe priority queue reads from UI goroutine |
+| **Channel sizes** | All channels buffered (10). Don't change without understanding backpressure |
+| **Reconnect guard** | `sm.reconnecting` flag prevents duplicate reconnect goroutines |
+
+## Command Registry
+
+All slash commands registered in `cmd_registry.go`, dispatched by `SessionManager` event loop.
+
+**Handler signature:**
 ```go
 func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string)
 ```
-To add a new command: create the handler function, add it to the `commandRegistry` map in `init()`.
 
-### Concurrency Model
-- `SessionManager.mu` (sync.RWMutex) protects `client`, `currentReceiver`, `priorityQueue`, and `convByJID`.
-- Always use `sm.getClient()` (which uses RLock) to read `sm.client` — never read it bare.
-- DB writes should happen **outside** the lock when possible.
-- `snapshotPQ()` creates a deep copy of the priority queue for safe UI updates.
+**Adding a new command:**
+1. Write handler in `messages/cmd_*.go` (group by concern)
+2. Register in `commandRegistry` map in `cmd_registry.go` `init()`
+3. Add help entry in `ui_helpers.go` → `PrintHelp()`
 
-### Storage
-- **SQLite only** — all persistence goes through `MessageDatabase` in `storage.go`.
-- DB path: `<XDG_CONFIG>/whatscli/session_meta.db` (WAL mode, 5s busy timeout).
-- Tables: `conversations` (JID primary key) and `messages` (ID primary key, indexed on `chat_id`).
-- No in-memory caches — every read queries SQLite directly.
+**Command files:**
 
-### UI ↔ Backend Communication
-- Backend calls `UiMessageHandler` interface methods to update the UI.
-- UI sends commands via `SessionManager.CommandChannel` (channel of `Command` structs).
-- The `runManager()` goroutine processes commands from the channel.
+| File | Commands |
+|------|----------|
+| `cmd_basic.go` | `/help`, `/quit`, `/colorlist`, `/more`, `/info`, `/read` |
+| `cmd_connection.go` | `/connect`, `/disconnect`, `/logout`, `/reset` |
+| `cmd_chat.go` | `/send`, `/select`, `/backlog`, `/sync-groups` |
+| `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |
+| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
+| `cmd_search.go` | `/search`, `/search-contact` |
 
-## Build & Test
+## Storage Layer
 
-```bash
-make build       # go build -o whatscli
-make test        # go test -race -v ./...
-make vet         # go vet ./...
-```
+- **Engine:** SQLite 3 with WAL mode and 5s busy timeout
+- **App DB:** `<XDG_CONFIG>/whatscli/session_meta.db` — messages and conversations
+- **Session DB:** `<XDG_CONFIG>/whatscli/session.db` — whatsmeow device store
+- **Tables:** `conversations` (JID PK), `messages` (ID PK, indexed on `chat_id` and `chat_id+timestamp`)
+- **No caching** — all reads query SQLite directly
 
-Requires **CGO** (for `go-sqlite3`). On Linux: `apt install gcc`.
+## Testing
 
-## Known Stubs / Incomplete Features
+- Use `InitWithDB(db)` with in-memory SQLite for storage tests
+- Use `MockUiHandler` from `mock_ui_handler.go` — 17 methods
+- Tests always run with `-race` flag
+- `commandRegistry` auto-populated via `init()` — available in package tests
+- CI matrix: Go 1.22 + 1.24 on GitHub Actions
 
-| Command | Status |
-|---------|--------|
-| `read`  | Stub — prints "not implemented yet" |
-| `info`  | Stub — prints "not yet implemented" |
-| `more`  | Stub — not implemented |
-| `backlog` | Partial — uses 3 fallback methods for history sync |
+## Configuration
 
-## Recent Refactoring History
+INI file at `~/.config/whatscli/whatscli.config` (XDG standard).
 
-The codebase underwent a major refactor (Feb 2026) addressing findings from a code audit:
-- Eliminated deadlocks and data races in session manager
-- Fixed command injection vulnerability in `PrintImage`
-- Replaced `panic()` with error returns in storage init
-- Split `main.go` (1159 lines) into 5 focused UI modules
-- Replaced 550-line `execCommand` switch with command registry pattern
-- Added `convByJID` map for O(1) conversation lookups
-- Completely removed legacy Gob persistence
-- Enabled SQLite WAL mode
+| Section | Purpose |
+|---------|---------|
+| `[general]` | Download paths, cmd prefix, notifications, show command |
+| `[keymap]` | All keyboard shortcuts (16 bindings) |
+| `[ui]` | Sidebar width |
+| `[colors]` | Full theme (14 color keys) |
 
-See `ClaudeCodeProjectReview 20260214.md` for the original audit and `WhatsCLI-Remaining-Work-NextSteps.md` for the remaining work plan.
+Access: `config.Config.Section.Field` (e.g., `config.Config.General.CmdPrefix`).
+
+## Code Conventions
+
+- **Error handling:** Return errors, wrap with `fmt.Errorf("context: %w", err)`, propagate to `sm.uiHandler.PrintError()`
+- **No panics:** Never `panic()` for normal error handling
+- **Paths:** Always use `config.GetSessionFilePath()` and XDG — never hardcode
+- **Commands:** One function per command, use `checkParam()` for validation
+- **Exports:** Document all exported functions and types
+- **Testing:** Table-driven tests, in-memory SQLite, race detector, MockUiHandler
 
 ## Common Pitfalls
 
-1. **Never read `sm.client` without a lock** — use `sm.getClient()` instead.
-2. **Never do DB writes inside `sm.mu.Lock()`** — hold lock only for PQ/map mutations, then release before writing to SQLite.
-3. **`storage.Init()` uses `config.GetSessionFilePath()`** — in tests, you must either mock this or use `:memory:` SQLite.
-4. **The `UiMessageHandler` interface has 16 methods** — any mock must implement all of them.
-5. **`commandRegistry` is populated in `init()`** — tests in the `messages` package will automatically have it available.
+1. **Never read `sm.client` without a lock** — use `sm.getClient()`.
+2. **Never do DB writes inside `sm.mu.Lock()`** — hold lock only for PQ/map mutations.
+3. **`storage.Init()` uses `config.GetSessionFilePath()`** — tests must use `:memory:` via `InitWithDB()`.
+4. **`UiMessageHandler` interface has 17 methods** — any mock must implement all of them.
+5. **`commandRegistry` is populated in `init()`** — always available in `messages` package tests.
+
+## Related Documentation
+
+| File | Purpose |
+|------|---------|
+| [README.md](README.md) | User-facing project documentation |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor guide with command authoring walkthrough |
+| [CHANGELOG.md](CHANGELOG.md) | Version history |
+| [SKILLS.md](SKILLS.md) | Deep-dive into development patterns and conventions |
+| [CLAUDE.md](CLAUDE.md) | Claude Code-specific project instructions |
+| [GEMINI.md](GEMINI.md) | Gemini AI-specific project instructions |
+| [.github/copilot-instructions.md](.github/copilot-instructions.md) | GitHub Copilot instructions |
+| [.cursorrules](.cursorrules) | Cursor AI configuration |

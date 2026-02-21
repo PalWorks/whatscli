@@ -1,0 +1,48 @@
+# WhatsCLI — Cursor AI Rules
+# Terminal-based WhatsApp client in Go 1.24 (whatsmeow + tview)
+
+# Build & Test
+# make build    → go build -o whatscli
+# make test     → go test -race ./...
+# make vet      → go vet ./...
+# Requires CGO (SQLite). Linux: apt install gcc
+
+# Architecture: two packages
+# - main (root): TUI layer using tview (ui_layout.go, ui_handler.go, ui_keybindings.go, ui_render.go, ui_helpers.go)
+# - messages/: business logic, WhatsApp connection, SQLite storage, command dispatch
+# - config/: INI configuration with XDG paths
+# - qrcode/: ANSI QR code rendering
+# Communication: UI → CommandChannel → SessionManager.runManager() event loop
+# Backend → UiMessageHandler interface (17 methods) → UI updates
+
+# Command Pattern
+# All commands registered in cmd_registry.go via init()
+# Handler signature: func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string)
+# To add: create handler in cmd_*.go, register in init(), update PrintHelp() in ui_helpers.go
+
+# Concurrency (CRITICAL)
+# - ALWAYS use sm.getClient() — never read sm.client directly (data race)
+# - Hold sm.mu ONLY for PQ/map mutations — release BEFORE SQLite writes (deadlock risk)
+# - Use snapshotPQ() for safe priority queue reads from UI goroutine
+# - All channels are buffered (size 10)
+# - sm.reconnecting flag prevents duplicate reconnect goroutines
+
+# Storage
+# SQLite with WAL mode, 5s busy timeout
+# Tables: conversations (JID PK), messages (ID PK, indexed on chat_id and chat_id+timestamp)
+# No in-memory caches — all reads query SQLite directly
+# Production: config.GetSessionFilePath() + "_meta.db"
+# Testing: use InitWithDB() with in-memory SQLite (:memory:)
+
+# Error Handling
+# - Return errors, wrap with fmt.Errorf("context: %w", err)
+# - Propagate to sm.uiHandler.PrintError(err)
+# - NEVER use panic() for normal error handling
+# - Use checkParam() for command parameter validation
+
+# Code Style
+# - One function per command
+# - Document all exported functions and types
+# - Use config.GetSessionFilePath() and XDG — never hardcode paths
+# - Table-driven tests with -race flag
+# - MockUiHandler from mock_ui_handler.go for backend tests
