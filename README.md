@@ -9,11 +9,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/normen/whatscli/actions/workflows/ci.yml"><img src="https://github.com/normen/whatscli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/normen/whatscli/releases/latest"><img src="https://img.shields.io/github/v/release/normen/whatscli?color=blue" alt="Latest Release"></a>
-  <a href="https://github.com/normen/whatscli/blob/master/LICENSE"><img src="https://img.shields.io/github/license/normen/whatscli" alt="License: MIT"></a>
+  <a href="https://github.com/PalWorks/whatscli/actions/workflows/ci.yml"><img src="https://github.com/PalWorks/whatscli/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/PalWorks/whatscli/releases/latest"><img src="https://img.shields.io/github/v/release/PalWorks/whatscli?color=blue" alt="Latest Release"></a>
+  <a href="https://github.com/PalWorks/whatscli/blob/master/LICENSE"><img src="https://img.shields.io/github/license/PalWorks/whatscli" alt="License: MIT"></a>
   <a href="https://goreportcard.com/report/github.com/normen/whatscli"><img src="https://goreportcard.com/badge/github.com/normen/whatscli" alt="Go Report Card"></a>
-  <a href="https://ko-fi.com/normen"><img src="https://img.shields.io/badge/support-ko--fi-ff5e5b?logo=ko-fi" alt="Ko-fi"></a>
 </p>
 
 <p align="center">
@@ -46,6 +45,8 @@
 ---
 
 ## Overview
+
+> **Fork Notice:** This is an actively maintained fork of [normen/whatscli](https://github.com/normen/whatscli) with significant enhancements including SQLite-backed persistence, auto-reconnect, full-text search, modular command architecture, and comprehensive test coverage.
 
 **WhatsCLI** is a terminal-based WhatsApp client that connects directly to WhatsApp's multi-device network — no browser, Electron, or phone tethering needed after the initial QR scan. It's designed for developers, sysadmins, and power users who live in the terminal and want a fast, keyboard-driven WhatsApp experience.
 
@@ -152,48 +153,12 @@ WhatsCLI follows a clean separation between presentation and business logic:
 
 ## Installation
 
-### Pre-Built Binaries (Recommended)
-
-Download the latest release for your platform from the [Releases page](https://github.com/normen/whatscli/releases/latest):
-
-| Platform | Archive |
-|----------|---------|
-| **Linux** (amd64) | `whatscli-vX.Y.Z-linux.zip` |
-| **macOS** (amd64) | `whatscli-vX.Y.Z-macos.zip` |
-| **Windows** (amd64) | `whatscli-vX.Y.Z-windows.zip` |
-| **Raspberry Pi** (ARMv5) | `whatscli-vX.Y.Z-raspberrypi.zip` |
-
-```bash
-# Example: Linux
-unzip whatscli-*-linux.zip
-chmod +x whatscli
-sudo mv whatscli /usr/local/bin/
-
-# Run it
-whatscli
-```
-
-### Package Managers
-
-#### macOS (Homebrew)
-
-```bash
-brew install normen/tap/whatscli
-```
-
-#### Arch Linux (AUR)
-
-```bash
-# via your preferred AUR helper
-yay -S whatscli
-```
-
-### Build from Source
+### Build from Source (Recommended)
 
 **Prerequisites:** Go 1.22+ and a C compiler (GCC/Clang) for the SQLite CGO dependency.
 
 ```bash
-git clone https://github.com/normen/whatscli.git
+git clone https://github.com/PalWorks/whatscli.git
 cd whatscli
 go build -o whatscli .
 ./whatscli
@@ -310,12 +275,12 @@ Use `/colorlist` in-app to see all available color names.
 ### Quick Start
 
 ```bash
-# 1. Install
-brew install normen/tap/whatscli   # macOS
-# or download binary from Releases
+# 1. Build from source
+git clone https://github.com/PalWorks/whatscli.git
+cd whatscli && make build
 
 # 2. Launch
-whatscli
+./whatscli
 
 # 3. Scan the QR code with WhatsApp on your phone
 #    (WhatsApp → Settings → Linked Devices → Link a Device)
@@ -628,7 +593,7 @@ git add -A
 git commit -m "feat: add /mycommand for XYZ"
 git push origin feature/my-command
 
-# Open a Pull Request
+# Open a Pull Request against PalWorks/whatscli
 ```
 
 ---
@@ -662,5 +627,5 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-  <sub>Built with ❤️ by <a href="https://github.com/normen">normen</a> and contributors</sub>
+  <sub>Originally created by <a href="https://github.com/normen">normen</a> · Enhanced and maintained by <a href="https://github.com/PalWorks">PalWorks</a></sub>
 </p>
