@@ -88,5 +88,6 @@ type Conversation struct {
 	Preview     string
 	Unread      uint16
 	IsPinned    bool
+	IsArchived  bool
 	Index       int // Heap index for internal use
 }

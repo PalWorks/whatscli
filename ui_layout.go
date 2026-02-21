@@ -49,13 +49,19 @@ func SetupLeftPane() *tview.Flex {
 		}
 	}
 
-	// Define selection handlers
-	statusSelectFunc := func(row, column int) {
-		if ctx.StatusTable.HasFocus() && row >= 0 && row < ctx.StatusTable.GetRowCount() {
-			cell := ctx.StatusTable.GetCell(row, column)
+	// --- Selection handlers: open chat on click/Enter ---
+	// These fire via SetSelectionChangedFunc (mouse click, arrow keys) and
+	// SetSelectedFunc (Enter key).  The RenderingList guard prevents
+	// ghost-scrolling when RenderChatTable restores selection.
+
+	openFromStatus := func(row, column int) {
+		if ctx.RenderingList {
+			return
+		}
+		if row >= 0 && row < ctx.StatusTable.GetRowCount() {
+			cell := ctx.StatusTable.GetCell(row, 0)
 			if cell != nil {
-				ref := cell.GetReference()
-				if ref != nil {
+				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
 						Id:          conv.JID,
@@ -70,12 +76,14 @@ func SetupLeftPane() *tview.Flex {
 		}
 	}
 
-	chatSelectFunc := func(row, column int) {
-		if ctx.ChatTable.HasFocus() && row >= 0 && row < ctx.ChatTable.GetRowCount() {
-			cell := ctx.ChatTable.GetCell(row, column)
+	openFromChat := func(row, column int) {
+		if ctx.RenderingList {
+			return
+		}
+		if row >= 0 && row < ctx.ChatTable.GetRowCount() {
+			cell := ctx.ChatTable.GetCell(row, 0)
 			if cell != nil {
-				ref := cell.GetReference()
-				if ref != nil {
+				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
 						Id:          conv.JID,
@@ -88,19 +96,21 @@ func SetupLeftPane() *tview.Flex {
 				}
 			}
 		}
-		// Infinite scroll trigger for contacts
+		// Infinite scroll trigger
 		if row >= ctx.ChatTable.GetRowCount()-5 && ctx.ChatLimit < len(ctx.AllChats) {
 			ctx.ChatLimit += batchSize
 			RenderChatTable()
 		}
 	}
 
-	groupSelectFunc := func(row, column int) {
-		if ctx.GroupTable.HasFocus() && row >= 0 && row < ctx.GroupTable.GetRowCount() {
-			cell := ctx.GroupTable.GetCell(row, column)
+	openFromGroup := func(row, column int) {
+		if ctx.RenderingList {
+			return
+		}
+		if row >= 0 && row < ctx.GroupTable.GetRowCount() {
+			cell := ctx.GroupTable.GetCell(row, 0)
 			if cell != nil {
-				ref := cell.GetReference()
-				if ref != nil {
+				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
 						Id:          conv.JID,
@@ -115,26 +125,26 @@ func SetupLeftPane() *tview.Flex {
 		}
 	}
 
-	// Selection Changed Funcs
-	ctx.StatusTable.SetSelectionChangedFunc(statusSelectFunc)
+	// Wire: SelectionChanged fires on click + arrow keys; Selected fires on Enter.
+	ctx.StatusTable.SetSelectionChangedFunc(openFromStatus)
+	ctx.StatusTable.SetSelectedFunc(openFromStatus)
+
+	ctx.ChatTable.SetSelectionChangedFunc(openFromChat)
+	ctx.ChatTable.SetSelectedFunc(openFromChat)
+
+	ctx.GroupTable.SetSelectionChangedFunc(openFromGroup)
+	ctx.GroupTable.SetSelectedFunc(openFromGroup)
+
 	ctx.StatusTable.SetFocusFunc(func() {
 		setActiveTable(ctx.StatusTable)
-		row, col := ctx.StatusTable.GetSelection()
-		statusSelectFunc(row, col)
 	})
 
-	ctx.ChatTable.SetSelectionChangedFunc(chatSelectFunc)
 	ctx.ChatTable.SetFocusFunc(func() {
 		setActiveTable(ctx.ChatTable)
-		row, col := ctx.ChatTable.GetSelection()
-		chatSelectFunc(row, col)
 	})
 
-	ctx.GroupTable.SetSelectionChangedFunc(groupSelectFunc)
 	ctx.GroupTable.SetFocusFunc(func() {
 		setActiveTable(ctx.GroupTable)
-		row, col := ctx.GroupTable.GetSelection()
-		groupSelectFunc(row, col)
 	})
 
 	// Initialize styles (start with all inactive)

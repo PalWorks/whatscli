@@ -43,6 +43,10 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		return fmt.Errorf("failed to create conversations table: %w", err)
 	}
 
+	// Backward-compatible migration: add is_archived column for existing databases.
+	// SQLite ignores the ALTER if the column already exists when using this pattern.
+	md.db.Exec(`ALTER TABLE conversations ADD COLUMN is_archived BOOLEAN DEFAULT 0`)
+
 	_, err = md.db.Exec(`
 	CREATE TABLE IF NOT EXISTS messages (
 		id TEXT PRIMARY KEY,
@@ -103,21 +107,22 @@ func (md *MessageDatabase) AddMessage(msg Message) error {
 // UpsertConversation updates or inserts a conversation
 func (md *MessageDatabase) UpsertConversation(c Conversation) error {
 	_, err := md.db.Exec(`
-	INSERT INTO conversations (jid, name, last_msg_time, preview, unread, is_pinned)
-	VALUES (?, ?, ?, ?, ?, ?)
+	INSERT INTO conversations (jid, name, last_msg_time, preview, unread, is_pinned, is_archived)
+	VALUES (?, ?, ?, ?, ?, ?, ?)
 	ON CONFLICT(jid) DO UPDATE SET
 		name=excluded.name,
 		last_msg_time=excluded.last_msg_time,
 		preview=excluded.preview,
 		unread=excluded.unread,
-		is_pinned=excluded.is_pinned;
-	`, c.JID, c.Name, c.LastMsgTime, c.Preview, c.Unread, c.IsPinned)
+		is_pinned=excluded.is_pinned,
+		is_archived=excluded.is_archived;
+	`, c.JID, c.Name, c.LastMsgTime, c.Preview, c.Unread, c.IsPinned, c.IsArchived)
 	return err
 }
 
 // GetConversations retrieves all conversations from the DB
 func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
-	rows, err := md.db.Query("SELECT jid, name, last_msg_time, preview, unread, is_pinned FROM conversations")
+	rows, err := md.db.Query("SELECT jid, name, last_msg_time, preview, unread, is_pinned, is_archived FROM conversations")
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +131,7 @@ func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
 	var convs []Conversation
 	for rows.Next() {
 		var c Conversation
-		if err := rows.Scan(&c.JID, &c.Name, &c.LastMsgTime, &c.Preview, &c.Unread, &c.IsPinned); err != nil {
+		if err := rows.Scan(&c.JID, &c.Name, &c.LastMsgTime, &c.Preview, &c.Unread, &c.IsPinned, &c.IsArchived); err != nil {
 			return nil, err
 		}
 		convs = append(convs, c)

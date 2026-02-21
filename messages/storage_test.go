@@ -34,7 +34,7 @@ func TestInit_CreatesTables(t *testing.T) {
 	md := newTestDB(t)
 
 	// Verify conversations table exists by querying it
-	_, err := md.db.Exec("SELECT jid, name, last_msg_time, preview, unread, is_pinned FROM conversations LIMIT 1")
+	_, err := md.db.Exec("SELECT jid, name, last_msg_time, preview, unread, is_pinned, is_archived FROM conversations LIMIT 1")
 	if err != nil {
 		t.Errorf("conversations table not created: %v", err)
 	}
@@ -143,6 +143,7 @@ func TestUpsertConversation_InsertAndUpdate(t *testing.T) {
 		Preview:     "Hello",
 		Unread:      2,
 		IsPinned:    false,
+		IsArchived:  false,
 	}
 
 	// Insert
@@ -157,14 +158,15 @@ func TestUpsertConversation_InsertAndUpdate(t *testing.T) {
 	if len(convs) != 1 {
 		t.Fatalf("expected 1 conversation, got %d", len(convs))
 	}
-	if convs[0].Name != "Alice" || convs[0].Preview != "Hello" {
-		t.Errorf("insert mismatch: name=%q preview=%q", convs[0].Name, convs[0].Preview)
+	if convs[0].Name != "Alice" || convs[0].Preview != "Hello" || convs[0].IsArchived != false {
+		t.Errorf("insert mismatch: name=%q preview=%q archived=%v", convs[0].Name, convs[0].Preview, convs[0].IsArchived)
 	}
 
-	// Update
+	// Update — also toggle IsArchived to true
 	conv.Name = "Alice Updated"
 	conv.Preview = "Bye"
 	conv.LastMsgTime = 2000
+	conv.IsArchived = true
 	if err := md.UpsertConversation(conv); err != nil {
 		t.Fatalf("update failed: %v", err)
 	}
@@ -176,8 +178,8 @@ func TestUpsertConversation_InsertAndUpdate(t *testing.T) {
 	if len(convs) != 1 {
 		t.Fatalf("expected 1 conversation after upsert, got %d", len(convs))
 	}
-	if convs[0].Name != "Alice Updated" || convs[0].Preview != "Bye" || convs[0].LastMsgTime != 2000 {
-		t.Errorf("update mismatch: name=%q preview=%q time=%d", convs[0].Name, convs[0].Preview, convs[0].LastMsgTime)
+	if convs[0].Name != "Alice Updated" || convs[0].Preview != "Bye" || convs[0].LastMsgTime != 2000 || convs[0].IsArchived != true {
+		t.Errorf("update mismatch: name=%q preview=%q time=%d archived=%v", convs[0].Name, convs[0].Preview, convs[0].LastMsgTime, convs[0].IsArchived)
 	}
 }
 

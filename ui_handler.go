@@ -159,7 +159,10 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 		// 4. Atomic Write (Standard Writer)
 		fmt.Fprint(ctx.TextView, output)
 
-		// 5. Ensure input field is focused and cleared so commands can be entered
+		// 5. Auto-scroll to QR code so it's visible without manual scrolling
+		ctx.TextView.ScrollToEnd()
+
+		// 6. Ensure input field is focused and cleared so commands can be entered
 		ctx.App.SetFocus(ctx.TextInput)
 	})
 }

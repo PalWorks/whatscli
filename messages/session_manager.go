@@ -15,6 +15,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/proto/waHistorySync"
 	"go.mau.fi/whatsmeow/store/sqlstore"
 	"go.mau.fi/whatsmeow/types"
 	waLog "go.mau.fi/whatsmeow/util/log"
@@ -157,9 +158,81 @@ func (sm *SessionManager) runManager() error {
 func (sm *SessionManager) setCurrentReceiver(id string) {
 	sm.mu.Lock()
 	sm.currentReceiver = id
+	// Check if conversation has unread messages
+	hasUnread := false
+	if conv := sm.convByJID[id]; conv != nil && conv.Unread > 0 {
+		hasUnread = true
+	}
 	sm.mu.Unlock()
 	screen := sm.getMessages(id)
 	sm.uiHandler.NewScreen(screen)
+
+	// Auto-mark as read in background (like WhatsApp Web)
+	if hasUnread {
+		go sm.markChatAsRead(id)
+	}
+}
+
+// markChatAsRead sends read receipts for the most recent incoming messages
+// in the given chat and resets the unread counter in PQ and DB.
+// Safe for background use — returns silently on any failure.
+func (sm *SessionManager) markChatAsRead(jidStr string) {
+	client := sm.getClient()
+	if client == nil || !client.IsConnected() {
+		return
+	}
+
+	chatJID, err := types.ParseJID(jidStr)
+	if err != nil {
+		return
+	}
+
+	// Load messages to collect IDs for read receipt
+	msgs, err := sm.db.GetMessages(jidStr)
+	if err != nil || len(msgs) == 0 {
+		return
+	}
+
+	// Collect unread message IDs (up to last 50 messages from others)
+	var ids []types.MessageID
+	var lastSender types.JID
+	for i := len(msgs) - 1; i >= 0 && len(ids) < 50; i-- {
+		if !msgs[i].FromMe {
+			sender, _ := types.ParseJID(msgs[i].ContactId)
+			if len(ids) == 0 {
+				lastSender = sender
+			}
+			// MarkRead requires all IDs to be from the same sender
+			if sender == lastSender {
+				ids = append(ids, msgs[i].Id)
+			}
+		}
+	}
+
+	if len(ids) == 0 {
+		return
+	}
+
+	if err := client.MarkRead(context.Background(), ids, time.Now(), chatJID, lastSender); err != nil {
+		return
+	}
+
+	// Reset unread counter — copy under lock, DB write outside.
+	var convCopy *Conversation
+	sm.mu.Lock()
+	if conv := sm.convByJID[jidStr]; conv != nil {
+		conv.Unread = 0
+		c := *conv
+		convCopy = &c
+	}
+	safeList := sm.snapshotPQ()
+	sm.mu.Unlock()
+
+	if convCopy != nil {
+		_ = sm.db.UpsertConversation(*convCopy)
+	}
+
+	sm.uiHandler.UpdateChatList(safeList)
 }
 
 // get the next message id to select (highlighted + offset)
@@ -481,6 +554,206 @@ func (sm *SessionManager) loadRecentChats() {
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
 	}
+}
+
+// processHistorySync parses a HistorySync event to extract real conversation
+// metadata (timestamps, unread counts, pinned status) and store historical
+// messages in SQLite. This enables correct chat ordering on first login.
+func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
+	client := sm.getClient()
+	if client == nil || !client.IsConnected() {
+		sm.uiHandler.PrintError(errors.New("not connected — cannot process history sync"))
+		return
+	}
+
+	conversations := data.GetConversations()
+	if len(conversations) == 0 {
+		sm.uiHandler.PrintText(fmt.Sprintf("History sync (%s): no conversations", data.GetSyncType()))
+		return
+	}
+
+	sm.uiHandler.PrintText(fmt.Sprintf("Processing history sync (%s): %d conversations...",
+		data.GetSyncType(), len(conversations)))
+
+	var toUpsert []Conversation
+	totalMessages := 0
+	addMsgErrors := 0
+
+	for _, conv := range conversations {
+		chatJIDStr := conv.GetID()
+		chatJID, err := types.ParseJID(chatJIDStr)
+		if err != nil {
+			continue
+		}
+
+		// Skip non-chat JIDs (status broadcasts, etc.)
+		if chatJID.Server != "s.whatsapp.net" && chatJID.Server != "g.us" {
+			continue
+		}
+
+		jidStr := chatJID.String()
+
+		// --- Extract conversation metadata from proto ---
+		lastMsgTimestamp := int64(conv.GetLastMsgTimestamp())
+		if lastMsgTimestamp == 0 {
+			lastMsgTimestamp = int64(conv.GetConversationTimestamp())
+		}
+
+		unreadCount := uint16(conv.GetUnreadCount())
+		isPinned := conv.GetPinned() > 0
+		isArchived := conv.GetArchived()
+
+		// Determine chat name from history proto
+		name := conv.GetName()
+		if name == "" {
+			name = conv.GetDisplayName()
+		}
+
+		// --- Process individual messages ---
+		var latestPreview string
+		var latestMsgTs int64
+
+		for _, histMsg := range conv.GetMessages() {
+			webMsg := histMsg.GetMessage()
+			if webMsg == nil {
+				continue
+			}
+
+			evt, err := client.ParseWebMessage(chatJID, webMsg)
+			if err != nil {
+				continue
+			}
+
+			text, preview := extractMessageContent(evt.Message)
+			if text == "" {
+				continue
+			}
+
+			msgTimestamp := uint64(evt.Info.Timestamp.Unix())
+
+			// Resolve sender name: prefer PushName, fall back to JID
+			senderName := evt.Info.PushName
+			if senderName == "" {
+				senderName = evt.Info.Sender.User
+			}
+
+			msg := Message{
+				Id:           evt.Info.ID,
+				ChatId:       jidStr,
+				FromMe:       evt.Info.IsFromMe,
+				Timestamp:    msgTimestamp,
+				Text:         text,
+				ContactId:    evt.Info.Sender.String(),
+				ContactName:  senderName,
+				ContactShort: senderName,
+			}
+
+			// AddMessage uses INSERT OR IGNORE, so duplicates are skipped
+			if err := sm.db.AddMessage(msg); err != nil {
+				addMsgErrors++
+			}
+
+			// Track the most recent message for the conversation preview
+			if int64(msgTimestamp) > latestMsgTs {
+				latestMsgTs = int64(msgTimestamp)
+				latestPreview = preview
+			}
+
+			totalMessages++
+		}
+
+		// Use best available timestamp
+		if latestMsgTs > lastMsgTimestamp {
+			lastMsgTimestamp = latestMsgTs
+		}
+
+		if latestPreview == "" {
+			latestPreview = "New chat"
+		}
+
+		// --- Update priority queue ---
+		sm.mu.Lock()
+		existingConv := sm.convByJID[jidStr]
+
+		if existingConv != nil {
+			updated := false
+
+			// Only update timestamp/preview if history has newer data
+			if lastMsgTimestamp > existingConv.LastMsgTime {
+				existingConv.LastMsgTime = lastMsgTimestamp
+				existingConv.Preview = latestPreview
+				updated = true
+			}
+
+			// Fill in name if we only had a phone number
+			if name != "" && (existingConv.Name == existingConv.JID || existingConv.Name == chatJID.User) {
+				existingConv.Name = name
+				updated = true
+			}
+
+			// Always adopt pinned status from authoritative source
+			if isPinned != existingConv.IsPinned {
+				existingConv.IsPinned = isPinned
+				updated = true
+			}
+
+			// Prefer history unread count if it's higher
+			if unreadCount > existingConv.Unread {
+				existingConv.Unread = unreadCount
+				updated = true
+			}
+
+			// Adopt archived status from authoritative source
+			if isArchived != existingConv.IsArchived {
+				existingConv.IsArchived = isArchived
+				updated = true
+			}
+
+			if updated {
+				sm.priorityQueue.Update(existingConv, existingConv.LastMsgTime, existingConv.IsPinned)
+				c := *existingConv
+				toUpsert = append(toUpsert, c)
+			}
+		} else {
+			// New conversation — use history name or fall back to JID user
+			if name == "" {
+				name = chatJID.User
+			}
+			newConv := &Conversation{
+				JID:         jidStr,
+				Name:        name,
+				LastMsgTime: lastMsgTimestamp,
+				Preview:     latestPreview,
+				Unread:      unreadCount,
+				IsPinned:    isPinned,
+				IsArchived:  isArchived,
+			}
+			heap.Push(&sm.priorityQueue, newConv)
+			sm.convByJID[jidStr] = newConv
+			toUpsert = append(toUpsert, *newConv)
+		}
+		sm.mu.Unlock()
+	}
+
+	// Persist all conversation updates (outside lock)
+	for _, c := range toUpsert {
+		if err := sm.db.UpsertConversation(c); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+		}
+	}
+
+	// Refresh chat list UI
+	sm.mu.Lock()
+	safeList := sm.snapshotPQ()
+	sm.mu.Unlock()
+	sm.uiHandler.UpdateChatList(safeList)
+
+	if addMsgErrors > 0 {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to store %d history messages", addMsgErrors))
+	}
+
+	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
+		len(toUpsert), totalMessages))
 }
 
 // loadRecentMessages loads the most recent messages for a chat

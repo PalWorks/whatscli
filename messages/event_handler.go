@@ -49,9 +49,7 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		reasonText := fmt.Sprintf("%v", v.Reason)
 		eh.sm.uiHandler.PrintText("Logged out: " + reasonText)
 	case *events.HistorySync:
-		// Reload chats when history sync occurs
-		eh.sm.uiHandler.PrintText("Receiving history sync...")
-		go eh.sm.loadRecentChats()
+		go eh.sm.processHistorySync(v.Data)
 	}
 }
 

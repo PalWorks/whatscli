@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
@@ -27,69 +26,8 @@ func cmdRead(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		return
 	}
 
-	chatJID, err := types.ParseJID(receiver)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("invalid chat JID: %v", err))
-		return
-	}
-
-	// Get recent messages to collect IDs for read receipt
-	msgs, err := sm.db.GetMessages(receiver)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
-		return
-	}
-	if len(msgs) == 0 {
-		sm.uiHandler.PrintText("No messages to mark as read")
-		return
-	}
-
-	// Collect unread message IDs (up to last 50 messages from others)
-	var ids []types.MessageID
-	var lastSender types.JID
-	for i := len(msgs) - 1; i >= 0 && len(ids) < 50; i-- {
-		if !msgs[i].FromMe {
-			sender, _ := types.ParseJID(msgs[i].ContactId)
-			if len(ids) == 0 {
-				lastSender = sender
-			}
-			// MarkRead requires all IDs to be from the same sender
-			if sender == lastSender {
-				ids = append(ids, msgs[i].Id)
-			}
-		}
-	}
-
-	if len(ids) == 0 {
-		sm.uiHandler.PrintText("No unread messages from others")
-		return
-	}
-
-	err = client.MarkRead(context.Background(), ids, time.Now(), chatJID, lastSender)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to mark as read: %v", err))
-		return
-	}
-
-	// Reset unread counter — copy under lock, DB write outside (audit R-2).
-	var convCopy *Conversation
-	sm.mu.Lock()
-	if conv := sm.convByJID[receiver]; conv != nil {
-		conv.Unread = 0
-		c := *conv
-		convCopy = &c
-	}
-	safeList := sm.snapshotPQ()
-	sm.mu.Unlock()
-
-	if convCopy != nil {
-		if err := sm.db.UpsertConversation(*convCopy); err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
-		}
-	}
-
-	sm.uiHandler.UpdateChatList(safeList)
-	sm.uiHandler.PrintText(fmt.Sprintf("Marked %d messages as read", len(ids)))
+	sm.markChatAsRead(receiver)
+	sm.uiHandler.PrintText("Marked chat as read")
 }
 
 // cmdInfo shows information about the current chat.

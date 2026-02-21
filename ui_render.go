@@ -20,6 +20,9 @@ import (
 func getMessagesString(msgs []messages.Message) string {
 	out := ""
 	for _, msg := range msgs {
+		if strings.TrimSpace(msg.Text) == "" {
+			continue // skip empty/protocol messages
+		}
 		out += getTextMessageString(&msg)
 		out += "\n"
 	}
@@ -47,6 +50,47 @@ func getTextMessageString(msg *messages.Message) string {
 	}
 	out += "[\"\"]"
 	return out
+}
+
+// formatRelativeTime formats a Unix timestamp into a WhatsApp Web–style
+// relative label: "just now", "5m", "2h", "Yesterday", weekday, or "Jan 02".
+func formatRelativeTime(timestamp int64) string {
+	if timestamp <= 0 {
+		return ""
+	}
+	now := time.Now()
+	t := time.Unix(timestamp, 0)
+	diff := now.Sub(t)
+
+	// Guard against future timestamps (clock skew / server-side drift)
+	if diff < 0 {
+		return "just now"
+	}
+
+	switch {
+	case diff < time.Minute:
+		return "just now"
+	case diff < time.Hour:
+		return fmt.Sprintf("%dm", int(diff.Minutes()))
+	case diff < 24*time.Hour:
+		// Same calendar day check
+		yN, mN, dN := now.Date()
+		yT, mT, dT := t.Date()
+		if yN == yT && mN == mT && dN == dT {
+			return fmt.Sprintf("%dh", int(diff.Hours()))
+		}
+		return "Yesterday"
+	case diff < 48*time.Hour:
+		return "Yesterday"
+	case diff < 7*24*time.Hour:
+		return t.Weekday().String()[:3] // "Mon", "Tue", etc.
+	default:
+		// Same year → "Jan 02"; different year → "Jan 02, 06"
+		if t.Year() == now.Year() {
+			return t.Format("Jan 02")
+		}
+		return t.Format("Jan 02, 06")
+	}
 }
 
 // RenderChatTable renders the table based on ctx.AllChats and ctx.ChatLimit
@@ -97,6 +141,11 @@ func RenderChatTable() {
 	newRowG := 0
 
 	for _, conv := range displayList {
+		// Skip archived chats
+		if conv.IsArchived {
+			continue
+		}
+
 		// Name cell
 		name := conv.Name
 		if name == "" {
@@ -118,11 +167,20 @@ func RenderChatTable() {
 			SetExpansion(1).
 			SetSelectable(true)
 
+		// Timestamp cell (right-aligned, dim)
+		tsText := formatRelativeTime(conv.LastMsgTime)
+		tsCell := tview.NewTableCell(tsText).
+			SetAlign(tview.AlignRight).
+			SetSelectable(true).
+			SetExpansion(0)
+
 		// Color & Split
 		if conv.JID == messages.STATUSSUFFIX {
 			// Status
 			cell.SetTextColor(tcell.ColorYellow) // Distinct color
+			tsCell.SetTextColor(tcell.ColorDimGray)
 			ctx.StatusTable.SetCell(sIdx, 0, cell)
+			ctx.StatusTable.SetCell(sIdx, 1, tsCell)
 			if conv.JID == selectedStatusJID {
 				newRowS = sIdx
 			}
@@ -130,7 +188,9 @@ func RenderChatTable() {
 		} else if strings.HasSuffix(conv.JID, messages.GROUPSUFFIX) {
 			// Group
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListGroup])
+			tsCell.SetTextColor(tcell.ColorDimGray)
 			ctx.GroupTable.SetCell(gIdx, 0, cell)
+			ctx.GroupTable.SetCell(gIdx, 1, tsCell)
 			if conv.JID == selectedGroupJID {
 				newRowG = gIdx
 			}
@@ -138,7 +198,9 @@ func RenderChatTable() {
 		} else {
 			// Contact
 			cell.SetTextColor(tcell.ColorNames[config.Config.Colors.ListContact])
+			tsCell.SetTextColor(tcell.ColorDimGray)
 			ctx.ChatTable.SetCell(cIdx, 0, cell)
+			ctx.ChatTable.SetCell(cIdx, 1, tsCell)
 			if conv.JID == selectedChatJID {
 				newRowC = cIdx
 			}
@@ -146,7 +208,9 @@ func RenderChatTable() {
 		}
 	}
 
-	// Restore selection
+	// Restore selection — guard prevents SetSelectionChangedFunc from
+	// firing SetDisplayedChat during this programmatic Select().
+	ctx.RenderingList = true
 	if ctx.StatusTable.GetRowCount() > 0 {
 		ctx.StatusTable.Select(newRowS, 0)
 	}
@@ -158,6 +222,7 @@ func RenderChatTable() {
 	if ctx.GroupTable.GetRowCount() > 0 {
 		ctx.GroupTable.Select(newRowG, 0)
 	}
+	ctx.RenderingList = false
 }
 
 // prints an image attachment to the TextView (by message id)
