@@ -13,7 +13,7 @@
 # - config/: INI configuration with XDG paths
 # - qrcode/: ANSI QR code rendering
 # Communication: UI → CommandChannel → SessionManager.runManager() event loop
-# Backend → UiMessageHandler interface (17 methods) → UI updates
+# Backend → UiMessageHandler interface (15 methods) → UI updates
 
 # Command Pattern
 # All commands registered in cmd_registry.go via init()

@@ -4,10 +4,10 @@
 
 ## Project Overview
 
-**WhatsCLI** is a terminal-based WhatsApp client written in Go 1.24.  
+**WhatsCLI** is a terminal-based WhatsApp client written in Go 1.25.  
 It uses [whatsmeow](https://github.com/tulir/whatsmeow) for the WhatsApp multi-device protocol and [tview](https://github.com/rivo/tview) for the terminal UI.
 
-**Version:** v1.3.0  
+**Version:** v1.7.0  
 **License:** MIT  
 **Module:** `github.com/normen/whatscli`
 
@@ -17,7 +17,7 @@ It uses [whatsmeow](https://github.com/tulir/whatsmeow) for the WhatsApp multi-d
 # Build & Run
 make build          # go build -o whatscli
 make run            # go run .
-whatscli --debug    # verbose protocol logging
+whatscli --debug    # verbose protocol logging to <config dir>/whatscli/debug.log (--logfile to override)
 
 # Test & Lint
 make test           # go test -race ./...
@@ -82,7 +82,10 @@ func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []stri
 | `cmd_connection.go` | `/connect`, `/disconnect`, `/logout`, `/reset` |
 | `cmd_chat.go` | `/send`, `/select`, `/backlog`, `/sync-groups` |
 | `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |
-| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
+| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio`, `/sendsticker` |
+| `cmd_message.go` | `/download`, `/open`, `/show`, `/url`, `/revoke`, `/reply`, `/edit` |
+| `cmd_record.go` | `/record`, `/stoprecording` |
+| `cmd_export.go` | `/export` |
 | `cmd_search.go` | `/search`, `/search-contact` |
 
 ## Storage Layer
@@ -96,10 +99,10 @@ func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []stri
 ## Testing
 
 - Use `InitWithDB(db)` with in-memory SQLite for storage tests
-- Use `MockUiHandler` from `mock_ui_handler.go` to stub the 17-method `UiMessageHandler` interface
+- Use `MockUiHandler` from `mock_ui_handler.go` to stub the 15-method `UiMessageHandler` interface
 - Tests always run with `-race` flag
 - `commandRegistry` is auto-populated via `init()` — always available in package tests
-- CI runs on Go 1.22 and 1.24 (GitHub Actions matrix)
+- CI runs on Go 1.25 (GitHub Actions)
 
 ## Configuration
 

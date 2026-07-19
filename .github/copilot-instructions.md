@@ -18,7 +18,7 @@ Two packages separated by concern:
 - `config/` — INI configuration with XDG paths
 - `qrcode/` — ANSI QR code rendering
 
-Communication: UI sends commands via `SessionManager.CommandChannel`; backend calls back through `UiMessageHandler` interface (17 methods).
+Communication: UI sends commands via `SessionManager.CommandChannel`; backend calls back through `UiMessageHandler` interface (15 methods).
 
 ## Command Pattern
 

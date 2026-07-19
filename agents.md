@@ -8,7 +8,7 @@
 **WhatsCLI** is a terminal-based WhatsApp client written in Go 1.24.  
 It uses [whatsmeow](https://github.com/tulir/whatsmeow) for the WhatsApp multi-device protocol and [tview](https://github.com/rivo/tview) for the TUI framework.
 
-**Version:** v1.3.0 · **License:** MIT · **Module:** `github.com/normen/whatscli`
+**Version:** v1.7.0 · **License:** MIT · **Module:** `github.com/normen/whatscli`
 
 ## Quick Reference
 
@@ -17,7 +17,7 @@ make build       # go build -o whatscli
 make test        # go test -race ./...
 make vet         # go vet ./...
 make run         # go run .
-whatscli --debug # Verbose WhatsApp protocol logging
+whatscli --debug # Verbose protocol logging to <config dir>/whatscli/debug.log (--logfile to override)
 ```
 
 **CGO required** — SQLite via `go-sqlite3`. Install gcc: `apt install gcc` (Linux).
@@ -36,7 +36,7 @@ whatscli/
 ├── config/
 │   └── settings.go      # INI config via XDG paths (4 sections, 30+ keys)
 ├── messages/
-│   ├── messages.go      # Data types + UiMessageHandler interface (17 methods)
+│   ├── messages.go      # Data types + UiMessageHandler interface (15 methods)
 │   ├── session_manager.go  # Event loop, command dispatch, lifecycle
 │   ├── connection.go    # WhatsApp login, QR code flow, auto-reconnect
 │   ├── event_handler.go # WhatsApp event processing
@@ -49,7 +49,10 @@ whatscli/
 │   ├── cmd_connection.go # /login, /connect, /disconnect, /logout, /reset
 │   ├── cmd_chat.go      # /send, /select, /backlog, /sync-groups
 │   ├── cmd_group.go     # /create, /subject, /leave, /add, /remove, /admin, /removeadmin
-│   ├── cmd_media.go     # /upload, /sendimage, /sendvideo, /sendaudio
+│   ├── cmd_media.go     # /upload, /sendimage, /sendvideo, /sendaudio, /sendsticker
+│   ├── cmd_message.go   # /download, /open, /show, /url, /revoke, /reply, /edit
+│   ├── cmd_record.go    # /record, /stoprecording
+│   ├── cmd_export.go    # /export
 │   └── cmd_search.go    # /search, /search-contact
 └── qrcode/
     └── qrcode.go        # ANSI QR code rendering for terminal display
@@ -89,7 +92,10 @@ func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []stri
 | `cmd_connection.go` | `/connect`, `/disconnect`, `/logout`, `/reset` |
 | `cmd_chat.go` | `/send`, `/select`, `/backlog`, `/sync-groups` |
 | `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |
-| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
+| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio`, `/sendsticker` |
+| `cmd_message.go` | `/download`, `/open`, `/show`, `/url`, `/revoke`, `/reply`, `/edit` |
+| `cmd_record.go` | `/record`, `/stoprecording` |
+| `cmd_export.go` | `/export` |
 | `cmd_search.go` | `/search`, `/search-contact` |
 
 ## Storage Layer
@@ -103,10 +109,10 @@ func(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []stri
 ## Testing
 
 - Use `InitWithDB(db)` with in-memory SQLite for storage tests
-- Use `MockUiHandler` from `mock_ui_handler.go` — 17 methods
+- Use `MockUiHandler` from `mock_ui_handler.go` — 15 methods
 - Tests always run with `-race` flag
 - `commandRegistry` auto-populated via `init()` — available in package tests
-- CI matrix: Go 1.22 + 1.24 on GitHub Actions
+- CI: Go 1.25 on GitHub Actions
 
 ## Configuration
 
@@ -135,7 +141,7 @@ Access: `config.Config.Section.Field` (e.g., `config.Config.General.CmdPrefix`).
 1. **Never read `sm.client` without a lock** — use `sm.getClient()`.
 2. **Never do DB writes inside `sm.mu.Lock()`** — hold lock only for PQ/map mutations.
 3. **`storage.Init()` uses `config.GetSessionFilePath()`** — tests must use `:memory:` via `InitWithDB()`.
-4. **`UiMessageHandler` interface has 17 methods** — any mock must implement all of them.
+4. **`UiMessageHandler` interface has 15 methods** — any mock must implement all of them.
 5. **`commandRegistry` is populated in `init()`** — always available in `messages` package tests.
 
 ## Related Documentation

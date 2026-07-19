@@ -69,8 +69,13 @@
 
 | Category | Capabilities |
 |----------|-------------|
-| **Messaging** | Send & receive text, images, video, audio, documents, stickers, contacts, locations, and reactions |
-| **Media** | Download, open, and preview attachments; send files via `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
+| **Messaging** | Send & receive text, images, video, audio, documents, stickers, contacts, locations, and reactions (aggregated inline on the message, e.g. `👍 x2`) |
+| **Media** | Send & receive files via `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio`, `/sendsticker`; download, open, in-terminal preview (`d`/`o`/`s`), and revoke (`r`) received attachments |
+| **Voice Notes** | Record from the terminal microphone and send as a voice note (`/record`, `/stoprecording`) via a configurable external recorder (sox, arecord, etc.) |
+| **Reply Threading** | Reply to a selected message (`/reply`, keybinding `y`) with a quoted preview shown above the reply |
+| **Message Editing** | Edit a previously sent message (`/edit`, keybinding `e`) within WhatsApp's 20-minute edit window |
+| **Status** | View incoming status updates in a dedicated, read-only Status pane |
+| **Encrypted Export** | Export a chat's full message history to an [age](https://age-encryption.org)-encrypted file (`/export`), decryptable with any age-compatible tool |
 | **Search** | Full-text search across all messages (`/search`) and contact search (`/search-contact`) |
 | **Groups** | Create groups, add/remove members, promote/demote admins, set subjects, sync group metadata |
 | **Persistence** | SQLite-backed message & conversation storage with WAL mode for performance |
@@ -78,7 +83,7 @@
 | **Connectivity** | Auto-reconnect with exponential backoff (2s → 30s, 5 attempts), manual `/connect` and `/disconnect` |
 | **Notifications** | Desktop notifications via `beeep` or terminal bell — configurable per preference |
 | **QR Login** | ANSI QR code rendered directly in-terminal with countdown timer and auto-refresh |
-| **Customization** | INI-based config for colors, key bindings, sidebar width, download paths, and image preview commands |
+| **Customization** | INI-based config for colors, key bindings, sidebar width, download paths, image preview commands, and voice recording |
 | **Image Display** | External image-to-terminal rendering via configurable commands (`jp2a`, `pixterm`, etc.) |
 | **Clipboard** | Copy/paste user IDs for group management commands |
 
@@ -138,7 +143,7 @@ WhatsCLI follows a clean separation between presentation and business logic:
 
 | Component | Technology |
 |-----------|-----------|
-| **Language** | Go 1.24 |
+| **Language** | Go 1.25 |
 | **WhatsApp Protocol** | [whatsmeow](https://github.com/tulir/whatsmeow) (multi-device Web API) |
 | **Terminal UI** | [tview](https://github.com/rivo/tview) + [tcell](https://github.com/gdamore/tcell) |
 | **Database** | SQLite 3 via [go-sqlite3](https://github.com/mattn/go-sqlite3) (CGO) |
@@ -147,7 +152,8 @@ WhatsCLI follows a clean separation between presentation and business logic:
 | **Notifications** | [beeep](https://github.com/gen2brain/beeep) (cross-platform desktop notifications) |
 | **Clipboard** | [clipboard](https://github.com/atotto/clipboard) |
 | **Key Bindings** | [cbind](https://code.rocketnine.space/tslocum/cbind) |
-| **CI/CD** | GitHub Actions (Go 1.22 + 1.24 matrix) |
+| **Encrypted Export** | [age](https://age-encryption.org) via [filippo.io/age](https://github.com/FiloSottile/age) |
+| **CI/CD** | GitHub Actions (Go 1.25) |
 
 ---
 
@@ -155,7 +161,7 @@ WhatsCLI follows a clean separation between presentation and business logic:
 
 ### Build from Source (Recommended)
 
-**Prerequisites:** Go 1.22+ and a C compiler (GCC/Clang) for the SQLite CGO dependency.
+**Prerequisites:** Go 1.25+ and a C compiler (GCC/Clang) for the SQLite CGO dependency.
 
 ```bash
 git clone https://github.com/PalWorks/whatscli.git
@@ -174,11 +180,20 @@ make run      # build and run
 
 ### Debug Mode
 
-Enable verbose WhatsApp protocol logging with the `--debug` flag:
+Enable verbose WhatsApp protocol logging with the `--debug` flag. Logs are
+written to a file — `<config dir>/whatscli/debug.log` by default — rather
+than the terminal, so they don't interfere with the TUI. The log captures
+both the WhatsApp protocol trace and the same status/error messages shown
+in the UI, which is useful for diagnosing a connection issue after the fact.
 
 ```bash
 whatscli --debug
+
+# Write the debug log somewhere else:
+whatscli --debug --logfile /tmp/whatscli-debug.log
 ```
+
+Each run truncates the log file, so it only ever contains the current session.
 
 ---
 
@@ -207,6 +222,10 @@ The file is auto-created on first run with sensible defaults. Run `/help` inside
 | `use_terminal_bell` | `false` | Ring terminal bell instead of desktop notification |
 | `notification_timeout` | `60` | Seconds between repeated notifications |
 | `backlog_msg_quantity` | `10` | Number of messages to load per backlog request |
+| `record_command` | `sox -d -r 16000 -c 1 -t wav` | External command to record audio for `/record`; the output file path is appended as the final argument (same convention as `show_command`) |
+| `record_max_seconds` | `120` | Maximum recording duration before `/record` automatically stops and sends |
+
+`/export`'s passphrase is **not** a config key — it must be set in the `WHATSCLI_EXPORT_PASSPHRASE` environment variable before launching WhatsCLI, so it never sits in a config file or is echoed to the screen. It must be at least 8 characters.
 
 </details>
 
@@ -232,6 +251,8 @@ The file is auto-created on first run with sensible defaults. Run `/help` inside
 | `message_url` | `u` | Open URL in browser |
 | `message_info` | `i` | Show message info |
 | `message_revoke` | `r` | Revoke message |
+| `message_reply` | `y` | Reply to message (pre-fills the input field) |
+| `message_edit` | `e` | Edit message (pre-fills the input field) |
 
 </details>
 
@@ -300,7 +321,7 @@ After the initial scan, WhatsCLI reconnects automatically on subsequent launches
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  WhatsCLI v1.3.0  Type /help or press Ctrl+? for help   │
+│  WhatsCLI v1.7.0  Type /help or press Ctrl+? for help   │
 ├──────────────┬──────────────────────────────────────────┤
 │              │                                          │
 │  Chat List   │          Message View                    │
@@ -371,6 +392,20 @@ All commands use the configurable prefix (default: `/`).
 | `/search <keyword>` | Full-text search across all messages |
 | `/search-contact <name>` | Search for contacts by name |
 
+### Message Actions
+
+These act on the currently selected message (see [Key Bindings](#key-bindings) for the default keys) or, typed manually, take the message ID as their first parameter.
+
+| Command | Description |
+|---------|-------------|
+| `/download <id>` | Download the attachment on a selected message |
+| `/open <id>` | Download the attachment and open it with the OS default handler |
+| `/show <id>` | Render an image/sticker attachment inline in the terminal |
+| `/url <id>` | Open the first URL found in a message's text |
+| `/revoke <id>` | Revoke (delete for everyone) one of your own messages |
+| `/reply <id> <text>` | Reply to a message with a quoted preview (the `y` keybinding pre-fills `<id>` for you) |
+| `/edit <id> <text>` | Edit one of your own messages within the 20-minute edit window (the `e` keybinding pre-fills `<id>`) |
+
 ### Media
 
 | Command | Description |
@@ -378,7 +413,16 @@ All commands use the configurable prefix (default: `/`).
 | `/sendimage <path>` | Send an image |
 | `/sendvideo <path>` | Send a video |
 | `/sendaudio <path>` | Send an audio file |
+| `/sendsticker <path.webp>` | Send a sticker (must be a `.webp` file) |
 | `/upload <path>` | Send any file as a document |
+| `/record` | Start recording audio via the configured `record_command`; sends as a voice note when stopped |
+| `/stoprecording` | Stop an in-progress `/record` early and send immediately |
+
+### Export
+
+| Command | Description |
+|---------|-------------|
+| `/export <chat-jid> <path>` | Export a chat's full message history to an age-encrypted file. Requires the `WHATSCLI_EXPORT_PASSPHRASE` environment variable to be set (at least 8 characters) before launching WhatsCLI. Decrypt with the standard [age](https://age-encryption.org) CLI: `age -d -p <path> > messages.json` |
 
 ### Group Management
 
@@ -419,6 +463,8 @@ All key bindings are configurable in `whatscli.config` under the `[keymap]` sect
 | `u` | Message selected | Open URL |
 | `i` | Message selected | Show info |
 | `r` | Message selected | Revoke message |
+| `y` | Message selected | Reply (pre-fills `/reply <id> ` for you to type the text) |
+| `e` | Message selected | Edit (pre-fills `/edit <id> ` for you to type the new text) |
 
 ---
 
@@ -465,7 +511,7 @@ whatscli/
 │   └── screenshot.png       # Application screenshot
 │
 ├── .github/
-│   ├── workflows/ci.yml     # CI pipeline (build + test on Go 1.22 & 1.24)
+│   ├── workflows/ci.yml     # CI pipeline (build + test on Go 1.25)
 │   ├── FUNDING.yml          # Sponsorship configuration
 │   └── PULL_REQUEST_TEMPLATE.md
 │
@@ -505,7 +551,7 @@ go build ./...
 
 Every push and PR to `master` triggers the GitHub Actions CI workflow:
 
-1. **Matrix build** across Go 1.22 and 1.24
+1. **Build** on Go 1.25
 2. `go mod download` + `go mod verify`
 3. `go vet ./...`
 4. `go build -v ./...`
@@ -552,15 +598,16 @@ WhatsCLI stores session and message data in the XDG config directory:
 
 ## Roadmap
 
-> **Note:** This roadmap is inferred from the codebase and recent development activity. Features are subject to change.
+> **Note:** This roadmap is inferred from the codebase and recent development activity. Features are subject to change. See `ImplementationPlan_20260718.md` in the repo root for the phased implementation plan currently being executed against this roadmap.
 
-- [ ] End-to-end encrypted message backup/export
-- [ ] Reaction display in message view
-- [ ] Voice message recording from terminal
-- [ ] Sticker sending support
-- [ ] Message reply threading in the UI
+- [x] End-to-end encrypted message backup/export (`/export`, age-encrypted)
+- [x] Reaction display attached to the target message (aggregated inline, e.g. `👍 x2`)
+- [x] Voice message recording from terminal (`/record`, `/stoprecording`)
+- [x] Sticker sending support (`/sendsticker`)
+- [x] Message reply threading in the UI (`/reply`, quoted preview shown above replies)
+- [x] Message editing (`/edit`, within WhatsApp's 20-minute edit window)
+- [x] Status/story viewing (read-only)
 - [ ] Configurable message display limits
-- [ ] Status/story viewing
 - [ ] Contact vCard display improvements
 
 ---

@@ -79,7 +79,7 @@ case command := <-sm.CommandChannel:
 
 ### Backend → UI (Updates)
 
-The `UiMessageHandler` interface (17 methods) allows the backend to update the UI without importing tview:
+The `UiMessageHandler` interface (15 methods) allows the backend to update the UI without importing tview:
 
 ```go
 type UiMessageHandler interface {

@@ -16,7 +16,7 @@ make test        # go test -race ./...
 make vet         # go vet ./...
 make run         # go run .
 make install     # go install .
-whatscli --debug # Run with verbose WhatsApp protocol logging
+whatscli --debug # Verbose protocol logging to <config dir>/whatscli/debug.log (--logfile to override)
 ```
 
 Requires **CGO** (SQLite via go-sqlite3). On Linux: `apt install gcc`.
@@ -94,7 +94,7 @@ Access via `config.Config.Section.Field` (e.g., `config.Config.General.CmdPrefix
 
 ## Common Pitfalls
 
-1. `UiMessageHandler` interface has **17 methods** — any mock must implement all of them.
+1. `UiMessageHandler` interface has **15 methods** — any mock must implement all of them.
 2. `storage.Init()` uses `config.GetSessionFilePath()` — tests must use `:memory:` via `InitWithDB()`.
 3. The `qrcode` package renders ANSI art — terminal width matters for QR visibility.
 4. `release.sh` updates a separate Homebrew tap repo — don't modify without understanding the full flow.
