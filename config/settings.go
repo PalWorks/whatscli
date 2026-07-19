@@ -27,6 +27,15 @@ type General struct {
 	UseTerminalBell     bool
 	NotificationTimeout int64
 	BacklogMsgQuantity  int
+
+	// RecordCommand records audio to a file: it is split on spaces and the
+	// output file path is appended as the final argument, the same
+	// convention ShowCommand uses for its target file (see PrintImage).
+	RecordCommand string
+	// RecordMaxSeconds bounds how long /record can run before it is
+	// automatically stopped and sent, in case the user forgets to run
+	// /stoprecording.
+	RecordMaxSeconds int
 }
 
 type Keymap struct {
@@ -47,6 +56,8 @@ type Keymap struct {
 	MessageUrl      string
 	MessageInfo     string
 	MessageRevoke   string
+	MessageReply    string
+	MessageEdit     string
 }
 
 type Ui struct {
@@ -80,6 +91,8 @@ var Config = IniFile{
 		UseTerminalBell:     false,
 		NotificationTimeout: 60,
 		BacklogMsgQuantity:  10,
+		RecordCommand:       "sox -d -r 16000 -c 1 -t wav",
+		RecordMaxSeconds:    120,
 	},
 	&Keymap{
 		SwitchPanels:    "Tab",
@@ -99,6 +112,8 @@ var Config = IniFile{
 		MessageUrl:      "u",
 		MessageRevoke:   "r",
 		MessageShow:     "s",
+		MessageReply:    "y",
+		MessageEdit:     "e",
 	},
 	&Ui{
 		ChatSidebarWidth: 30,
