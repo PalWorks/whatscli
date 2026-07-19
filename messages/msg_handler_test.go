@@ -277,3 +277,379 @@ func TestExtractMessageContent_ExtendedTextPriority(t *testing.T) {
 		t.Errorf("expected ExtendedTextMessage to take priority, got %q", text)
 	}
 }
+
+// ----- Phase 2.2: extractMediaInfo tests -----
+
+func TestExtractMediaInfo_Nil(t *testing.T) {
+	info, ok := extractMediaInfo(nil)
+	if ok {
+		t.Error("expected ok=false for nil message")
+	}
+	if info.mediaType != "" {
+		t.Errorf("expected empty mediaType for nil message, got %q", info.mediaType)
+	}
+}
+
+func TestExtractMediaInfo_PlainTextHasNoMedia(t *testing.T) {
+	msg := &waE2E.Message{Conversation: proto.String("just text")}
+	info, ok := extractMediaInfo(msg)
+	if ok {
+		t.Error("expected ok=false for a plain text message")
+	}
+	if info.mediaType != "" {
+		t.Errorf("expected empty mediaType, got %q", info.mediaType)
+	}
+}
+
+func TestExtractMediaInfo_Image(t *testing.T) {
+	mediaKey := []byte{0x01, 0x02, 0x03}
+	fileSHA := []byte{0xAA}
+	fileEncSHA := []byte{0xBB}
+	msg := &waE2E.Message{
+		ImageMessage: &waE2E.ImageMessage{
+			Mimetype:      proto.String("image/jpeg"),
+			MediaKey:      mediaKey,
+			DirectPath:    proto.String("/v/t62.7118-24/img"),
+			FileSHA256:    fileSHA,
+			FileEncSHA256: fileEncSHA,
+			FileLength:    proto.Uint64(4096),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok {
+		t.Fatal("expected ok=true for an image message")
+	}
+	if info.mediaType != "image" {
+		t.Errorf("expected mediaType 'image', got %q", info.mediaType)
+	}
+	if info.mimetype != "image/jpeg" {
+		t.Errorf("expected mimetype 'image/jpeg', got %q", info.mimetype)
+	}
+	if string(info.mediaKey) != string(mediaKey) {
+		t.Errorf("mediaKey mismatch: expected %v, got %v", mediaKey, info.mediaKey)
+	}
+	if info.directPath != "/v/t62.7118-24/img" {
+		t.Errorf("directPath mismatch: got %q", info.directPath)
+	}
+	if string(info.fileSHA256) != string(fileSHA) || string(info.fileEncSHA256) != string(fileEncSHA) {
+		t.Errorf("SHA256 mismatch: fileSHA256=%v fileEncSHA256=%v", info.fileSHA256, info.fileEncSHA256)
+	}
+	if info.fileLength != 4096 {
+		t.Errorf("expected fileLength 4096, got %d", info.fileLength)
+	}
+}
+
+func TestExtractMediaInfo_Video(t *testing.T) {
+	msg := &waE2E.Message{
+		VideoMessage: &waE2E.VideoMessage{
+			Mimetype:   proto.String("video/mp4"),
+			MediaKey:   []byte{0x10},
+			DirectPath: proto.String("/v/vid"),
+			FileLength: proto.Uint64(1000),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok || info.mediaType != "video" {
+		t.Fatalf("expected mediaType 'video', got %q (ok=%v)", info.mediaType, ok)
+	}
+	if info.mimetype != "video/mp4" {
+		t.Errorf("expected mimetype 'video/mp4', got %q", info.mimetype)
+	}
+}
+
+func TestExtractMediaInfo_Audio(t *testing.T) {
+	msg := &waE2E.Message{
+		AudioMessage: &waE2E.AudioMessage{
+			Mimetype:   proto.String("audio/ogg"),
+			MediaKey:   []byte{0x20},
+			DirectPath: proto.String("/v/aud"),
+			FileLength: proto.Uint64(500),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok || info.mediaType != "audio" {
+		t.Fatalf("expected mediaType 'audio', got %q (ok=%v)", info.mediaType, ok)
+	}
+}
+
+func TestExtractMediaInfo_Document(t *testing.T) {
+	msg := &waE2E.Message{
+		DocumentMessage: &waE2E.DocumentMessage{
+			Mimetype:   proto.String("application/pdf"),
+			FileName:   proto.String("report.pdf"),
+			MediaKey:   []byte{0x30},
+			DirectPath: proto.String("/v/doc"),
+			FileLength: proto.Uint64(2048),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok || info.mediaType != "document" {
+		t.Fatalf("expected mediaType 'document', got %q (ok=%v)", info.mediaType, ok)
+	}
+	if info.fileName != "report.pdf" {
+		t.Errorf("expected fileName 'report.pdf', got %q", info.fileName)
+	}
+}
+
+func TestExtractMediaInfo_Document_FileNameFallsBackToTitle(t *testing.T) {
+	msg := &waE2E.Message{
+		DocumentMessage: &waE2E.DocumentMessage{
+			Title: proto.String("My Report"),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok {
+		t.Fatal("expected ok=true for a document message")
+	}
+	if info.fileName != "My Report" {
+		t.Errorf("expected fileName to fall back to title 'My Report', got %q", info.fileName)
+	}
+}
+
+// ----- Phase 3.3: extractForwarded tests -----
+
+func TestExtractForwarded_Nil(t *testing.T) {
+	if extractForwarded(nil) {
+		t.Error("expected false for nil message")
+	}
+}
+
+func TestExtractForwarded_PlainTextNeverForwarded(t *testing.T) {
+	// Conversation (plain text) has no ContextInfo in the protocol at all,
+	// so a bare plain-text message can never be reported as forwarded.
+	msg := &waE2E.Message{Conversation: proto.String("hello")}
+	if extractForwarded(msg) {
+		t.Error("expected false for a plain Conversation message")
+	}
+}
+
+func TestExtractForwarded_ExtendedText(t *testing.T) {
+	tests := []struct {
+		name string
+		ctx  *waE2E.ContextInfo
+		want bool
+	}{
+		{"forwarded", &waE2E.ContextInfo{IsForwarded: proto.Bool(true)}, true},
+		{"not forwarded", &waE2E.ContextInfo{IsForwarded: proto.Bool(false)}, false},
+		{"no context info", nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &waE2E.Message{
+				ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+					Text:        proto.String("hi"),
+					ContextInfo: tt.ctx,
+				},
+			}
+			if got := extractForwarded(msg); got != tt.want {
+				t.Errorf("extractForwarded() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExtractForwarded_Image(t *testing.T) {
+	msg := &waE2E.Message{
+		ImageMessage: &waE2E.ImageMessage{
+			ContextInfo: &waE2E.ContextInfo{IsForwarded: proto.Bool(true)},
+		},
+	}
+	if !extractForwarded(msg) {
+		t.Error("expected true for a forwarded image message")
+	}
+}
+
+func TestExtractForwarded_Video(t *testing.T) {
+	msg := &waE2E.Message{
+		VideoMessage: &waE2E.VideoMessage{
+			ContextInfo: &waE2E.ContextInfo{IsForwarded: proto.Bool(true)},
+		},
+	}
+	if !extractForwarded(msg) {
+		t.Error("expected true for a forwarded video message")
+	}
+}
+
+func TestExtractForwarded_Audio(t *testing.T) {
+	msg := &waE2E.Message{
+		AudioMessage: &waE2E.AudioMessage{
+			ContextInfo: &waE2E.ContextInfo{IsForwarded: proto.Bool(true)},
+		},
+	}
+	if !extractForwarded(msg) {
+		t.Error("expected true for a forwarded audio message")
+	}
+}
+
+func TestExtractForwarded_Document(t *testing.T) {
+	msg := &waE2E.Message{
+		DocumentMessage: &waE2E.DocumentMessage{
+			ContextInfo: &waE2E.ContextInfo{IsForwarded: proto.Bool(true)},
+		},
+	}
+	if !extractForwarded(msg) {
+		t.Error("expected true for a forwarded document message")
+	}
+}
+
+func TestExtractForwarded_Sticker(t *testing.T) {
+	msg := &waE2E.Message{
+		StickerMessage: &waE2E.StickerMessage{
+			ContextInfo: &waE2E.ContextInfo{IsForwarded: proto.Bool(true)},
+		},
+	}
+	if !extractForwarded(msg) {
+		t.Error("expected true for a forwarded sticker message")
+	}
+}
+
+func TestExtractMediaInfo_Sticker(t *testing.T) {
+	msg := &waE2E.Message{
+		StickerMessage: &waE2E.StickerMessage{
+			Mimetype:   proto.String("image/webp"),
+			MediaKey:   []byte{0x40},
+			DirectPath: proto.String("/v/stk"),
+		},
+	}
+	info, ok := extractMediaInfo(msg)
+	if !ok || info.mediaType != "sticker" {
+		t.Fatalf("expected mediaType 'sticker', got %q (ok=%v)", info.mediaType, ok)
+	}
+}
+
+// ----- Phase 5.1: reply threading extraction -----
+
+func TestExtractQuotedID_Nil(t *testing.T) {
+	if got := extractQuotedID(nil); got != "" {
+		t.Errorf("expected empty string for nil message, got %q", got)
+	}
+}
+
+func TestExtractQuotedID_PlainTextNeverAReply(t *testing.T) {
+	msg := &waE2E.Message{Conversation: proto.String("hello")}
+	if got := extractQuotedID(msg); got != "" {
+		t.Errorf("expected empty string for a plain Conversation message, got %q", got)
+	}
+}
+
+func TestExtractQuotedID_ExtendedText(t *testing.T) {
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String("reply text"),
+			ContextInfo: &waE2E.ContextInfo{StanzaID: proto.String("original-id")},
+		},
+	}
+	if got := extractQuotedID(msg); got != "original-id" {
+		t.Errorf("extractQuotedID() = %q, want %q", got, "original-id")
+	}
+}
+
+func TestExtractQuotedID_NoContextInfo(t *testing.T) {
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{Text: proto.String("not a reply")},
+	}
+	if got := extractQuotedID(msg); got != "" {
+		t.Errorf("expected empty string with no ContextInfo, got %q", got)
+	}
+}
+
+func TestExtractQuotedID_Image(t *testing.T) {
+	msg := &waE2E.Message{
+		ImageMessage: &waE2E.ImageMessage{
+			ContextInfo: &waE2E.ContextInfo{StanzaID: proto.String("img-reply-target")},
+		},
+	}
+	if got := extractQuotedID(msg); got != "img-reply-target" {
+		t.Errorf("extractQuotedID() = %q, want %q", got, "img-reply-target")
+	}
+}
+
+func TestExtractEmbeddedQuotePreview_NoQuote(t *testing.T) {
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String("hi"),
+			ContextInfo: &waE2E.ContextInfo{StanzaID: proto.String("id1")},
+		},
+	}
+	if got := extractEmbeddedQuotePreview(msg); got != "" {
+		t.Errorf("expected empty preview with no embedded QuotedMessage, got %q", got)
+	}
+}
+
+func TestExtractEmbeddedQuotePreview_EmbeddedText(t *testing.T) {
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String("sure, sounds good"),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:      proto.String("id1"),
+				QuotedMessage: &waE2E.Message{Conversation: proto.String("want to grab lunch?")},
+			},
+		},
+	}
+	if got := extractEmbeddedQuotePreview(msg); got != "want to grab lunch?" {
+		t.Errorf("extractEmbeddedQuotePreview() = %q, want %q", got, "want to grab lunch?")
+	}
+}
+
+func TestResolveQuote_NotAReply(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	msg := &waE2E.Message{Conversation: proto.String("hello")}
+	id, preview := resolveQuote(sm.db, msg)
+	if id != "" || preview != "" {
+		t.Errorf("resolveQuote() = (%q, %q), want (\"\", \"\")", id, preview)
+	}
+}
+
+func TestResolveQuote_PrefersLocalCopyOverEmbedded(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	if err := sm.db.AddMessage(Message{Id: "orig1", ChatId: "c@s.whatsapp.net", Text: "the real current text"}); err != nil {
+		t.Fatalf("seed AddMessage failed: %v", err)
+	}
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String("replying"),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:      proto.String("orig1"),
+				QuotedMessage: &waE2E.Message{Conversation: proto.String("stale embedded copy")},
+			},
+		},
+	}
+	id, preview := resolveQuote(sm.db, msg)
+	if id != "orig1" {
+		t.Errorf("expected quoted ID %q, got %q", "orig1", id)
+	}
+	if preview != "the real current text" {
+		t.Errorf("expected preview from local DB, got %q", preview)
+	}
+}
+
+func TestResolveQuote_FallsBackToEmbeddedWhenNotStoredLocally(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text: proto.String("replying"),
+			ContextInfo: &waE2E.ContextInfo{
+				StanzaID:      proto.String("unknown-id"),
+				QuotedMessage: &waE2E.Message{Conversation: proto.String("embedded original")},
+			},
+		},
+	}
+	id, preview := resolveQuote(sm.db, msg)
+	if id != "unknown-id" || preview != "embedded original" {
+		t.Errorf("resolveQuote() = (%q, %q), want (%q, %q)", id, preview, "unknown-id", "embedded original")
+	}
+}
+
+func TestResolveQuote_PlaceholderWhenNeitherAvailable(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	msg := &waE2E.Message{
+		ExtendedTextMessage: &waE2E.ExtendedTextMessage{
+			Text:        proto.String("replying"),
+			ContextInfo: &waE2E.ContextInfo{StanzaID: proto.String("unknown-id")},
+		},
+	}
+	id, preview := resolveQuote(sm.db, msg)
+	if id != "unknown-id" || preview != "[message]" {
+		t.Errorf("resolveQuote() = (%q, %q), want (%q, %q)", id, preview, "unknown-id", "[message]")
+	}
+}

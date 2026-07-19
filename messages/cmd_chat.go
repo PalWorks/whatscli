@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/normen/whatscli/config"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -55,6 +57,8 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 
 	sm.uiHandler.PrintText("Requesting message history from WhatsApp servers...")
 
+	quantity := config.Config.General.BacklogMsgQuantity
+
 	// Build anchor from oldest known message (if any)
 	var anchor *types.MessageInfo
 	msgs, err := sm.db.GetMessages(receiver)
@@ -86,17 +90,25 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 			},
 			Timestamp: time.Unix(int64(oldest.Timestamp), 0),
 		}
-		sm.uiHandler.PrintText(fmt.Sprintf("Requesting 50 messages before: %s (%s)",
-			oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
+		sm.uiHandler.PrintText(fmt.Sprintf("Requesting %d messages before: %s (%s)",
+			quantity, oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
 	} else {
-		sm.uiHandler.PrintText("Requesting latest 50 messages...")
+		sm.uiHandler.PrintText(fmt.Sprintf("Requesting latest %d messages...", quantity))
 	}
 
-	req := client.BuildHistorySyncRequest(anchor, 50)
+	req := client.BuildHistorySyncRequest(anchor, quantity)
 
 	// Send to primary device (self)
 	target := *client.Store.ID
 	target.Device = 0
+
+	// Drain any stale completion signal left over from an unrelated prior
+	// sync, so the wait below can't mistake it for the response to *this*
+	// request.
+	select {
+	case <-sm.historySyncDone:
+	default:
+	}
 
 	resp, err := client.SendMessage(context.Background(), target, req)
 	if err != nil {
@@ -106,10 +118,16 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 
 	sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
 
-	// History sync arrives asynchronously; check in background so the
-	// command loop is not blocked (audit finding P-1).
+	// History sync arrives asynchronously; wait for the actual completion
+	// signal from processHistorySync rather than a fixed sleep, falling
+	// back to a generous timeout in case the response never arrives.
 	go func() {
-		time.Sleep(5 * time.Second)
+		select {
+		case <-sm.historySyncDone:
+		case <-time.After(30 * time.Second):
+		case <-sm.stop:
+			return
+		}
 
 		// Re-read currentReceiver — user may have switched chats during wait.
 		sm.mu.RLock()

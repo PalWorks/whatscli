@@ -10,6 +10,18 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
+// isSyncableChatJID reports whether a history-sync conversation JID should be
+// kept rather than skipped. Ordinary contacts and groups are always kept.
+// status@broadcast (Phase 5.6) is also kept — it is viewed read-only in its
+// own Status pane — while every other broadcast/newsletter/etc. JID is
+// skipped, matching the pre-5.6 behavior for everything except statuses.
+func isSyncableChatJID(jid types.JID) bool {
+	if jid.Server == "s.whatsapp.net" || jid.Server == "g.us" {
+		return true
+	}
+	return jid.String() == STATUSSUFFIX
+}
+
 // loadRecentChats fetches recent chats from WhatsApp and adds them to the database
 func (sm *SessionManager) loadRecentChats() {
 	sm.uiHandler.PrintText("Loading chats...")
@@ -38,7 +50,6 @@ func (sm *SessionManager) loadRecentChats() {
 				}
 			}
 		}
-
 
 		for jid, contact := range contacts {
 			if !contact.Found {
@@ -70,7 +81,6 @@ func (sm *SessionManager) loadRecentChats() {
 					name = jid.User
 				}
 			}
-
 
 			// Update PQ under lock, collect DB write for outside
 			sm.mu.Lock()
@@ -121,6 +131,17 @@ func (sm *SessionManager) loadRecentChats() {
 // metadata (timestamps, unread counts, pinned status) and store historical
 // messages in SQLite. This enables correct chat ordering on first login.
 func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
+	// Signal completion on every exit path (including early returns below)
+	// so cmdBacklog's wait resolves as soon as a sync response is actually
+	// processed, instead of on a fixed timer. Non-blocking: if nobody is
+	// waiting (buffer already full or no listener), this is a no-op.
+	defer func() {
+		select {
+		case sm.historySyncDone <- struct{}{}:
+		default:
+		}
+	}()
+
 	client := sm.getClient()
 	if client == nil || !client.IsConnected() {
 		sm.uiHandler.PrintError(errors.New("not connected — cannot process history sync"))
@@ -147,12 +168,11 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 			continue
 		}
 
-		// Skip non-chat JIDs (status broadcasts, etc.)
-		if chatJID.Server != "s.whatsapp.net" && chatJID.Server != "g.us" {
+		jidStr := chatJID.String()
+
+		if !isSyncableChatJID(chatJID) {
 			continue
 		}
-
-		jidStr := chatJID.String()
 
 		// --- Extract conversation metadata from proto ---
 		lastMsgTimestamp := int64(conv.GetLastMsgTimestamp())
@@ -185,12 +205,27 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 				continue
 			}
 
+			// Reactions get their own table rather than being stored as
+			// standalone messages (Phase 5.2) — record and move on to the
+			// next history item instead of falling through to the generic
+			// message path below.
+			if react := evt.Message.GetReactionMessage(); react != nil {
+				if targetID := react.GetKey().GetID(); targetID != "" {
+					if err := sm.db.SetReaction(targetID, evt.Info.Sender.String(), react.GetText()); err != nil {
+						addMsgErrors++
+					}
+				}
+				continue
+			}
+
 			text, preview := extractMessageContent(evt.Message)
 			if text == "" {
 				continue
 			}
 
 			msgTimestamp := uint64(evt.Info.Timestamp.Unix())
+			media, _ := extractMediaInfo(evt.Message)
+			quotedID, quotedPreview := resolveQuote(sm.db, evt.Message)
 
 			// Resolve sender name: prefer PushName, fall back to JID
 			senderName := evt.Info.PushName
@@ -199,14 +234,25 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 			}
 
 			msg := Message{
-				Id:           evt.Info.ID,
-				ChatId:       jidStr,
-				FromMe:       evt.Info.IsFromMe,
-				Timestamp:    msgTimestamp,
-				Text:         text,
-				ContactId:    evt.Info.Sender.String(),
-				ContactName:  senderName,
-				ContactShort: senderName,
+				Id:            evt.Info.ID,
+				ChatId:        jidStr,
+				FromMe:        evt.Info.IsFromMe,
+				Timestamp:     msgTimestamp,
+				Text:          text,
+				ContactId:     evt.Info.Sender.String(),
+				ContactName:   senderName,
+				ContactShort:  senderName,
+				MediaType:     media.mediaType,
+				Mimetype:      media.mimetype,
+				MediaKey:      media.mediaKey,
+				DirectPath:    media.directPath,
+				FileSHA256:    media.fileSHA256,
+				FileEncSHA256: media.fileEncSHA256,
+				FileLength:    media.fileLength,
+				FileName:      media.fileName,
+				Forwarded:     extractForwarded(evt.Message),
+				QuotedID:      quotedID,
+				QuotedPreview: quotedPreview,
 			}
 
 			// AddMessage uses INSERT OR IGNORE, so duplicates are skipped
@@ -278,7 +324,11 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 		} else {
 			// New conversation — use history name or fall back to JID user
 			if name == "" {
-				name = chatJID.User
+				if jidStr == STATUSSUFFIX {
+					name = "Status"
+				} else {
+					name = chatJID.User
+				}
 			}
 			newConv := &Conversation{
 				JID:         jidStr,
@@ -315,21 +365,4 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 
 	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
 		len(toUpsert), totalMessages))
-}
-
-// loadRecentMessages loads the most recent messages for a chat
-func (sm *SessionManager) loadRecentMessages(chatJID string) {
-	if client := sm.getClient(); client == nil || !client.IsConnected() {
-		return
-	}
-
-	// For now, message history retrieval is limited in whatsmeow
-	// Messages will be populated as they're sent and received
-	// silenced: sm.uiHandler.PrintText(fmt.Sprintf("Message history for %s will be populated as you communicate", chatJID))
-
-	// If this is the currently selected chat, update the UI
-	if chatJID == sm.currentReceiver {
-		screen := sm.getMessages(chatJID)
-		sm.uiHandler.NewScreen(screen)
-	}
 }

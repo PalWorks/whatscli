@@ -4,7 +4,6 @@ package messages
 type UiMessageHandler interface {
 	NewMessage(Message)
 	NewScreen([]Message)
-	SetChats([]Chat)
 	UpdateChatList([]*Conversation)
 	PrintError(error)
 	PrintText(string)
@@ -22,18 +21,8 @@ type UiMessageHandler interface {
 
 // data struct for current session status
 type SessionStatus struct {
-	BatteryCharge    int
-	BatteryLoading   bool
-	BatteryPowersave bool
-	Connected        bool
-	LastSeen         string
-}
-
-// message struct for battery messages
-type BatteryMsg struct {
-	charge    int
-	loading   bool
-	powersave bool
+	Connected bool
+	LastSeen  string
 }
 
 // message struct for status messages
@@ -59,6 +48,41 @@ type Message struct {
 	FromMe       bool
 	Forwarded    bool
 	Text         string
+
+	// Media fields, populated for messages that carry an attachment.
+	// MediaType is empty for plain text messages.
+	MediaType     string // "", "image", "video", "audio", "document", "sticker"
+	Mimetype      string
+	MediaKey      []byte
+	DirectPath    string
+	FileSHA256    []byte
+	FileEncSHA256 []byte
+	FileLength    uint64
+	FileName      string // documents only
+
+	// Deleted marks a message that was revoked (locally or by the sender);
+	// Text is set to a placeholder when this is true.
+	Deleted bool
+
+	// QuotedID is the message ID this message replies to, or "" if it isn't
+	// a reply. QuotedPreview is a short display string for that quoted
+	// message, resolved at receive/send time (from the local DB if the
+	// quoted message is known, or from the embedded quote otherwise) so
+	// rendering never needs a live lookup.
+	QuotedID      string
+	QuotedPreview string
+
+	// Reactions is populated by the storage layer at read time (a join
+	// against the reactions table, keyed by message ID) — it is not a column
+	// on the messages table and is never set by AddMessage.
+	Reactions []ReactionSummary
+}
+
+// ReactionSummary aggregates all reactions of one emoji on a message, e.g.
+// "👍" with Count 2 for two people reacting with a thumbs-up.
+type ReactionSummary struct {
+	Emoji string
+	Count int
 }
 
 // internal contact representation to abstract from message lib
@@ -67,13 +91,6 @@ type Chat struct {
 	IsGroup bool
 	Name    string
 	Unread  int
-	LastMessage int64
-}
-
-type Contact struct {
-	Id    string
-	Name  string
-	Short string
 }
 
 const GROUPSUFFIX = "@g.us"

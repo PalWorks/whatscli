@@ -42,18 +42,35 @@ func init() {
 		"add":         cmdAdd,
 		"remove":      cmdRemove,
 		"admin":       cmdAdmin,
-		"promote":     cmdAdmin,       // alias
+		"promote":     cmdAdmin, // alias
 		"removeadmin": cmdRemoveAdmin,
 		"demote":      cmdRemoveAdmin, // alias
 
 		// Media commands (cmd_media.go)
-		"upload":    cmdMedia,
-		"sendimage": cmdMedia,
-		"sendvideo": cmdMedia,
-		"sendaudio": cmdMedia,
+		"upload":      cmdMedia,
+		"sendimage":   cmdMedia,
+		"sendvideo":   cmdMedia,
+		"sendaudio":   cmdMedia,
+		"sendsticker": cmdMedia,
+
+		// Voice recording commands (cmd_record.go)
+		"record":        cmdRecord,
+		"stoprecording": cmdStopRecording,
+
+		// Export commands (cmd_export.go)
+		"export": cmdExport,
 
 		// Search commands (cmd_search.go)
 		"search":         cmdSearch,
 		"search-contact": cmdSearchContact,
+
+		// Message-scoped commands (cmd_message.go)
+		"download": cmdDownload,
+		"open":     cmdOpen,
+		"show":     cmdShow,
+		"url":      cmdURL,
+		"revoke":   cmdRevoke,
+		"reply":    cmdReply,
+		"edit":     cmdEdit,
 	}
 }

@@ -50,6 +50,21 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		eh.sm.uiHandler.PrintText("Logged out: " + reasonText)
 	case *events.HistorySync:
 		go eh.sm.processHistorySync(v.Data)
+	case *events.MarkChatAsRead:
+		// Emitted when the whole chat is marked read/unread from another
+		// device (e.g. reading it on the phone). Only clear the local
+		// unread badge on a "read" action, not "unread".
+		if v.Action.GetRead() {
+			eh.sm.clearUnread(v.JID.String())
+		}
+	case *events.Receipt:
+		if v.Type == types.ReceiptTypeRead {
+			// Per-message read receipts are intentionally not persisted:
+			// tracking delivery state per message needs a new storage
+			// column and is out of scope here. events.MarkChatAsRead
+			// above already covers the common "read on another device"
+			// case at the conversation level.
+		}
 	}
 }
 
@@ -176,6 +191,202 @@ func truncatePreview(s string) string {
 	return string(r[:maxLen]) + "…"
 }
 
+// mediaInfo carries the media-specific fields extracted from a message
+// proto, used to populate Message.MediaType/Mimetype/MediaKey/etc. so a
+// later /download can call client.Download without re-parsing the proto.
+type mediaInfo struct {
+	mediaType     string
+	mimetype      string
+	mediaKey      []byte
+	directPath    string
+	fileSHA256    []byte
+	fileEncSHA256 []byte
+	fileLength    uint64
+	fileName      string
+}
+
+// extractMediaInfo extracts media metadata from a whatsmeow Message proto.
+// The second return value is false for messages that carry no media
+// attachment (plain text, contact, location, reaction, etc.). This is a
+// pure function with no side effects, making it easy to test.
+func extractMediaInfo(msg *waE2E.Message) (mediaInfo, bool) {
+	if msg == nil {
+		return mediaInfo{}, false
+	}
+
+	if img := msg.GetImageMessage(); img != nil {
+		return mediaInfo{
+			mediaType:     "image",
+			mimetype:      img.GetMimetype(),
+			mediaKey:      img.GetMediaKey(),
+			directPath:    img.GetDirectPath(),
+			fileSHA256:    img.GetFileSHA256(),
+			fileEncSHA256: img.GetFileEncSHA256(),
+			fileLength:    img.GetFileLength(),
+		}, true
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		return mediaInfo{
+			mediaType:     "video",
+			mimetype:      vid.GetMimetype(),
+			mediaKey:      vid.GetMediaKey(),
+			directPath:    vid.GetDirectPath(),
+			fileSHA256:    vid.GetFileSHA256(),
+			fileEncSHA256: vid.GetFileEncSHA256(),
+			fileLength:    vid.GetFileLength(),
+		}, true
+	}
+	if aud := msg.GetAudioMessage(); aud != nil {
+		return mediaInfo{
+			mediaType:     "audio",
+			mimetype:      aud.GetMimetype(),
+			mediaKey:      aud.GetMediaKey(),
+			directPath:    aud.GetDirectPath(),
+			fileSHA256:    aud.GetFileSHA256(),
+			fileEncSHA256: aud.GetFileEncSHA256(),
+			fileLength:    aud.GetFileLength(),
+		}, true
+	}
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		name := doc.GetFileName()
+		if name == "" {
+			name = doc.GetTitle()
+		}
+		return mediaInfo{
+			mediaType:     "document",
+			mimetype:      doc.GetMimetype(),
+			mediaKey:      doc.GetMediaKey(),
+			directPath:    doc.GetDirectPath(),
+			fileSHA256:    doc.GetFileSHA256(),
+			fileEncSHA256: doc.GetFileEncSHA256(),
+			fileLength:    doc.GetFileLength(),
+			fileName:      name,
+		}, true
+	}
+	if sticker := msg.GetStickerMessage(); sticker != nil {
+		return mediaInfo{
+			mediaType:     "sticker",
+			mimetype:      sticker.GetMimetype(),
+			mediaKey:      sticker.GetMediaKey(),
+			directPath:    sticker.GetDirectPath(),
+			fileSHA256:    sticker.GetFileSHA256(),
+			fileEncSHA256: sticker.GetFileEncSHA256(),
+			fileLength:    sticker.GetFileLength(),
+		}, true
+	}
+
+	return mediaInfo{}, false
+}
+
+// extractForwarded reports whether msg was forwarded, by checking the
+// ContextInfo of whichever sub-message is present (nested GetContextInfo/
+// GetIsForwarded calls are nil-safe protobuf getters, so this never panics
+// even when a message has no context info). Checked in the same priority
+// order as extractMessageContent.
+func extractForwarded(msg *waE2E.Message) bool {
+	if msg == nil {
+		return false
+	}
+	if ext := msg.GetExtendedTextMessage(); ext != nil {
+		return ext.GetContextInfo().GetIsForwarded()
+	}
+	if img := msg.GetImageMessage(); img != nil {
+		return img.GetContextInfo().GetIsForwarded()
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		return vid.GetContextInfo().GetIsForwarded()
+	}
+	if aud := msg.GetAudioMessage(); aud != nil {
+		return aud.GetContextInfo().GetIsForwarded()
+	}
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		return doc.GetContextInfo().GetIsForwarded()
+	}
+	if sticker := msg.GetStickerMessage(); sticker != nil {
+		return sticker.GetContextInfo().GetIsForwarded()
+	}
+	return false
+}
+
+// extractQuotedID returns the message ID this message is replying to, read
+// from the ContextInfo of whichever sub-message is present, or "" if it isn't
+// a reply. Checked in the same priority order as extractMessageContent.
+func extractQuotedID(msg *waE2E.Message) string {
+	if msg == nil {
+		return ""
+	}
+	if ext := msg.GetExtendedTextMessage(); ext != nil {
+		return ext.GetContextInfo().GetStanzaID()
+	}
+	if img := msg.GetImageMessage(); img != nil {
+		return img.GetContextInfo().GetStanzaID()
+	}
+	if vid := msg.GetVideoMessage(); vid != nil {
+		return vid.GetContextInfo().GetStanzaID()
+	}
+	if aud := msg.GetAudioMessage(); aud != nil {
+		return aud.GetContextInfo().GetStanzaID()
+	}
+	if doc := msg.GetDocumentMessage(); doc != nil {
+		return doc.GetContextInfo().GetStanzaID()
+	}
+	if sticker := msg.GetStickerMessage(); sticker != nil {
+		return sticker.GetContextInfo().GetStanzaID()
+	}
+	return ""
+}
+
+// extractEmbeddedQuotePreview returns a short preview of the quoted message
+// content embedded directly in this message's ContextInfo (senders commonly
+// include it so other clients can render the reply without a lookup of their
+// own). Returns "" if there is no embedded quote — the caller is expected to
+// fall back to a local DB lookup by the ID from extractQuotedID in that case.
+func extractEmbeddedQuotePreview(msg *waE2E.Message) string {
+	if msg == nil {
+		return ""
+	}
+	var quoted *waE2E.Message
+	if ext := msg.GetExtendedTextMessage(); ext != nil {
+		quoted = ext.GetContextInfo().GetQuotedMessage()
+	} else if img := msg.GetImageMessage(); img != nil {
+		quoted = img.GetContextInfo().GetQuotedMessage()
+	} else if vid := msg.GetVideoMessage(); vid != nil {
+		quoted = vid.GetContextInfo().GetQuotedMessage()
+	} else if aud := msg.GetAudioMessage(); aud != nil {
+		quoted = aud.GetContextInfo().GetQuotedMessage()
+	} else if doc := msg.GetDocumentMessage(); doc != nil {
+		quoted = doc.GetContextInfo().GetQuotedMessage()
+	} else if sticker := msg.GetStickerMessage(); sticker != nil {
+		quoted = sticker.GetContextInfo().GetQuotedMessage()
+	}
+	if quoted == nil {
+		return ""
+	}
+	_, preview := extractMessageContent(quoted)
+	return preview
+}
+
+// resolveQuote determines the QuotedID/QuotedPreview pair for a received
+// message: if it's a reply, prefer a preview derived from our own local copy
+// of the quoted message (accurate, reflects e.g. a since-edited or deleted
+// state), falling back to whatever preview the sender embedded, and finally a
+// generic placeholder if neither is available (the quoted message is neither
+// stored locally nor embedded — e.g. it predates this session and history
+// hasn't synced it yet).
+func resolveQuote(db *MessageDatabase, msg *waE2E.Message) (quotedID, quotedPreview string) {
+	quotedID = extractQuotedID(msg)
+	if quotedID == "" {
+		return "", ""
+	}
+	if local, err := db.GetMessageByID(quotedID); err == nil {
+		return quotedID, truncatePreview(local.Text)
+	}
+	if embedded := extractEmbeddedQuotePreview(msg); embedded != "" {
+		return quotedID, embedded
+	}
+	return quotedID, "[message]"
+}
+
 // processIncomingMessage handles all common steps for any received message:
 // build Message struct → persist to DB → update PQ → UI update → notification.
 func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, preview string) {
@@ -185,16 +396,29 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 
 	chatJID := evt.Info.Chat.String()
 	timestamp := uint64(evt.Info.Timestamp.Unix())
+	media, _ := extractMediaInfo(evt.Message)
+	quotedID, quotedPreview := resolveQuote(eh.sm.db, evt.Message)
 
 	msg := Message{
-		Id:           evt.Info.ID,
-		ChatId:       chatJID,
-		FromMe:       evt.Info.IsFromMe,
-		Timestamp:    timestamp,
-		Text:         text,
-		ContactId:    evt.Info.Sender.String(),
-		ContactName:  eh.getContactName(evt.Info.Sender),
-		ContactShort: eh.getContactShort(evt.Info.Sender),
+		Id:            evt.Info.ID,
+		ChatId:        chatJID,
+		FromMe:        evt.Info.IsFromMe,
+		Timestamp:     timestamp,
+		Text:          text,
+		ContactId:     evt.Info.Sender.String(),
+		ContactName:   eh.getContactName(evt.Info.Sender),
+		ContactShort:  eh.getContactShort(evt.Info.Sender),
+		MediaType:     media.mediaType,
+		Mimetype:      media.mimetype,
+		MediaKey:      media.mediaKey,
+		DirectPath:    media.directPath,
+		FileSHA256:    media.fileSHA256,
+		FileEncSHA256: media.fileEncSHA256,
+		FileLength:    media.fileLength,
+		FileName:      media.fileName,
+		Forwarded:     extractForwarded(evt.Message),
+		QuotedID:      quotedID,
+		QuotedPreview: quotedPreview,
 	}
 
 	// Persist message
@@ -268,9 +492,116 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 }
 
 // Handle incoming messages — dispatches to extractMessageContent then processIncomingMessage.
+// Reactions, revokes, and edits are intercepted first since they mutate
+// existing state (a reactions row, or an existing stored message) rather
+// than adding a new message of their own.
 func (eh *eventHandler) handleMessage(evt *events.Message) {
+	if react := evt.Message.GetReactionMessage(); react != nil {
+		eh.handleReaction(evt, react)
+		return
+	}
+
+	if proto := evt.Message.GetProtocolMessage(); proto != nil {
+		switch proto.GetType() {
+		case waE2E.ProtocolMessage_REVOKE:
+			eh.handleRevoke(proto)
+			return
+		case waE2E.ProtocolMessage_MESSAGE_EDIT:
+			eh.handleEdit(proto)
+			return
+		}
+	}
+
 	text, preview := extractMessageContent(evt.Message)
 	eh.processIncomingMessage(evt, text, preview)
+}
+
+// handleReaction records a reaction (or its removal, signaled by an empty
+// emoji) against the target message and refreshes the screen if that
+// message's chat is currently displayed. Reactions are stored in their own
+// table rather than as standalone messages (Phase 5.2) — this is why they are
+// intercepted here rather than falling through to processIncomingMessage.
+func (eh *eventHandler) handleReaction(evt *events.Message, react *waE2E.ReactionMessage) {
+	targetID := react.GetKey().GetID()
+	if targetID == "" {
+		return
+	}
+
+	sender := evt.Info.Sender.String()
+	if err := eh.sm.db.SetReaction(targetID, sender, react.GetText()); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to store reaction: %v", err))
+		return
+	}
+
+	eh.sm.mu.RLock()
+	isCurrent := eh.sm.currentReceiver == evt.Info.Chat.String()
+	eh.sm.mu.RUnlock()
+	if isCurrent {
+		eh.sm.uiHandler.NewScreen(eh.sm.getMessages(evt.Info.Chat.String()))
+	}
+}
+
+// handleRevoke marks the target message deleted when a revoke protocol
+// message is received (from any participant, not just the local user — this
+// mirrors what the server/other client already did), and refreshes the
+// screen if that message's chat is currently displayed.
+func (eh *eventHandler) handleRevoke(proto *waE2E.ProtocolMessage) {
+	targetID := proto.GetKey().GetID()
+	if targetID == "" {
+		return
+	}
+
+	msg, err := eh.sm.db.GetMessageByID(targetID)
+	if err != nil {
+		// Message not locally known (e.g. it arrived before this session
+		// started, or history hasn't synced it yet) — nothing to update.
+		return
+	}
+
+	if err := eh.sm.db.MarkMessageDeleted(targetID); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to mark message deleted: %v", err))
+		return
+	}
+
+	eh.sm.mu.RLock()
+	isCurrent := eh.sm.currentReceiver == msg.ChatId
+	eh.sm.mu.RUnlock()
+	if isCurrent {
+		eh.sm.uiHandler.NewScreen(eh.sm.getMessages(msg.ChatId))
+	}
+}
+
+// handleEdit updates the stored text for a message when an edit protocol
+// message is received, appending an "(edited)" marker so the change is
+// visible in history.
+func (eh *eventHandler) handleEdit(proto *waE2E.ProtocolMessage) {
+	targetID := proto.GetKey().GetID()
+	edited := proto.GetEditedMessage()
+	if targetID == "" || edited == nil {
+		return
+	}
+
+	msg, err := eh.sm.db.GetMessageByID(targetID)
+	if err != nil {
+		return
+	}
+
+	newText, _ := extractMessageContent(edited)
+	if newText == "" {
+		return
+	}
+
+	if err := eh.sm.db.UpdateMessageText(targetID, newText+" (edited)"); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to update edited message: %v", err))
+		return
+	}
+
+	eh.sm.mu.RLock()
+	isCurrent := eh.sm.currentReceiver == msg.ChatId
+	eh.sm.mu.RUnlock()
+	if isCurrent {
+		eh.sm.uiHandler.NewScreen(eh.sm.getMessages(msg.ChatId))
+	}
 }
 
 // Helper to get contact name

@@ -2,6 +2,7 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -36,6 +37,8 @@ func cmdCreate(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 			} else {
 				sm.uiHandler.PrintText("Group created: " + resp.JID.String())
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<phone1,phone2> <subject>")
@@ -61,6 +64,8 @@ func cmdSubject(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 			} else {
 				sm.uiHandler.PrintText("Subject updated")
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<new subject>")
@@ -83,6 +88,8 @@ func cmdLeave(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 		} else {
 			sm.uiHandler.PrintText("Left group")
 		}
+	} else {
+		sm.uiHandler.PrintError(errors.New("not connected"))
 	}
 }
 
@@ -114,6 +121,8 @@ func cmdAdd(sm *SessionManager, client *whatsmeow.Client, cmdName string, params
 			} else {
 				sm.uiHandler.PrintText("Added " + user)
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<userid>")
@@ -147,6 +156,8 @@ func cmdRemove(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 			} else {
 				sm.uiHandler.PrintText("Removed " + user)
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<userid>")
@@ -180,6 +191,8 @@ func cmdAdmin(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 			} else {
 				sm.uiHandler.PrintText("Promoted " + user)
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<userid>")
@@ -213,6 +226,8 @@ func cmdRemoveAdmin(sm *SessionManager, client *whatsmeow.Client, cmdName string
 			} else {
 				sm.uiHandler.PrintText("Demoted " + user)
 			}
+		} else {
+			sm.uiHandler.PrintError(errors.New("not connected"))
 		}
 	} else {
 		sm.printCommandUsage(cmdName, "<userid>")

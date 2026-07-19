@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/normen/whatscli/config"
+
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -144,8 +146,8 @@ func cmdMore(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		}
 	}
 
-	// Load 50 older messages
-	olderMsgs, err := sm.db.GetMessagesPaginated(receiver, oldestTimestamp, 50)
+	// Load older messages, count configurable via [general] backlog_msg_quantity
+	olderMsgs, err := sm.db.GetMessagesPaginated(receiver, oldestTimestamp, config.Config.General.BacklogMsgQuantity)
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to load older messages: %v", err))
 		return

@@ -75,10 +75,18 @@ func (sm *SessionManager) markChatAsRead(jidStr string) {
 		return
 	}
 
-	// Reset unread counter — copy under lock, DB write outside.
+	sm.clearUnread(jidStr)
+}
+
+// clearUnread resets the unread counter for jidStr to zero, both in memory
+// and in SQLite, and refreshes the chat list UI. Safe to call for a JID
+// that isn't a known conversation (no-op) or one that's already at zero.
+// Shared by markChatAsRead (local /read) and the MarkChatAsRead event
+// (chat read from another device).
+func (sm *SessionManager) clearUnread(jidStr string) {
 	var convCopy *Conversation
 	sm.mu.Lock()
-	if conv := sm.convByJID[jidStr]; conv != nil {
+	if conv := sm.convByJID[jidStr]; conv != nil && conv.Unread != 0 {
 		conv.Unread = 0
 		c := *conv
 		convCopy = &c
@@ -87,7 +95,9 @@ func (sm *SessionManager) markChatAsRead(jidStr string) {
 	sm.mu.Unlock()
 
 	if convCopy != nil {
-		_ = sm.db.UpsertConversation(*convCopy)
+		if err := sm.db.UpsertConversation(*convCopy); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to update conversation: %v", err))
+		}
 	}
 
 	sm.uiHandler.UpdateChatList(safeList)
@@ -147,6 +157,14 @@ func (sm *SessionManager) getMessages(wid string) []Message {
 
 // sendText sends a text message to a WhatsApp JID.
 func (sm *SessionManager) sendText(wid string, text string) {
+	// Status (Phase 5.6) is a read-only view — WhatsCLI has no status-posting
+	// feature, so composing into status@broadcast is refused rather than
+	// silently posting to the user's own status feed.
+	if wid == STATUSSUFFIX {
+		sm.uiHandler.PrintError(errors.New("cannot send messages to Status (view only)"))
+		return
+	}
+
 	sm.mu.RLock()
 	client := sm.client
 	sm.mu.RUnlock()

@@ -17,6 +17,11 @@ import (
 // SetDebug enables or disables verbose WhatsApp protocol logging (T-2).
 func (sm *SessionManager) SetDebug(on bool) { sm.debug = on }
 
+// SetLogFile overrides the debug log file path (see defaultDebugLogPath).
+// Only meaningful when SetDebug(true) is also set; must be called before
+// Init().
+func (sm *SessionManager) SetLogFile(path string) { sm.logFilePath = path }
+
 // getConnection creates or returns the existing WhatsApp client.
 func (sm *SessionManager) getConnection() (*whatsmeow.Client, error) {
 	sm.mu.Lock()
@@ -25,10 +30,17 @@ func (sm *SessionManager) getConnection() (*whatsmeow.Client, error) {
 	if sm.client == nil {
 		// Create database store for WhatsApp
 		dbPath := config.GetSessionFilePath() + ".db"
-		// T-2: Use verbose logger when debug mode is enabled.
+		// T-2: Use verbose logger when debug mode is enabled, writing to
+		// the same debug log file as everything else logged via Init()
+		// (Phase 4.2). Falls back to stdout if the file logger wasn't set
+		// up (e.g. it failed to open — see Init()).
 		var logger waLog.Logger = waLog.Noop
 		if sm.debug {
-			logger = waLog.Stdout("CLIENT", "DEBUG", true)
+			if sm.debugLogger != nil {
+				logger = sm.debugLogger.Sub("CLIENT")
+			} else {
+				logger = waLog.Stdout("CLIENT", "DEBUG", true)
+			}
 		}
 		container, err := sqlstore.New(context.Background(), "sqlite3", "file:"+dbPath+"?_foreign_keys=on", logger)
 		if err != nil {
