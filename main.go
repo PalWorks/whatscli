@@ -10,13 +10,14 @@ import (
 	"github.com/rivo/tview"
 )
 
-var VERSION string = "v1.3.0"
+var VERSION string = "v1.7.0"
 
 const batchSize = 50
 
 func main() {
 	// T-2: Parse --debug flag before anything else.
 	debugMode := flag.Bool("debug", false, "Enable verbose WhatsApp protocol logging")
+	logFile := flag.String("logfile", "", "Path to write the debug log to (default: <config dir>/whatscli/debug.log; only used with --debug)")
 	flag.Parse()
 
 	err := config.InitConfig()
@@ -25,21 +26,33 @@ func main() {
 		return
 	}
 
-	// Initialize the application context (replaces package-level globals)
-	ctx = &AppContext{
+	// Initialize the application context. This is the single wiring point:
+	// ctx is a local, not a package-level global, and is injected into
+	// UiHandler so the whole UI layer is reachable without process globals.
+	ctx := &AppContext{
 		MouseState: true,
 		ChatLimit:  50,
 	}
+	ctx.initUpdates()
 
-	ctx.UiHandler = UiHandler{}
+	ctx.UiHandler = UiHandler{ctx: ctx}
 	ctx.SessionManager = &messages.SessionManager{}
 	ctx.SessionManager.SetDebug(*debugMode)
+	if *logFile != "" {
+		ctx.SessionManager.SetLogFile(*logFile)
+	}
 	if err := ctx.SessionManager.Init(ctx.UiHandler); err != nil {
 		fmt.Printf("Failed to initialize session: %v\n", err)
 		return
 	}
 
 	ctx.App = tview.NewApplication()
+
+	// Start the single UI-update consumer once App exists. draw wraps
+	// QueueUpdateDraw (which blocks until the main loop draws), so updates
+	// are applied strictly in the order they were enqueued.
+	ctx.draw = func(f func()) { ctx.App.QueueUpdateDraw(f) }
+	go ctx.processUpdates()
 
 	sideBarWidth := config.Config.Ui.ChatSidebarWidth
 	gridLayout := tview.NewGrid()
@@ -66,13 +79,13 @@ func main() {
 	ctx.TextView.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	ctx.TextView.SetTextColor(tcell.ColorNames[config.Config.Colors.Text])
 
-	PrintHelp()
+	ctx.PrintHelp()
 
 	ctx.TextInput = tview.NewInputField()
 	ctx.TextInput.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	ctx.TextInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	ctx.TextInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
-	ctx.TextInput.SetDoneFunc(EnterCommand)
+	ctx.TextInput.SetDoneFunc(ctx.EnterCommand)
 	ctx.TextInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Key() == tcell.KeyTab {
 			if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
@@ -110,7 +123,7 @@ func main() {
 	})
 
 	gridLayout.AddItem(ctx.TopBar, 0, 0, 1, 4, 0, 0, false)
-	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
+	gridLayout.AddItem(ctx.SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
 
 	gridLayout.AddItem(ctx.TextView, 1, 1, 1, 3, 0, 0, false)
 	gridLayout.AddItem(ctx.TextInput, 2, 1, 1, 3, 0, 0, false)
@@ -119,9 +132,9 @@ func main() {
 	ctx.App.EnableMouse(true)
 	ctx.App.SetFocus(ctx.TextInput)
 	if err := ctx.SessionManager.StartManager(); err != nil {
-		PrintError(err)
+		ctx.PrintError(err)
 	}
-	LoadShortcuts()
+	ctx.LoadShortcuts()
 	ctx.App.Run()
 	ctx.SessionManager.Shutdown()
 }

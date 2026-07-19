@@ -10,7 +10,7 @@ import (
 )
 
 // SetupLeftPane initializes the left panel with Status, Chats, and Groups
-func SetupLeftPane() *tview.Flex {
+func (ctx *AppContext) SetupLeftPane() *tview.Flex {
 	// 1. Status Section
 	ctx.StatusTable = tview.NewTable()
 	ctx.StatusTable.SetSelectable(true, false)
@@ -64,13 +64,12 @@ func SetupLeftPane() *tview.Flex {
 				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
-						Id:          conv.JID,
-						Name:        conv.Name,
-						Unread:      int(conv.Unread),
-						LastMessage: conv.LastMsgTime,
-						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+						Id:      conv.JID,
+						Name:    conv.Name,
+						Unread:  int(conv.Unread),
+						IsGroup: strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
 					}
-					SetDisplayedChat(chat)
+					ctx.SetDisplayedChat(chat)
 				}
 			}
 		}
@@ -86,20 +85,19 @@ func SetupLeftPane() *tview.Flex {
 				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
-						Id:          conv.JID,
-						Name:        conv.Name,
-						Unread:      int(conv.Unread),
-						LastMessage: conv.LastMsgTime,
-						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+						Id:      conv.JID,
+						Name:    conv.Name,
+						Unread:  int(conv.Unread),
+						IsGroup: strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
 					}
-					SetDisplayedChat(chat)
+					ctx.SetDisplayedChat(chat)
 				}
 			}
 		}
 		// Infinite scroll trigger
 		if row >= ctx.ChatTable.GetRowCount()-5 && ctx.ChatLimit < len(ctx.AllChats) {
 			ctx.ChatLimit += batchSize
-			RenderChatTable()
+			ctx.RenderChatTable()
 		}
 	}
 
@@ -113,13 +111,12 @@ func SetupLeftPane() *tview.Flex {
 				if ref := cell.GetReference(); ref != nil {
 					conv := ref.(*messages.Conversation)
 					chat := messages.Chat{
-						Id:          conv.JID,
-						Name:        conv.Name,
-						Unread:      int(conv.Unread),
-						LastMessage: conv.LastMsgTime,
-						IsGroup:     strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
+						Id:      conv.JID,
+						Name:    conv.Name,
+						Unread:  int(conv.Unread),
+						IsGroup: strings.HasSuffix(conv.JID, messages.GROUPSUFFIX),
 					}
-					SetDisplayedChat(chat)
+					ctx.SetDisplayedChat(chat)
 				}
 			}
 		}

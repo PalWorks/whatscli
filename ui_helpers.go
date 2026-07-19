@@ -8,12 +8,12 @@ import (
 )
 
 // prints text to the TextView
-func PrintText(txt string) {
+func (ctx *AppContext) PrintText(txt string) {
 	fmt.Fprintln(ctx.TextView, txt)
 }
 
 // prints an error to the TextView
-func PrintError(err error) {
+func (ctx *AppContext) PrintError(err error) {
 	if err == nil {
 		return
 	}
@@ -21,7 +21,7 @@ func PrintError(err error) {
 }
 
 // prints an error to the TextView
-func PrintErrorMsg(text string, err error) {
+func (ctx *AppContext) PrintErrorMsg(text string, err error) {
 	if err == nil {
 		return
 	}
@@ -29,7 +29,7 @@ func PrintErrorMsg(text string, err error) {
 }
 
 // prints help to chat view
-func PrintHelp() {
+func (ctx *AppContext) PrintHelp() {
 	cmdPrefix := config.Config.General.CmdPrefix
 	fmt.Fprintln(ctx.TextView, "")
 	fmt.Fprintln(ctx.TextView, "[::b]Application & Connection[::-]")
@@ -37,6 +37,7 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"disconnect", "Disconnect"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"logout", "Logout & Delete Data"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"quit / "+config.Config.Keymap.CommandQuit, "Exit"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"colorlist", "Show Color Names"))
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Navigation & View[::-]")
@@ -44,10 +45,12 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.SwitchPanels, "Switch Panel"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.FocusMessages, "Focus Messages"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Ctrl+p", "Toggle Mouse"))
+	fmt.Fprintln(ctx.TextView, "[::d] Status pane is view-only — messages/media cannot be sent to it[::-]")
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Chat & Messages[::-]")
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"backlog / "+config.Config.Keymap.CommandBacklog, "Load Backlog"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"more", "Load More Messages (Local)"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"read / "+config.Config.Keymap.CommandRead, "Mark Read"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Up/Down", "Select Message"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageDownload, "Download"))
@@ -56,6 +59,8 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageUrl, "Open URL"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageRevoke, "Revoke"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageInfo, "Info"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageReply, "Reply"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageEdit, "Edit"))
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Media[::-]")
@@ -63,6 +68,13 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendimage <path>", "Send Image"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendvideo <path>", "Send Video"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendaudio <path>", "Send Audio"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sendsticker <path.webp>", "Send Sticker"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"record", "Record & Send Voice Note"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"stoprecording", "Stop Recording & Send Now"))
+	fmt.Fprintln(ctx.TextView, "")
+
+	fmt.Fprintln(ctx.TextView, "[::b]Export[::-]")
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"export <chat-jid> <path>", "Encrypted Chat Export (age)"))
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Search[::-]")
@@ -78,6 +90,7 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"remove <userid>", "Kick"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"admin <userid>", "Promote"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"removeadmin <userid>", "Demote"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"sync-groups", "Sync Group Metadata"))
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Clipboard[::-]")
@@ -90,7 +103,7 @@ func PrintHelp() {
 }
 
 // updates the status bar
-func UpdateStatusBar(statusInfo messages.SessionStatus) {
+func (ctx *AppContext) UpdateStatusBar(statusInfo messages.SessionStatus) {
 	out := " "
 	if statusInfo.Connected {
 		out += "[" + config.Config.Colors.Positive + "]online[-]"
@@ -98,26 +111,12 @@ func UpdateStatusBar(statusInfo messages.SessionStatus) {
 		out += "[" + config.Config.Colors.Negative + "]offline[-]"
 	}
 	out += " "
-	out += "[::d] ("
-	out += fmt.Sprint(statusInfo.BatteryCharge)
-	out += "%"
-	if statusInfo.BatteryLoading {
-		out += " [" + config.Config.Colors.Positive + "]L[-]"
-	} else {
-		out += " [" + config.Config.Colors.Negative + "]l[-]"
-	}
-	if statusInfo.BatteryPowersave {
-		out += " [" + config.Config.Colors.Negative + "]S[-]"
-	} else {
-		out += " [" + config.Config.Colors.Positive + "]s[-]"
-	}
-	out += ")[::-] "
 	out += statusInfo.LastSeen
 	ctx.TopBar.SetText(out)
 }
 
 // sets the current chat, loads text from storage to TextView
-func SetDisplayedChat(chat messages.Chat) {
+func (ctx *AppContext) SetDisplayedChat(chat messages.Chat) {
 	ctx.CurrentReceiver = chat
 	ctx.TextView.Clear()
 	ctx.TextView.SetTitle(chat.Name)

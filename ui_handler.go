@@ -11,27 +11,33 @@ import (
 	"github.com/skratchdot/open-golang/open"
 )
 
-type UiHandler struct{}
+// UiHandler adapts the backend's messages.UiMessageHandler interface to the
+// tview UI. Every method that mutates the UI enqueues a closure onto the
+// AppContext update queue (ctx.enqueue) instead of spawning its own goroutine.
+// A single consumer applies them in FIFO order, so backend calls render in the
+// exact order they were made (fixes the previous out-of-order rendering).
+type UiHandler struct {
+	ctx *AppContext
+}
 
 func (u UiHandler) NewMessage(msg messages.Message) {
-	// QueueUpdateDraw must be called from a goroutine to avoid blocking the caller.
-	go ctx.App.QueueUpdateDraw(func() {
-		ctx.CurRegions = append(ctx.CurRegions, msg)
-		PrintText(getTextMessageString(&msg))
+	u.ctx.enqueue(func() {
+		u.ctx.CurRegions = append(u.ctx.CurRegions, msg)
+		u.ctx.PrintText(getTextMessageString(&msg))
 	})
 }
 
 func (u UiHandler) NewScreen(msgs []messages.Message) {
-	go ctx.App.QueueUpdateDraw(func() {
-		ctx.TextView.Clear()
+	u.ctx.enqueue(func() {
+		u.ctx.TextView.Clear()
 		screen := getMessagesString(msgs)
-		ctx.TextView.SetText(screen)
-		ctx.CurRegions = msgs
+		u.ctx.TextView.SetText(screen)
+		u.ctx.CurRegions = msgs
 		if screen == "" {
-			if ctx.CurrentReceiver.Id == "" {
-				PrintHelp()
+			if u.ctx.CurrentReceiver.Id == "" {
+				u.ctx.PrintHelp()
 			} else {
-				PrintText("[::d] ~~~ no messages, press " + config.Config.Keymap.CommandBacklog + " to load backlog if available ~~~[::-]")
+				u.ctx.PrintText("[::d] ~~~ no messages, press " + config.Config.Keymap.CommandBacklog + " to load backlog if available ~~~[::-]")
 			}
 		}
 	})
@@ -39,14 +45,14 @@ func (u UiHandler) NewScreen(msgs []messages.Message) {
 
 // UpdateChatList updates the table with the PriorityQueue content
 func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
-	go ctx.App.QueueUpdateDraw(func() {
+	u.ctx.enqueue(func() {
 		// Update the store
-		ctx.AllChats = make([]*messages.Conversation, len(pq))
-		copy(ctx.AllChats, pq)
+		u.ctx.AllChats = make([]*messages.Conversation, len(pq))
+		copy(u.ctx.AllChats, pq)
 
 		// Sort the full list once
-		sort.Slice(ctx.AllChats, func(i, j int) bool {
-			a, b := ctx.AllChats[i], ctx.AllChats[j]
+		sort.Slice(u.ctx.AllChats, func(i, j int) bool {
+			a, b := u.ctx.AllChats[i], u.ctx.AllChats[j]
 
 			// Pinned check
 			if a.IsPinned && !b.IsPinned {
@@ -60,34 +66,31 @@ func (u UiHandler) UpdateChatList(pq []*messages.Conversation) {
 			return a.LastMsgTime > b.LastMsgTime
 		})
 
-		RenderChatTable()
+		u.ctx.RenderChatTable()
 	})
 }
 
-// SetChats is a legacy no-op kept for UiMessageHandler interface compatibility.
-func (u UiHandler) SetChats(ids []messages.Chat) {}
-
 func (u UiHandler) PrintError(err error) {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintError(err)
+	u.ctx.enqueue(func() {
+		u.ctx.PrintError(err)
 	})
 }
 
 func (u UiHandler) PrintText(msg string) {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintText(msg)
+	u.ctx.enqueue(func() {
+		u.ctx.PrintText(msg)
 	})
 }
 
 func (u UiHandler) PrintQR(qr string) {
-	go ctx.App.QueueUpdateDraw(func() {
-		fmt.Fprint(tview.ANSIWriter(ctx.TextView), qr+"\n")
+	u.ctx.enqueue(func() {
+		fmt.Fprint(tview.ANSIWriter(u.ctx.TextView), qr+"\n")
 	})
 }
 
 func (u UiHandler) PrintFile(path string) {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintImage(path)
+	u.ctx.enqueue(func() {
+		u.ctx.PrintImage(path)
 	})
 }
 
@@ -96,41 +99,49 @@ func (u UiHandler) OpenFile(path string) {
 }
 
 func (u UiHandler) SetStatus(status messages.SessionStatus) {
-	go ctx.App.QueueUpdateDraw(func() {
-		UpdateStatusBar(status)
+	u.ctx.enqueue(func() {
+		u.ctx.UpdateStatusBar(status)
 	})
 }
 
 func (u UiHandler) ShowColorList() {
-	out := ""
-	for idx, _ := range tcell.ColorNames {
-		out = out + "[" + idx + "]" + idx + "[-]\n"
+	names := make([]string, 0, len(tcell.ColorNames))
+	for name := range tcell.ColorNames {
+		names = append(names, name)
 	}
-	PrintText(out)
+	sort.Strings(names)
+
+	out := ""
+	for _, name := range names {
+		out = out + "[" + name + "]" + name + "[-]\n"
+	}
+	u.ctx.enqueue(func() {
+		u.ctx.PrintText(out)
+	})
 }
 
 func (u UiHandler) Clear() {
-	go ctx.App.QueueUpdateDraw(func() {
-		ctx.TextView.Clear()
-		PrintHelp()
+	u.ctx.enqueue(func() {
+		u.ctx.TextView.Clear()
+		u.ctx.PrintHelp()
 	})
 }
 
 func (u UiHandler) PrintHelp() {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintHelp()
+	u.ctx.enqueue(func() {
+		u.ctx.PrintHelp()
 	})
 }
 
 func (u UiHandler) PrintCommands() {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintHelp()
+	u.ctx.enqueue(func() {
+		u.ctx.PrintHelp()
 	})
 }
 
 func (u UiHandler) Quit() {
-	go ctx.App.QueueUpdateDraw(func() {
-		ctx.App.Stop()
+	u.ctx.enqueue(func() {
+		u.ctx.App.Stop()
 	})
 }
 
@@ -139,12 +150,12 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 	// Translate ANSI codes in the QR string to tview tags to avoid using ANSIWriter during draw
 	qtTrans := tview.TranslateANSI(qr)
 
-	go ctx.App.QueueUpdateDraw(func() {
+	u.ctx.enqueue(func() {
 		// 1. Clear Screen
-		ctx.TextView.Clear()
+		u.ctx.TextView.Clear()
 
 		// 2. Print Help
-		PrintHelp()
+		u.ctx.PrintHelp()
 
 		// 3. Construct Full Output (Header + QR)
 		var output string
@@ -157,12 +168,12 @@ func (u UiHandler) UpdateQR(qr string, attempt int, timeout int) {
 		output += qtTrans + "\n"
 
 		// 4. Atomic Write (Standard Writer)
-		fmt.Fprint(ctx.TextView, output)
+		fmt.Fprint(u.ctx.TextView, output)
 
 		// 5. Auto-scroll to QR code so it's visible without manual scrolling
-		ctx.TextView.ScrollToEnd()
+		u.ctx.TextView.ScrollToEnd()
 
 		// 6. Ensure input field is focused and cleared so commands can be entered
-		ctx.App.SetFocus(ctx.TextInput)
+		u.ctx.App.SetFocus(u.ctx.TextInput)
 	})
 }

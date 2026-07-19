@@ -38,11 +38,17 @@ func getTextMessageString(msg *messages.Message) string {
 	if msg.Forwarded {
 		text = "[" + config.Config.Colors.ForwardedText + "]" + text + "[-]"
 	}
+	if len(msg.Reactions) > 0 {
+		text += " " + reactionSuffix(msg.Reactions)
+	}
 	tim := time.Unix(int64(msg.Timestamp), 0)
 	time := tim.Format("02-01-06 15:04:05")
 	out += "[\""
 	out += msg.Id
 	out += "\"]"
+	if msg.QuotedPreview != "" {
+		out += "[-::d]  > " + tview.Escape(msg.QuotedPreview) + "[-::-]\n"
+	}
 	if msg.FromMe { //msg from me
 		out += "[-::d](" + time + ") [" + colorMe + "::b]Me: [-::-]" + text
 	} else { // message from others
@@ -50,6 +56,18 @@ func getTextMessageString(msg *messages.Message) string {
 	}
 	out += "[\"\"]"
 	return out
+}
+
+// reactionSuffix formats a message's aggregated reactions for inline display,
+// e.g. "👍 x2 ❤️ x1". ReactionSummary is already returned in a deterministic
+// (emoji-ascending) order by the storage layer, so this is a pure formatting
+// step with no further sorting needed.
+func reactionSuffix(reactions []messages.ReactionSummary) string {
+	parts := make([]string, 0, len(reactions))
+	for _, r := range reactions {
+		parts = append(parts, fmt.Sprintf("%s x%d", r.Emoji, r.Count))
+	}
+	return "[::d]" + strings.Join(parts, " ") + "[-::-]"
 }
 
 // formatRelativeTime formats a Unix timestamp into a WhatsApp Web–style
@@ -94,7 +112,7 @@ func formatRelativeTime(timestamp int64) string {
 }
 
 // RenderChatTable renders the table based on ctx.AllChats and ctx.ChatLimit
-func RenderChatTable() {
+func (ctx *AppContext) RenderChatTable() {
 	// Snapshot current selection by JID
 	var selectedStatusJID string
 	var selectedChatJID string
@@ -225,19 +243,31 @@ func RenderChatTable() {
 	ctx.RenderingList = false
 }
 
+// isWithin reports whether path is dir itself or a descendant of dir.
+// Unlike a bare strings.HasPrefix check, this does not treat a sibling
+// directory with dir as a string prefix (e.g. "/home/x/DownloadsEvil")
+// as being inside dir.
+func isWithin(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator))
+}
+
 // prints an image attachment to the TextView (by message id)
-func PrintImage(path string) {
+func (ctx *AppContext) PrintImage(path string) {
 	// Sanitize path to prevent command injection / path traversal
 	cleanPath := filepath.Clean(path)
 	absPath, err := filepath.Abs(cleanPath)
 	if err != nil {
-		PrintError(fmt.Errorf("invalid file path: %v", err))
+		ctx.PrintError(fmt.Errorf("invalid file path: %v", err))
 		return
 	}
 
 	// Verify the file exists
 	if _, err := os.Stat(absPath); err != nil {
-		PrintError(fmt.Errorf("file not found: %v", err))
+		ctx.PrintError(fmt.Errorf("file not found: %v", err))
 		return
 	}
 
@@ -245,13 +275,13 @@ func PrintImage(path string) {
 	// Resolve symlinks to prevent symlink-based directory escape (audit S-2).
 	resolvedPath, err := filepath.EvalSymlinks(absPath)
 	if err != nil {
-		PrintError(fmt.Errorf("could not resolve path: %v", err))
+		ctx.PrintError(fmt.Errorf("could not resolve path: %v", err))
 		return
 	}
 	downloadDir := filepath.Clean(config.Config.General.DownloadPath)
 	previewDir := filepath.Clean(config.Config.General.PreviewPath)
-	if !strings.HasPrefix(resolvedPath, downloadDir) && !strings.HasPrefix(resolvedPath, previewDir) {
-		PrintError(fmt.Errorf("file path outside allowed directories"))
+	if !isWithin(downloadDir, resolvedPath) && !isWithin(previewDir, resolvedPath) {
+		ctx.PrintError(fmt.Errorf("file path outside allowed directories"))
 		return
 	}
 
@@ -272,5 +302,5 @@ func PrintImage(path string) {
 			return
 		}
 	}
-	PrintError(err)
+	ctx.PrintError(err)
 }
