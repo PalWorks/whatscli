@@ -7,7 +7,7 @@
 **WhatsCLI** is a terminal-based WhatsApp client written in Go 1.25.  
 It uses [whatsmeow](https://github.com/tulir/whatsmeow) for the WhatsApp multi-device protocol and [tview](https://github.com/rivo/tview) for the terminal UI.
 
-**Version:** v1.7.0  
+**Version:** v1.8.0  
 **License:** MIT  
 **Module:** `github.com/normen/whatscli`
 
@@ -59,6 +59,9 @@ These rules are non-negotiable. Violating them causes data races and deadlocks.
 | **PQ snapshots** | Use `snapshotPQ()` for safe priority queue reads from the UI goroutine |
 | **Channel sizes** | All channels are buffered (10). Don't change without understanding backpressure |
 | **Reconnect guard** | `sm.reconnecting` flag prevents duplicate reconnect goroutines |
+| **Login guard** | All login paths go through `login()`; its `sm.connecting` flag prevents overlapping attempts |
+| **Bounded contexts** | Network calls use `netCtx()`/`netTransferCtx()` (netctx.go), never `context.Background()` (exempt: QR pairing, local store calls) |
+| **No network on the command loop** | Keep cheap guards synchronous, then background the network call in a goroutine |
 
 ## Command Registry Pattern
 

@@ -1,5 +1,5 @@
 # WhatsCLI — Cursor AI Rules
-# Terminal-based WhatsApp client in Go 1.24 (whatsmeow + tview)
+# Terminal-based WhatsApp client in Go 1.25 (whatsmeow + tview)
 
 # Build & Test
 # make build    → go build -o whatscli

@@ -36,6 +36,15 @@ type General struct {
 	// automatically stopped and sent, in case the user forgets to run
 	// /stoprecording.
 	RecordMaxSeconds int
+
+	// NetworkTimeout bounds request-response network operations (message
+	// sends, group operations, read receipts) in seconds. Zero or negative
+	// falls back to the built-in default of 60.
+	NetworkTimeout int
+	// NetworkTransferTimeout bounds bulk media uploads and downloads in
+	// seconds, sized for large files on slow links. Zero or negative falls
+	// back to the built-in default of 300.
+	NetworkTransferTimeout int
 }
 
 type Keymap struct {
@@ -83,16 +92,18 @@ type Colors struct {
 
 var Config = IniFile{
 	&General{
-		DownloadPath:        GetHomeDir() + "Downloads",
-		PreviewPath:         GetHomeDir() + "Downloads",
-		CmdPrefix:           "/",
-		ShowCommand:         "jp2a --color",
-		EnableNotifications: false,
-		UseTerminalBell:     false,
-		NotificationTimeout: 60,
-		BacklogMsgQuantity:  10,
-		RecordCommand:       "sox -d -r 16000 -c 1 -t wav",
-		RecordMaxSeconds:    120,
+		DownloadPath:           GetHomeDir() + "Downloads",
+		PreviewPath:            GetHomeDir() + "Downloads",
+		CmdPrefix:              "/",
+		ShowCommand:            "jp2a --color",
+		EnableNotifications:    false,
+		UseTerminalBell:        false,
+		NotificationTimeout:    60,
+		BacklogMsgQuantity:     10,
+		RecordCommand:          "sox -d -r 16000 -c 1 -t wav",
+		RecordMaxSeconds:       120,
+		NetworkTimeout:         60,
+		NetworkTransferTimeout: 300,
 	},
 	&Keymap{
 		SwitchPanels:    "Tab",

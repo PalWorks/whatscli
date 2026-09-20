@@ -58,13 +58,41 @@ func (eh *eventHandler) Handle(evt interface{}) {
 			eh.sm.clearUnread(v.JID.String())
 		}
 	case *events.Receipt:
-		if v.Type == types.ReceiptTypeRead {
-			// Per-message read receipts are intentionally not persisted:
-			// tracking delivery state per message needs a new storage
-			// column and is out of scope here. events.MarkChatAsRead
-			// above already covers the common "read on another device"
-			// case at the conversation level.
-		}
+		eh.handleReceipt(v)
+	}
+}
+
+// handleReceipt persists per-message delivery state (plan H4) and refreshes
+// the message view if the receipt's chat is currently displayed. Runs on
+// whatsmeow's event goroutine, like every other case in Handle. Only
+// delivered/read receipts map to a display state; sender/retry/played
+// receipts are ignored. events.MarkChatAsRead separately covers the
+// conversation-level unread badge.
+func (eh *eventHandler) handleReceipt(evt *events.Receipt) {
+	var status int
+	switch evt.Type {
+	case types.ReceiptTypeDelivered:
+		status = ReceiptDelivered
+	case types.ReceiptTypeRead, types.ReceiptTypeReadSelf:
+		status = ReceiptRead
+	default:
+		return
+	}
+
+	if len(evt.MessageIDs) == 0 {
+		return
+	}
+	if err := eh.sm.db.SetReceiptStatus(evt.MessageIDs, status); err != nil {
+		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to store receipt: %v", err))
+		return
+	}
+
+	chat := evt.Chat.String()
+	eh.sm.mu.RLock()
+	isCurrent := eh.sm.currentReceiver == chat
+	eh.sm.mu.RUnlock()
+	if isCurrent {
+		eh.sm.uiHandler.NewScreen(eh.sm.getMessages(chat))
 	}
 }
 
@@ -304,6 +332,14 @@ func extractForwarded(msg *waE2E.Message) bool {
 	}
 	if sticker := msg.GetStickerMessage(); sticker != nil {
 		return sticker.GetContextInfo().GetIsForwarded()
+	}
+	// Contact and location messages (plan H3.2): exactly the remaining types
+	// extractMessageContent renders — parity rule, no more, no fewer.
+	if con := msg.GetContactMessage(); con != nil {
+		return con.GetContextInfo().GetIsForwarded()
+	}
+	if loc := msg.GetLocationMessage(); loc != nil {
+		return loc.GetContextInfo().GetIsForwarded()
 	}
 	return false
 }

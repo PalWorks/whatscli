@@ -36,6 +36,8 @@ func (ctx *AppContext) PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"connect / "+config.Config.Keymap.CommandConnect, "(Re)Connect"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"disconnect", "Disconnect"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"logout", "Logout & Delete Data"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"reset", "Reset Connection & Local Data"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"help / "+config.Config.Keymap.CommandHelp, "Show This Help"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"quit / "+config.Config.Keymap.CommandQuit, "Exit"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"colorlist", "Show Color Names"))
 	fmt.Fprintln(ctx.TextView, "")

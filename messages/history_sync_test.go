@@ -8,81 +8,125 @@ import (
 	"go.mau.fi/whatsmeow/types"
 )
 
-// ----- Phase 3.4: deterministic backlog completion tests -----
+// ----- Phase 3.4 / H3.1: deterministic backlog completion tests -----
 
-// TestProcessHistorySync_SignalsCompletionEvenOnEarlyReturn verifies that
-// the historySyncDone completion signal fires regardless of which guard
-// causes processHistorySync to return early (here: no client set, so it
-// hits the "not connected" guard). This is what lets cmdBacklog's wait
-// resolve promptly instead of blocking for its full fallback timeout.
-func TestProcessHistorySync_SignalsCompletionEvenOnEarlyReturn(t *testing.T) {
+// TestProcessHistorySync_NotifiesWaitersEvenOnEarlyReturn verifies that
+// registered sync waiters are woken regardless of which guard causes
+// processHistorySync to return early (here: no client set, so it hits the
+// "not connected" guard). This is what lets cmdBacklog's wait resolve
+// promptly instead of blocking for its full fallback timeout.
+func TestProcessHistorySync_NotifiesWaitersEvenOnEarlyReturn(t *testing.T) {
 	sm, _ := newTestSessionManager(t)
+	waiter, _ := sm.addSyncWaiter()
+
 	// No client set: sm.getClient() returns nil, so processHistorySync
 	// hits its "not connected" guard and returns immediately.
-
 	sm.processHistorySync(&waHistorySync.HistorySync{})
 
 	select {
-	case <-sm.historySyncDone:
-		// signaled, as expected
+	case <-waiter:
+		// woken, as expected
 	default:
-		t.Fatal("expected historySyncDone to be signaled even on early return")
+		t.Fatal("expected the sync waiter to be woken even on early return")
 	}
 }
 
-// TestHistorySyncDone_UnblocksWaitingGoroutine exercises the channel
-// mechanics cmdBacklog relies on directly: historySyncDone is buffered
-// (size 1), so a signal sent before a waiting goroutine even starts its
-// select is not lost — the goroutine unblocks as soon as it runs.
-func TestHistorySyncDone_UnblocksWaitingGoroutine(t *testing.T) {
+// TestSyncWaiters_AllConcurrentWaitersWake is the H3.1 fix's core property:
+// N concurrent waiters (e.g. overlapping /backlog calls) are ALL woken by
+// one completed sync, where the old single buffered channel woke exactly
+// one and left the rest to time out.
+func TestSyncWaiters_AllConcurrentWaitersWake(t *testing.T) {
 	sm, _ := newTestSessionManager(t)
 
-	select {
-	case sm.historySyncDone <- struct{}{}:
-	default:
-		t.Fatal("failed to send on historySyncDone (buffer should have room)")
-	}
-
-	unblocked := make(chan struct{})
-	go func() {
-		select {
-		case <-sm.historySyncDone:
-		case <-time.After(5 * time.Second):
-			t.Error("timed out waiting for historySyncDone")
-		}
-		close(unblocked)
-	}()
-
-	select {
-	case <-unblocked:
-		// unblocked promptly, as expected
-	case <-time.After(1 * time.Second):
-		t.Fatal("waiting goroutine did not unblock promptly after signal")
-	}
-}
-
-// TestHistorySyncDone_NonBlockingSendNeverPanics verifies the send-with-
-// default pattern used by processHistorySync's defer never blocks or
-// panics even when the buffer is already full (no listener has drained it).
-func TestHistorySyncDone_NonBlockingSendNeverPanics(t *testing.T) {
-	sm, _ := newTestSessionManager(t)
-
-	for i := 0; i < 3; i++ {
-		done := make(chan struct{})
-		go func() {
+	const n = 3
+	woken := make(chan int, n)
+	for i := 0; i < n; i++ {
+		waiter, _ := sm.addSyncWaiter()
+		go func(i int) {
 			select {
-			case sm.historySyncDone <- struct{}{}:
-			default:
+			case <-waiter:
+				woken <- i
+			case <-time.After(5 * time.Second):
 			}
-			close(done)
-		}()
+		}(i)
+	}
 
+	sm.notifySyncWaiters()
+
+	for i := 0; i < n; i++ {
 		select {
-		case <-done:
+		case <-woken:
 		case <-time.After(1 * time.Second):
-			t.Fatalf("non-blocking send #%d did not return promptly", i)
+			t.Fatalf("only %d of %d waiters woke after notify", i, n)
 		}
 	}
+}
+
+// TestSyncWaiters_RegistryClearsAndDoesNotDoubleClose verifies notify is
+// idempotent across rounds: a second notify with no new waiters must not
+// re-close already-closed channels (which would panic), and a waiter
+// registered after a notify is not stale-woken by it.
+func TestSyncWaiters_RegistryClearsAndDoesNotDoubleClose(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+
+	_, _ = sm.addSyncWaiter()
+	sm.notifySyncWaiters()
+	// Registry is now empty; a second notify must be a no-op (a double
+	// close of the first waiter's channel would panic here).
+	sm.notifySyncWaiters()
+
+	late, _ := sm.addSyncWaiter()
+	select {
+	case <-late:
+		t.Fatal("a waiter registered after a notify must not be woken by that past notify")
+	default:
+		// still open, as expected
+	}
+}
+
+// TestSyncWaiters_CancelDeregisters verifies the cancel func removes an
+// abandoned waiter (master audit F6): after cancel, a later notify neither
+// closes it (it is gone) nor panics, and the registry is empty.
+func TestSyncWaiters_CancelDeregisters(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+
+	waiter, cancel := sm.addSyncWaiter()
+	cancel()
+
+	sm.mu.RLock()
+	n := len(sm.syncWaiters)
+	sm.mu.RUnlock()
+	if n != 0 {
+		t.Fatalf("expected registry empty after cancel, got %d waiters", n)
+	}
+
+	// notify must not close the cancelled waiter (it was deregistered).
+	sm.notifySyncWaiters()
+	select {
+	case <-waiter:
+		t.Fatal("cancelled waiter should not be woken by a later notify")
+	default:
+	}
+
+	// cancel is idempotent — calling it again (or after a notify) is a no-op.
+	cancel()
+}
+
+// TestSyncWaiters_CancelAfterNotifyIsNoOp verifies cancel is safe once notify
+// has already closed and cleared the waiter (the common cmdBacklog path where
+// the sync completes before the deferred cancel runs).
+func TestSyncWaiters_CancelAfterNotifyIsNoOp(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+
+	waiter, cancel := sm.addSyncWaiter()
+	sm.notifySyncWaiters() // closes and clears
+	select {
+	case <-waiter:
+		// closed, as expected
+	default:
+		t.Fatal("waiter should have been closed by notify")
+	}
+	cancel() // must not panic or double-anything
 }
 
 // ----- Phase 5.6: status@broadcast is no longer skipped -----

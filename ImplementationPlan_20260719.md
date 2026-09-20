@@ -509,7 +509,7 @@ Estimated effort: [Inference] 2-3 hours including audit turnaround.
 |---|----------|-------------------------------|
 | 1 | H0 commit: single commit vs thematic commits | RESOLVED: thematic commits (dependency-ordered series; only the tip is guaranteed fully green, noted in each intermediate commit's context) |
 | 2 | Timeout values as constants vs config key | RESOLVED: config keys `network_timeout` (60) and `network_transfer_timeout` (300) in `[general]` |
-| 3 | Send ordering: accept goroutine-per-send reordering vs serialized send queue | OPEN: guidance provided, awaiting user's call |
+| 3 | Send ordering: accept goroutine-per-send reordering vs serialized send queue | RESOLVED: Option A, goroutine per send (impact guidance reviewed by user) |
 | 4 | Read-marker color: reuse Positive vs new `[colors]` key | RESOLVED: reuse Positive |
 
 ## Total Estimate

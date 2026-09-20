@@ -1,7 +1,6 @@
 package messages
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"mime"
@@ -112,7 +111,13 @@ func uploadAndSendMedia(client *whatsmeow.Client, jid types.JID, cmdName string,
 
 	mediaType := mediaTypesByCommand[cmdName]
 
-	uploaded, err := client.Upload(context.Background(), data, mediaType)
+	// One transfer-tier deadline covers both the upload and the send: the
+	// upload dominates, and a stalled link should fail the whole operation
+	// rather than hang it (plan H1.1).
+	ctx, cancel := netTransferCtx()
+	defer cancel()
+
+	uploaded, err := client.Upload(ctx, data, mediaType)
 	if err != nil {
 		return "", fmt.Errorf("failed to upload: %v", err)
 	}
@@ -183,7 +188,7 @@ func uploadAndSendMedia(client *whatsmeow.Client, jid types.JID, cmdName string,
 		}
 	}
 
-	resp, err := client.SendMessage(context.Background(), jid, msg)
+	resp, err := client.SendMessage(ctx, jid, msg)
 	if err != nil {
 		return "", fmt.Errorf("failed to send media: %v", err)
 	}

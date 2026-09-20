@@ -3,6 +3,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/normen/whatscli/config"
@@ -10,7 +14,7 @@ import (
 	"github.com/rivo/tview"
 )
 
-var VERSION string = "v1.7.0"
+var VERSION string = "v1.8.0"
 
 const batchSize = 50
 
@@ -135,6 +139,30 @@ func main() {
 		ctx.PrintError(err)
 	}
 	ctx.LoadShortcuts()
+
+	// An external SIGTERM/SIGINT (e.g. `kill`) stops the TUI event loop so
+	// the graceful Shutdown() below runs — cancelling an in-progress voice
+	// recording and closing the databases — instead of the process dying
+	// with the recorder subprocess and temp file orphaned (plan H2.2).
+	// Ctrl+C inside the TUI arrives as a tcell key event, not a signal, so
+	// this only fires for signals from outside the terminal. SIGKILL cannot
+	// be trapped; that residual case is documented in README.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for range sigCh {
+			// App.Stop() is a no-op until Run() has created the screen, so a
+			// signal landing in the tiny window before Run() would otherwise
+			// be lost (master audit F7). Retry briefly until it takes effect;
+			// once the app has stopped, Run() returns and the process exits,
+			// so the extra idempotent Stop() calls are harmless.
+			for i := 0; i < 50; i++ {
+				ctx.App.Stop()
+				time.Sleep(10 * time.Millisecond)
+			}
+		}
+	}()
+
 	ctx.App.Run()
 	ctx.SessionManager.Shutdown()
 }

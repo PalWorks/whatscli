@@ -22,9 +22,9 @@ var commandTestCoverage = map[string]bool{
 	"info":      true, // TestCmdInfo_*
 	"read":      true, // TestCmdRead_*
 
-	"login":   false, // no guardable early exit; sm.login() always attempts a real network connection/QR pairing — see cmd_connection_test.go
-	"connect": false, // alias of "login", same exemption
-	"reset":   false, // deletes real files via config.GetSessionFilePath(); the adrg/xdg package resolves XDG_CONFIG_HOME in its own init(), so t.Setenv cannot sandbox it — see cmd_connection_test.go
+	"login":   true, // guard branch covered by TestCmdLogin_RefusesWhileConnecting; the dial/QR path past the guard remains untestable — see cmd_connection_test.go
+	"connect": true, // alias of "login", same coverage
+	"reset":   true, // TestCmdReset_* via the sessionFilePath seam (plan H5.1) — see cmd_connection_test.go
 
 	"disconnect": true, // TestCmdDisconnect_NoClient
 	"logout":     true, // TestCmdLogout_AlreadyLoggedOut

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/normen/whatscli/config"
 )
 
 // MessageDatabase stores messages and contact data in SQLite
@@ -16,7 +15,7 @@ type MessageDatabase struct {
 
 // Init initializes the message database with a file-based SQLite connection.
 func (md *MessageDatabase) Init() error {
-	dbPath := config.GetSessionFilePath() + "_meta.db"
+	dbPath := sessionFilePath() + "_meta.db"
 	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return fmt.Errorf("failed to open metadata db: %w", err)
@@ -88,6 +87,10 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 	md.db.Exec(`ALTER TABLE messages ADD COLUMN quoted_id TEXT DEFAULT ''`)
 	md.db.Exec(`ALTER TABLE messages ADD COLUMN quoted_preview TEXT DEFAULT ''`)
 
+	// Phase H4 (read markers): delivery state for own messages, driven by
+	// live receipt events. 0=none/sent, 1=delivered, 2=read.
+	md.db.Exec(`ALTER TABLE messages ADD COLUMN receipt_status INTEGER DEFAULT 0`)
+
 	// Phase 5.2: reactions get their own table rather than being stored as
 	// standalone messages. PRIMARY KEY(message_id, sender) means a second
 	// reaction from the same sender on the same message replaces the first,
@@ -116,7 +119,7 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 // row scan, not scanned as a column.
 const messageColumns = "id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text, " +
 	"media_type, mimetype, media_key, direct_path, file_sha256, file_enc_sha256, file_length, file_name, deleted, " +
-	"quoted_id, quoted_preview"
+	"quoted_id, quoted_preview, receipt_status"
 
 // escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
 // treated as literal characters in a LIKE ? ESCAPE '\' clause.
@@ -145,13 +148,13 @@ func (md *MessageDatabase) AddMessage(msg Message) error {
 	_, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
 	(`+messageColumns+`)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName,
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 		msg.MediaType, msg.Mimetype, msg.MediaKey, msg.DirectPath,
 		msg.FileSHA256, msg.FileEncSHA256, msg.FileLength, msg.FileName, msg.Deleted,
-		msg.QuotedID, msg.QuotedPreview,
+		msg.QuotedID, msg.QuotedPreview, msg.ReceiptStatus,
 	)
 	return err
 }
@@ -305,7 +308,7 @@ func (md *MessageDatabase) GetMessageByID(id string) (Message, error) {
 	var ts int64
 	err := row.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text,
 		&msg.MediaType, &msg.Mimetype, &msg.MediaKey, &msg.DirectPath, &msg.FileSHA256, &msg.FileEncSHA256, &msg.FileLength, &msg.FileName, &msg.Deleted,
-		&msg.QuotedID, &msg.QuotedPreview)
+		&msg.QuotedID, &msg.QuotedPreview, &msg.ReceiptStatus)
 	if err != nil {
 		return Message{}, fmt.Errorf("failed to get message %q: %w", id, err)
 	}
@@ -315,6 +318,30 @@ func (md *MessageDatabase) GetMessageByID(id string) (Message, error) {
 		return Message{}, err
 	}
 	return msgs[0], nil
+}
+
+// SetReceiptStatus raises receipt_status to status for every given message
+// ID. Monotonic by construction (MAX(receipt_status, ?)): receipts can arrive
+// out of order (Android sends newest-first, iOS oldest-first, and a
+// "delivered" receipt can trail a "read" one on a flaky link), so a lower
+// state never overwrites a higher one. IDs not present in the table are
+// silently ignored — receipts routinely reference messages sent before this
+// session's history begins.
+func (md *MessageDatabase) SetReceiptStatus(ids []string, status int) error {
+	if md.db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]interface{}, 0, len(ids)+1)
+	args = append(args, status)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	_, err := md.db.Exec(`UPDATE messages SET receipt_status = MAX(receipt_status, ?) WHERE id IN (`+placeholders+`)`, args...)
+	return err
 }
 
 // MarkMessageDeleted marks a message as revoked/deleted: the stored text is
@@ -414,7 +441,7 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 		var ts int64
 		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text,
 			&msg.MediaType, &msg.Mimetype, &msg.MediaKey, &msg.DirectPath, &msg.FileSHA256, &msg.FileEncSHA256, &msg.FileLength, &msg.FileName, &msg.Deleted,
-			&msg.QuotedID, &msg.QuotedPreview); err != nil {
+			&msg.QuotedID, &msg.QuotedPreview, &msg.ReceiptStatus); err != nil {
 			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)

@@ -63,6 +63,13 @@
 - This is a personal messaging client, not an automation framework — there is no scripting/bot API
 - WhatsApp does not officially endorse third-party clients; protocol changes may temporarily break functionality
 
+### Known Limitations
+
+- **SIGKILL mid-recording**: WhatsCLI traps SIGTERM/SIGINT and shuts down gracefully (stopping an in-progress `/record` and cleaning up its temp file), but SIGKILL cannot be trapped by any process — a hard kill during a recording leaves the external recorder process running and its temp WAV file behind in the system temp directory
+- **Read markers are live-only**: delivery/read ticks are driven by receipts received while WhatsCLI is running; messages synced from history show no ticks
+- **Send ordering**: messages sent in very quick succession are dispatched concurrently and can occasionally reach the server out of order — WhatsApp itself orders by server receipt time and does not guarantee end-to-end ordering
+- **Network timeouts are always on**: `network_timeout`/`network_transfer_timeout` have no "unlimited" setting; on extremely slow links raise `network_transfer_timeout` for large media
+
 ---
 
 ## Features
@@ -74,6 +81,7 @@
 | **Voice Notes** | Record from the terminal microphone and send as a voice note (`/record`, `/stoprecording`) via a configurable external recorder (sox, arecord, etc.) |
 | **Reply Threading** | Reply to a selected message (`/reply`, keybinding `y`) with a quoted preview shown above the reply |
 | **Message Editing** | Edit a previously sent message (`/edit`, keybinding `e`) within WhatsApp's 20-minute edit window |
+| **Read Markers** | Delivery ticks on your own messages: dim `✓✓` when delivered, colored `✓✓` when read (live receipts only) |
 | **Status** | View incoming status updates in a dedicated, read-only Status pane |
 | **Encrypted Export** | Export a chat's full message history to an [age](https://age-encryption.org)-encrypted file (`/export`), decryptable with any age-compatible tool |
 | **Search** | Full-text search across all messages (`/search`) and contact search (`/search-contact`) |
@@ -224,6 +232,8 @@ The file is auto-created on first run with sensible defaults. Run `/help` inside
 | `backlog_msg_quantity` | `10` | Number of messages to load per backlog request |
 | `record_command` | `sox -d -r 16000 -c 1 -t wav` | External command to record audio for `/record`; the output file path is appended as the final argument (same convention as `show_command`) |
 | `record_max_seconds` | `120` | Maximum recording duration before `/record` automatically stops and sends |
+| `network_timeout` | `60` | Seconds before a request-response network operation (message send, group operation, read receipt) is abandoned; zero or negative falls back to 60 |
+| `network_transfer_timeout` | `300` | Seconds before a bulk media upload/download is abandoned. Sized for a 100 MB file at roughly 350 KB/s — raise it on very slow links. There is no "unlimited" setting: zero or negative falls back to 300 |
 
 `/export`'s passphrase is **not** a config key — it must be set in the `WHATSCLI_EXPORT_PASSPHRASE` environment variable before launching WhatsCLI, so it never sits in a config file or is echoed to the screen. It must be at least 8 characters.
 
@@ -321,7 +331,7 @@ After the initial scan, WhatsCLI reconnects automatically on subsequent launches
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  WhatsCLI v1.7.0  Type /help or press Ctrl+? for help   │
+│  WhatsCLI v1.8.0  Type /help or press Ctrl+? for help   │
 ├──────────────┬──────────────────────────────────────────┤
 │              │                                          │
 │  Chat List   │          Message View                    │
@@ -378,6 +388,7 @@ All commands use the configurable prefix (default: `/`).
 | `/connect` | (Re)connect to WhatsApp |
 | `/disconnect` | Disconnect from WhatsApp |
 | `/logout` | Log out and delete session data |
+| `/reset` | Reset the connection and clear local session/message data |
 | `/quit` | Exit WhatsCLI |
 | `/colorlist` | Display available color names |
 

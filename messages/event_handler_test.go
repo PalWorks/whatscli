@@ -373,3 +373,99 @@ func TestHandleReaction_NoScreenRefreshIfNotCurrentChat(t *testing.T) {
 		t.Error("expected no NewScreen call for a chat that isn't currently displayed")
 	}
 }
+
+// ----- Phase H4: handleReceipt tests -----
+
+// receiptEvent builds a minimal events.Receipt for handleReceipt tests.
+func receiptEvent(chat string, ids []string, rtype types.ReceiptType) *events.Receipt {
+	chatJID, _ := types.ParseJID(chat)
+	return &events.Receipt{
+		MessageSource: types.MessageSource{Chat: chatJID},
+		MessageIDs:    ids,
+		Type:          rtype,
+	}
+}
+
+func TestHandleReceipt_DeliveredPersists(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	eh := &eventHandler{sm: sm}
+	if err := sm.db.AddMessage(Message{Id: "out1", ChatId: "peer@s.whatsapp.net", FromMe: true, Timestamp: 1000, Text: "hi"}); err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+
+	eh.handleReceipt(receiptEvent("peer@s.whatsapp.net", []string{"out1"}, types.ReceiptTypeDelivered))
+
+	got, err := sm.db.GetMessageByID("out1")
+	if err != nil {
+		t.Fatalf("GetMessageByID failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptDelivered {
+		t.Errorf("ReceiptStatus = %d, want %d (delivered)", got.ReceiptStatus, ReceiptDelivered)
+	}
+}
+
+func TestHandleReceipt_ReadAndReadSelfPersistAsRead(t *testing.T) {
+	for _, rtype := range []types.ReceiptType{types.ReceiptTypeRead, types.ReceiptTypeReadSelf} {
+		sm, _ := newTestSessionManager(t)
+		eh := &eventHandler{sm: sm}
+		if err := sm.db.AddMessage(Message{Id: "out2", ChatId: "peer@s.whatsapp.net", FromMe: true, Timestamp: 1000, Text: "hi"}); err != nil {
+			t.Fatalf("AddMessage failed: %v", err)
+		}
+
+		eh.handleReceipt(receiptEvent("peer@s.whatsapp.net", []string{"out2"}, rtype))
+
+		got, err := sm.db.GetMessageByID("out2")
+		if err != nil {
+			t.Fatalf("GetMessageByID failed: %v", err)
+		}
+		if got.ReceiptStatus != ReceiptRead {
+			t.Errorf("type %q: ReceiptStatus = %d, want %d (read)", rtype, got.ReceiptStatus, ReceiptRead)
+		}
+	}
+}
+
+func TestHandleReceipt_IgnoresNonDisplayTypes(t *testing.T) {
+	sm, _ := newTestSessionManager(t)
+	eh := &eventHandler{sm: sm}
+	if err := sm.db.AddMessage(Message{Id: "out3", ChatId: "peer@s.whatsapp.net", FromMe: true, Timestamp: 1000, Text: "hi"}); err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+
+	for _, rtype := range []types.ReceiptType{types.ReceiptTypeSender, types.ReceiptTypeRetry, types.ReceiptTypePlayed} {
+		eh.handleReceipt(receiptEvent("peer@s.whatsapp.net", []string{"out3"}, rtype))
+	}
+
+	got, err := sm.db.GetMessageByID("out3")
+	if err != nil {
+		t.Fatalf("GetMessageByID failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptNone {
+		t.Errorf("ReceiptStatus = %d, want %d (sender/retry/played receipts must not change display state)", got.ReceiptStatus, ReceiptNone)
+	}
+}
+
+func TestHandleReceipt_RefreshesOnlyCurrentChat(t *testing.T) {
+	sm, mock := newTestSessionManager(t)
+	eh := &eventHandler{sm: sm}
+	if err := sm.db.AddMessage(Message{Id: "out4", ChatId: "peer@s.whatsapp.net", FromMe: true, Timestamp: 1000, Text: "hi"}); err != nil {
+		t.Fatalf("AddMessage failed: %v", err)
+	}
+
+	// Receipt for a chat that is NOT displayed: no screen refresh.
+	sm.mu.Lock()
+	sm.currentReceiver = "other@s.whatsapp.net"
+	sm.mu.Unlock()
+	eh.handleReceipt(receiptEvent("peer@s.whatsapp.net", []string{"out4"}, types.ReceiptTypeRead))
+	if len(mock.Screens) != 0 {
+		t.Fatalf("expected no screen refresh for a background chat, got %d", len(mock.Screens))
+	}
+
+	// Receipt for the displayed chat: exactly one refresh.
+	sm.mu.Lock()
+	sm.currentReceiver = "peer@s.whatsapp.net"
+	sm.mu.Unlock()
+	eh.handleReceipt(receiptEvent("peer@s.whatsapp.net", []string{"out4"}, types.ReceiptTypeRead))
+	if len(mock.Screens) != 1 {
+		t.Fatalf("expected 1 screen refresh for the displayed chat, got %d", len(mock.Screens))
+	}
+}

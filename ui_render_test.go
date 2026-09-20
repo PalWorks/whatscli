@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/normen/whatscli/config"
 	"github.com/normen/whatscli/messages"
 )
 
@@ -187,5 +188,59 @@ func TestReactionSuffix_PreservesGivenOrder(t *testing.T) {
 	want := "❤️ x2 👍 x1"
 	if !strings.Contains(got, want) {
 		t.Errorf("reactionSuffix() = %q, want it to contain %q", got, want)
+	}
+}
+
+func TestReceiptSuffix(t *testing.T) {
+	cases := []struct {
+		name    string
+		fromMe  bool
+		status  int
+		want    string
+		wantAny bool // true: just assert non-empty
+	}{
+		{name: "incoming message never gets ticks", fromMe: false, status: messages.ReceiptRead, want: ""},
+		{name: "own message with no receipt", fromMe: true, status: messages.ReceiptNone, want: ""},
+		{name: "own message delivered", fromMe: true, status: messages.ReceiptDelivered, wantAny: true},
+		{name: "own message read", fromMe: true, status: messages.ReceiptRead, wantAny: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := receiptSuffix(c.fromMe, c.status)
+			if c.wantAny {
+				if got == "" {
+					t.Errorf("receiptSuffix(%v, %d) = empty, want tick markup", c.fromMe, c.status)
+				}
+				if !strings.Contains(got, "✓✓") {
+					t.Errorf("receiptSuffix(%v, %d) = %q, want it to contain double check marks", c.fromMe, c.status, got)
+				}
+				return
+			}
+			if got != c.want {
+				t.Errorf("receiptSuffix(%v, %d) = %q, want %q", c.fromMe, c.status, got, c.want)
+			}
+		})
+	}
+}
+
+func TestReceiptSuffix_ReadUsesPositiveColorDeliveredIsDim(t *testing.T) {
+	delivered := receiptSuffix(true, messages.ReceiptDelivered)
+	read := receiptSuffix(true, messages.ReceiptRead)
+	if !strings.Contains(delivered, "[::d]") {
+		t.Errorf("delivered suffix %q should use dim styling", delivered)
+	}
+	if !strings.Contains(read, config.Config.Colors.Positive) {
+		t.Errorf("read suffix %q should use the Positive theme color", read)
+	}
+}
+
+func TestGetTextMessageString_AppendsReceiptTicksForOwnMessage(t *testing.T) {
+	msg := messages.Message{
+		Id: "tick1", ChatId: "peer@s.whatsapp.net", FromMe: true,
+		Timestamp: 1000, Text: "hello", ReceiptStatus: messages.ReceiptRead,
+	}
+	out := getTextMessageString(&msg)
+	if !strings.Contains(out, "✓✓") {
+		t.Errorf("rendered own read message should contain tick marks, got %q", out)
 	}
 }

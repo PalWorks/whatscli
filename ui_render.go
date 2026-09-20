@@ -41,6 +41,9 @@ func getTextMessageString(msg *messages.Message) string {
 	if len(msg.Reactions) > 0 {
 		text += " " + reactionSuffix(msg.Reactions)
 	}
+	if suffix := receiptSuffix(msg.FromMe, msg.ReceiptStatus); suffix != "" {
+		text += " " + suffix
+	}
 	tim := time.Unix(int64(msg.Timestamp), 0)
 	time := tim.Format("02-01-06 15:04:05")
 	out += "[\""
@@ -68,6 +71,25 @@ func reactionSuffix(reactions []messages.ReactionSummary) string {
 		parts = append(parts, fmt.Sprintf("%s x%d", r.Emoji, r.Count))
 	}
 	return "[::d]" + strings.Join(parts, " ") + "[-::-]"
+}
+
+// receiptSuffix renders the delivery-state tick marks for an own outgoing
+// message (plan H4): dim double check for delivered, Positive-colored double
+// check for read. Incoming messages and not-yet-receipted sends get no
+// suffix. Reuses the Positive theme color rather than a dedicated key
+// (plan DecisionPoints #4).
+func receiptSuffix(fromMe bool, status int) string {
+	if !fromMe {
+		return ""
+	}
+	switch status {
+	case messages.ReceiptDelivered:
+		return "[::d]✓✓[-::-]"
+	case messages.ReceiptRead:
+		return "[" + config.Config.Colors.Positive + "]✓✓[-]"
+	default:
+		return ""
+	}
 }
 
 // formatRelativeTime formats a Unix timestamp into a WhatsApp Web–style

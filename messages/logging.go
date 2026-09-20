@@ -8,8 +8,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/normen/whatscli/config"
-
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
@@ -67,9 +65,11 @@ func (h *loggingUiHandler) PrintText(text string) {
 }
 
 // defaultDebugLogPath returns <config dir>/whatscli/debug.log, alongside
-// the existing session.db / session_meta.db files.
+// the existing session.db / session_meta.db files. Routed through the
+// sessionFilePath seam (not config.GetSessionFilePath directly) so tests
+// that redirect the seam also redirect the debug log (master audit F10).
 func defaultDebugLogPath() string {
-	return filepath.Join(filepath.Dir(config.GetSessionFilePath()), "debug.log")
+	return filepath.Join(filepath.Dir(sessionFilePath()), "debug.log")
 }
 
 // openDebugLog truncates (crude rotation — one run, one log) and opens the

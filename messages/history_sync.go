@@ -43,13 +43,15 @@ func (sm *SessionManager) loadRecentChats() {
 
 		// P-3: Pre-fetch all group names in a single batch call to avoid N+1 API calls.
 		groupNames := make(map[string]string) // JID string → group name
-		if groups, err := client.GetJoinedGroups(context.Background()); err == nil {
+		groupsCtx, groupsCancel := netCtx()
+		if groups, err := client.GetJoinedGroups(groupsCtx); err == nil {
 			for _, g := range groups {
 				if g.Name != "" {
 					groupNames[g.JID.String()] = g.Name
 				}
 			}
 		}
+		groupsCancel()
 
 		for jid, contact := range contacts {
 			if !contact.Found {
@@ -133,14 +135,9 @@ func (sm *SessionManager) loadRecentChats() {
 func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 	// Signal completion on every exit path (including early returns below)
 	// so cmdBacklog's wait resolves as soon as a sync response is actually
-	// processed, instead of on a fixed timer. Non-blocking: if nobody is
-	// waiting (buffer already full or no listener), this is a no-op.
-	defer func() {
-		select {
-		case sm.historySyncDone <- struct{}{}:
-		default:
-		}
-	}()
+	// processed, instead of on a fixed timer. Wakes every registered waiter
+	// (plan H3.1); with no waiters this is a no-op.
+	defer sm.notifySyncWaiters()
 
 	client := sm.getClient()
 	if client == nil || !client.IsConnected() {

@@ -653,3 +653,51 @@ func TestResolveQuote_PlaceholderWhenNeitherAvailable(t *testing.T) {
 		t.Errorf("resolveQuote() = (%q, %q), want (%q, %q)", id, preview, "unknown-id", "[message]")
 	}
 }
+
+func TestExtractForwarded_ContactAndLocation(t *testing.T) {
+	fwd := &waE2E.ContextInfo{IsForwarded: proto.Bool(true)}
+
+	cases := []struct {
+		name string
+		msg  *waE2E.Message
+		want bool
+	}{
+		{
+			name: "forwarded contact",
+			msg: &waE2E.Message{ContactMessage: &waE2E.ContactMessage{
+				DisplayName: proto.String("Alice"),
+				ContextInfo: fwd,
+			}},
+			want: true,
+		},
+		{
+			name: "non-forwarded contact",
+			msg: &waE2E.Message{ContactMessage: &waE2E.ContactMessage{
+				DisplayName: proto.String("Alice"),
+			}},
+			want: false,
+		},
+		{
+			name: "forwarded location",
+			msg: &waE2E.Message{LocationMessage: &waE2E.LocationMessage{
+				DegreesLatitude: proto.Float64(1.5),
+				ContextInfo:     fwd,
+			}},
+			want: true,
+		},
+		{
+			name: "non-forwarded location",
+			msg: &waE2E.Message{LocationMessage: &waE2E.LocationMessage{
+				DegreesLatitude: proto.Float64(1.5),
+			}},
+			want: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := extractForwarded(c.msg); got != c.want {
+				t.Errorf("extractForwarded = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

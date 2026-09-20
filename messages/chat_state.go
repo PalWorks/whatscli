@@ -71,7 +71,9 @@ func (sm *SessionManager) markChatAsRead(jidStr string) {
 		return
 	}
 
-	if err := client.MarkRead(context.Background(), ids, time.Now(), chatJID, lastSender); err != nil {
+	ctx, cancel := netCtx()
+	defer cancel()
+	if err := client.MarkRead(ctx, ids, time.Now(), chatJID, lastSender); err != nil {
 		return
 	}
 
@@ -122,7 +124,9 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 
 	// For groups, use the group name if available
 	if jid.Server == "g.us" {
-		groupInfo, err := client.GetGroupInfo(context.Background(), jid)
+		ctx, cancel := netCtx()
+		defer cancel()
+		groupInfo, err := client.GetGroupInfo(ctx, jid)
 		if err == nil && groupInfo.Name != "" {
 			return groupInfo.Name
 		}
@@ -186,12 +190,19 @@ func (sm *SessionManager) sendText(wid string, text string) {
 		Conversation: proto.String(text),
 	}
 
-	// Send message
-	resp, err := client.SendMessage(context.Background(), receiver, msg)
+	// The network send (and everything depending on its result) must not
+	// block the command loop (plan H1.2), matching cmdReply/cmdRevoke. Sends
+	// that overlap in flight may reach the server out of order — accepted
+	// tradeoff (plan DecisionPoints #3).
+	go func() {
+		ctx, cancel := netCtx()
+		defer cancel()
+		resp, err := client.SendMessage(ctx, receiver, msg)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to send message: %v", err))
+			return
+		}
 
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to send message: %v", err))
-	} else {
 		// Create a Message struct to save to the database
 		newMsg := Message{
 			Id:           resp.ID,
@@ -199,7 +210,7 @@ func (sm *SessionManager) sendText(wid string, text string) {
 			FromMe:       true,
 			Timestamp:    uint64(time.Now().Unix()),
 			Text:         text,
-			ContactId:    client.Store.ID.String(),
+			ContactId:    ownJID(client),
 			ContactName:  "Me",
 			ContactShort: "Me",
 		}
@@ -215,5 +226,5 @@ func (sm *SessionManager) sendText(wid string, text string) {
 		if isCurrent {
 			sm.uiHandler.NewMessage(newMsg)
 		}
-	}
+	}()
 }

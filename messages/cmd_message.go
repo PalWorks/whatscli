@@ -1,7 +1,6 @@
 package messages
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"mime"
@@ -56,8 +55,10 @@ func downloadMessageTo(client *whatsmeow.Client, msg Message, dir string) (strin
 		return "", fmt.Errorf("unsupported media type %q", msg.MediaType)
 	}
 
+	ctx, cancel := netTransferCtx()
+	defer cancel()
 	// mmsType left empty: DownloadMediaWithPath resolves it from mediaType internally.
-	data, err := client.DownloadMediaWithPath(context.Background(), msg.DirectPath, msg.FileEncSHA256, msg.FileSHA256, msg.MediaKey, waType, "", false)
+	data, err := client.DownloadMediaWithPath(ctx, msg.DirectPath, msg.FileEncSHA256, msg.FileSHA256, msg.MediaKey, waType, "", false)
 	if err != nil {
 		return "", fmt.Errorf("failed to download media: %w", err)
 	}
@@ -333,7 +334,9 @@ func cmdRevoke(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 
 	go func() {
 		revoke := client.BuildRevoke(chatJID, types.EmptyJID, msg.Id)
-		if _, err := client.SendMessage(context.Background(), chatJID, revoke); err != nil {
+		ctx, cancel := netCtx()
+		defer cancel()
+		if _, err := client.SendMessage(ctx, chatJID, revoke); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to revoke message: %v", err))
 			return
 		}
@@ -410,7 +413,9 @@ func cmdReply(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 			},
 		}
 
-		resp, err := client.SendMessage(context.Background(), chatJID, replyMsg)
+		ctx, cancel := netCtx()
+		defer cancel()
+		resp, err := client.SendMessage(ctx, chatJID, replyMsg)
 		if err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to send reply: %v", err))
 			return
@@ -422,7 +427,7 @@ func cmdReply(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 			FromMe:        true,
 			Timestamp:     uint64(time.Now().Unix()),
 			Text:          text,
-			ContactId:     client.Store.ID.String(),
+			ContactId:     ownJID(client),
 			ContactName:   "Me",
 			ContactShort:  "Me",
 			QuotedID:      target.Id,
@@ -487,7 +492,9 @@ func cmdEdit(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		edited := &waE2E.Message{Conversation: proto.String(newText)}
 		built := client.BuildEdit(chatJID, target.Id, edited)
 
-		if _, err := client.SendMessage(context.Background(), chatJID, built); err != nil {
+		ctx, cancel := netCtx()
+		defer cancel()
+		if _, err := client.SendMessage(ctx, chatJID, built); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to send edit: %v", err))
 			return
 		}

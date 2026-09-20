@@ -2,6 +2,86 @@
 
 All notable changes to the WhatsApp CLI application will be documented in this file.
 
+## [v1.8.0] - 2026-07-19
+
+The pending-items rectification release (ImplementationPlan_20260719.md,
+phases H1 through H6): every open item carried from the Phase 4.3 handoff and
+the v1.7.0 master audit is now resolved.
+
+### Added
+- **Per-message read markers**: your own messages show `✓✓` ticks (dim when
+  delivered, Positive-colored when read), driven by live receipt events and
+  stored monotonically so out-of-order receipts can never downgrade read back
+  to delivered. Live receipts only; history-synced messages show no ticks.
+- **Network timeouts everywhere**: every WhatsApp network call is now bounded
+  by two new config keys, `[general] network_timeout` (default 60s, sends and
+  group/receipt operations) and `network_transfer_timeout` (default 300s,
+  media uploads/downloads). Previously a dead connection could hang the
+  affected operation forever. Deliberately exempt: the QR pairing flow
+  (user-paced), `client.Connect` (whatsmeow manages its own dial), and
+  local database calls.
+- **Signal handling**: SIGTERM/SIGINT from outside the terminal now runs the
+  same graceful shutdown as quitting normally — an in-progress voice
+  recording is stopped and its temp file removed instead of both being
+  orphaned. (SIGKILL remains untrappable; documented in README.)
+
+### Fixed
+- **Command loop no longer blocks on the network, anywhere**: `/send` text
+  sends, all seven group operations, `/backlog`'s history request, `/connect`
+  (including the whole QR pairing flow, which previously froze every other
+  command for minutes), `/info` on groups, `/read`, and `/export`'s full-chat
+  read all now run off the command loop with cheap guards kept synchronous.
+  A `connecting` guard shared by startup, `/connect` and auto-reconnect
+  prevents overlapping login attempts now that they are concurrent; `/reset`
+  refuses to run mid-pairing rather than deleting the session files under a
+  live attempt.
+- **QR pairing termination**: the pairing loop now handles whatsmeow closing
+  the QR channel and all terminal events (timeout, client-outdated, etc.).
+  Previously an unscanned QR spun a hot loop forever reading a closed
+  channel.
+- **Session store handle leak**: the whatsmeow `sqlstore.Container` is now
+  closed on every login/reconnect/logout/reset and on shutdown; previously
+  every reconnect leaked a SQLite handle, and `/reset` deleted the database
+  file while it was still open. Reconnects also disconnect the previous
+  client so its websocket and event handler no longer outlive it.
+- **Concurrent `/backlog` waiters**: history-sync completion now wakes every
+  waiter via a per-waiter registry (registered before the request is sent),
+  replacing a single buffered channel that concurrent waiters raced for and
+  a drain-stale-signal workaround with a small race window.
+- **Forwarded styling gap**: forwarded contact and location messages are now
+  detected (previously only text and the five media types were).
+- Auto-reconnect stands down cleanly when it collides with a manual
+  `/connect` instead of burning its five retry attempts against the guard,
+  and no longer stomps a connection that succeeded during its backoff wait.
+- `/backlog` during an incomplete pairing no longer risks a nil-dereference
+  panic from its background goroutine.
+
+### Hardening (from two master-audit passes over the above)
+- Backgrounded text sends and `/reply` no longer risk a nil-pointer panic if
+  a concurrent logout/reset clears the local JID mid-send.
+- `/logout` and `/reset` now share the single `connecting` guard with
+  `login()`, so neither can tear down a client/session store out from under
+  an in-progress pairing, and a reconnect can no longer race `/reset` on the
+  session database.
+- The previous client is disconnected unconditionally on every teardown so
+  whatsmeow's own auto-reconnect is disarmed — a dropped client can no longer
+  resurrect itself as a duplicate event handler.
+- Container handle no longer leaks on the expired-session re-pair path or on a
+  device-store open failure.
+- `/reset` performs its disconnect and session-delete off the `sm.mu` lock,
+  per the project's no-DB-writes-under-lock rule.
+- Abandoned `/backlog` sync waiters are deregistered on every exit path.
+- The SIGTERM/SIGINT handler retries so a signal arriving in the brief window
+  before the TUI screen exists is not lost.
+
+### Testing
+- `/reset` is now fully covered (previously exempt as untestable): a
+  `sessionFilePath` seam redirects all session-file paths into a temp
+  directory. The `/connect` exemption narrowed to just the real dial/QR
+  path — its concurrency guard is covered hermetically.
+- 305 tests passing under `-race` (was 279 at v1.7.0). Coverage: `messages`
+  46.5% (was 41.4% at v1.6.0), root UI 17.4% (was 14.2%).
+
 ## [v1.7.0] - 2026-07-18
 
 Phase 5 ("Feature Growth") of the implementation plan, items 5.1 through 5.8,

@@ -884,3 +884,137 @@ func TestGetMessages_AttachesReactionsToMultipleMessages(t *testing.T) {
 		t.Errorf("expected r7 to have no reactions, got %+v", msgs[1].Reactions)
 	}
 }
+
+func TestSetReceiptStatus_RoundTrip(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "r1", ChatId: "chat@s.whatsapp.net", FromMe: true, Timestamp: 100, Text: "hello", ContactId: "me@s.whatsapp.net"})
+
+	if err := md.SetReceiptStatus([]string{"r1"}, ReceiptDelivered); err != nil {
+		t.Fatalf("SetReceiptStatus failed: %v", err)
+	}
+
+	got, err := md.GetMessageByID("r1")
+	if err != nil {
+		t.Fatalf("GetMessageByID failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptDelivered {
+		t.Errorf("ReceiptStatus = %d, want %d (delivered)", got.ReceiptStatus, ReceiptDelivered)
+	}
+}
+
+func TestSetReceiptStatus_MonotonicNeverDowngrades(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "r2", ChatId: "chat@s.whatsapp.net", FromMe: true, Timestamp: 100, Text: "hello", ContactId: "me@s.whatsapp.net"})
+
+	if err := md.SetReceiptStatus([]string{"r2"}, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus(read) failed: %v", err)
+	}
+	// A late "delivered" receipt (out-of-order arrival) must not downgrade.
+	if err := md.SetReceiptStatus([]string{"r2"}, ReceiptDelivered); err != nil {
+		t.Fatalf("SetReceiptStatus(delivered) failed: %v", err)
+	}
+
+	got, err := md.GetMessageByID("r2")
+	if err != nil {
+		t.Fatalf("GetMessageByID failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptRead {
+		t.Errorf("ReceiptStatus = %d, want %d (read must survive a late delivered receipt)", got.ReceiptStatus, ReceiptRead)
+	}
+}
+
+func TestSetReceiptStatus_MultipleIDs(t *testing.T) {
+	md := newTestDB(t)
+	addTestMsg(t, md, Message{Id: "m1", ChatId: "chat@s.whatsapp.net", FromMe: true, Timestamp: 100, Text: "a", ContactId: "me@s.whatsapp.net"})
+	addTestMsg(t, md, Message{Id: "m2", ChatId: "chat@s.whatsapp.net", FromMe: true, Timestamp: 101, Text: "b", ContactId: "me@s.whatsapp.net"})
+	addTestMsg(t, md, Message{Id: "m3", ChatId: "chat@s.whatsapp.net", FromMe: true, Timestamp: 102, Text: "c", ContactId: "me@s.whatsapp.net"})
+
+	if err := md.SetReceiptStatus([]string{"m1", "m3"}, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus failed: %v", err)
+	}
+
+	for id, want := range map[string]int{"m1": ReceiptRead, "m2": ReceiptNone, "m3": ReceiptRead} {
+		got, err := md.GetMessageByID(id)
+		if err != nil {
+			t.Fatalf("GetMessageByID(%s) failed: %v", id, err)
+		}
+		if got.ReceiptStatus != want {
+			t.Errorf("%s: ReceiptStatus = %d, want %d", id, got.ReceiptStatus, want)
+		}
+	}
+}
+
+func TestSetReceiptStatus_EmptyIDsNoOp(t *testing.T) {
+	md := newTestDB(t)
+	if err := md.SetReceiptStatus(nil, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus(nil) should be a no-op, got error: %v", err)
+	}
+	if err := md.SetReceiptStatus([]string{}, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus(empty) should be a no-op, got error: %v", err)
+	}
+}
+
+func TestSetReceiptStatus_UnknownIDIgnored(t *testing.T) {
+	md := newTestDB(t)
+	// Receipts routinely reference messages sent before local history starts.
+	if err := md.SetReceiptStatus([]string{"never-stored"}, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus on unknown ID should not error, got: %v", err)
+	}
+}
+
+func TestInitWithDB_UpgradesSchemaMissingReceiptColumn(t *testing.T) {
+	db, err := sql.Open("sqlite3", ":memory:")
+	if err != nil {
+		t.Fatalf("failed to open in-memory db: %v", err)
+	}
+
+	// Recreate the pre-H4 schema: everything through the Phase 5 quote
+	// columns, but no receipt_status.
+	_, err = db.Exec(`
+	CREATE TABLE conversations (
+		jid TEXT PRIMARY KEY, name TEXT, last_msg_time INTEGER, preview TEXT,
+		unread INTEGER, is_pinned BOOLEAN, is_archived BOOLEAN DEFAULT 0
+	);
+	CREATE TABLE messages (
+		id TEXT PRIMARY KEY, chat_id TEXT, contact_id TEXT, contact_name TEXT,
+		contact_short TEXT, timestamp INTEGER, from_me BOOLEAN, forwarded BOOLEAN, text TEXT,
+		media_type TEXT DEFAULT '', mimetype TEXT DEFAULT '', media_key BLOB,
+		direct_path TEXT DEFAULT '', file_sha256 BLOB, file_enc_sha256 BLOB,
+		file_length INTEGER DEFAULT 0, file_name TEXT DEFAULT '', deleted BOOLEAN DEFAULT 0,
+		quoted_id TEXT DEFAULT '', quoted_preview TEXT DEFAULT ''
+	);
+	`)
+	if err != nil {
+		t.Fatalf("failed to create pre-H4 schema: %v", err)
+	}
+	_, err = db.Exec(`INSERT INTO messages (id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text)
+		VALUES ('legacy3', 'chat@s.whatsapp.net', 'c1', 'Bob', 'B', 500, 1, 0, 'pre-receipt-feature message')`)
+	if err != nil {
+		t.Fatalf("failed to insert legacy row: %v", err)
+	}
+
+	md := &MessageDatabase{}
+	if err := md.InitWithDB(db); err != nil {
+		t.Fatalf("InitWithDB on legacy schema failed: %v", err)
+	}
+
+	// The legacy row reads back with the zero-value status, and the column
+	// is writable.
+	got, err := md.GetMessageByID("legacy3")
+	if err != nil {
+		t.Fatalf("GetMessageByID on upgraded schema failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptNone {
+		t.Errorf("legacy row ReceiptStatus = %d, want %d", got.ReceiptStatus, ReceiptNone)
+	}
+	if err := md.SetReceiptStatus([]string{"legacy3"}, ReceiptRead); err != nil {
+		t.Fatalf("SetReceiptStatus on upgraded schema failed: %v", err)
+	}
+	got, err = md.GetMessageByID("legacy3")
+	if err != nil {
+		t.Fatalf("GetMessageByID after update failed: %v", err)
+	}
+	if got.ReceiptStatus != ReceiptRead {
+		t.Errorf("upgraded row ReceiptStatus = %d, want %d", got.ReceiptStatus, ReceiptRead)
+	}
+}

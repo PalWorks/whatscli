@@ -28,8 +28,11 @@ func cmdRead(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		return
 	}
 
-	sm.markChatAsRead(receiver)
-	sm.uiHandler.PrintText("Marked chat as read")
+	// markChatAsRead sends real read receipts over the network (bounded by
+	// netCtx, but still up to network_timeout) — run it off the command loop
+	// (audit F3), like setCurrentReceiver's auto-mark already does.
+	go sm.markChatAsRead(receiver)
+	sm.uiHandler.PrintText("Marking chat as read")
 }
 
 // cmdInfo shows information about the current chat.
@@ -54,30 +57,38 @@ func cmdInfo(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		return
 	}
 
-	if jid.Server == types.GroupServer {
-		// Group chat info
-		groupInfo, err := client.GetGroupInfo(context.Background(), jid)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("failed to get group info: %v", err))
+	// The group branch is a real server round trip (GetGroupInfo — audit
+	// F2, the last unbounded network call left on the command loop), and
+	// the contact branch does a full-chat DB read — both run backgrounded.
+	go func() {
+		if jid.Server == types.GroupServer {
+			// Group chat info
+			ctx, cancel := netCtx()
+			defer cancel()
+			groupInfo, err := client.GetGroupInfo(ctx, jid)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("failed to get group info: %v", err))
+				return
+			}
+
+			var lines []string
+			lines = append(lines, fmt.Sprintf("[::b]Group: %s[-:-:-]", groupInfo.Name))
+			lines = append(lines, fmt.Sprintf("  JID: %s", jid.String()))
+			if groupInfo.Topic != "" {
+				lines = append(lines, fmt.Sprintf("  Topic: %s", groupInfo.Topic))
+			}
+			lines = append(lines, fmt.Sprintf("  Participants: %d", len(groupInfo.Participants)))
+			if groupInfo.OwnerJID != (types.JID{}) {
+				lines = append(lines, fmt.Sprintf("  Owner: %s", groupInfo.OwnerJID.String()))
+			}
+			if !groupInfo.GroupCreated.IsZero() {
+				lines = append(lines, fmt.Sprintf("  Created: %s", groupInfo.GroupCreated.Format("2006-01-02 15:04")))
+			}
+			sm.uiHandler.PrintText(strings.Join(lines, "\n"))
 			return
 		}
 
-		var lines []string
-		lines = append(lines, fmt.Sprintf("[::b]Group: %s[-:-:-]", groupInfo.Name))
-		lines = append(lines, fmt.Sprintf("  JID: %s", jid.String()))
-		if groupInfo.Topic != "" {
-			lines = append(lines, fmt.Sprintf("  Topic: %s", groupInfo.Topic))
-		}
-		lines = append(lines, fmt.Sprintf("  Participants: %d", len(groupInfo.Participants)))
-		if groupInfo.OwnerJID != (types.JID{}) {
-			lines = append(lines, fmt.Sprintf("  Owner: %s", groupInfo.OwnerJID.String()))
-		}
-		if !groupInfo.GroupCreated.IsZero() {
-			lines = append(lines, fmt.Sprintf("  Created: %s", groupInfo.GroupCreated.Format("2006-01-02 15:04")))
-		}
-		sm.uiHandler.PrintText(strings.Join(lines, "\n"))
-	} else {
-		// Direct message contact info
+		// Direct message contact info (local store + local DB)
 		contact, err := client.Store.Contacts.GetContact(context.Background(), jid)
 		if err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to get contact: %v", err))
@@ -113,7 +124,7 @@ func cmdInfo(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		}
 
 		sm.uiHandler.PrintText(strings.Join(lines, "\n"))
-	}
+	}()
 }
 
 // cmdMore loads older messages for the current chat (pagination).

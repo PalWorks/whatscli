@@ -1,6 +1,6 @@
 ## Project
 
-WhatsCLI is a terminal-based WhatsApp client in Go 1.24 using whatsmeow (multi-device protocol) and tview (TUI).
+WhatsCLI is a terminal-based WhatsApp client in Go 1.25 using whatsmeow (multi-device protocol) and tview (TUI).
 
 ## Build & Test
 
@@ -14,7 +14,7 @@ WhatsCLI is a terminal-based WhatsApp client in Go 1.24 using whatsmeow (multi-d
 Two packages separated by concern:
 
 - `main` (root) — TUI layer: `main.go`, `app_context.go`, `ui_layout.go`, `ui_handler.go`, `ui_keybindings.go`, `ui_render.go`, `ui_helpers.go`
-- `messages/` — Business logic: `session_manager.go`, `connection.go`, `event_handler.go`, `history_sync.go`, `chat_state.go`, `storage.go`, `cmd_registry.go`, `cmd_*.go`
+- `messages/` — Business logic: `session_manager.go`, `connection.go`, `netctx.go`, `event_handler.go`, `history_sync.go`, `chat_state.go`, `storage.go`, `cmd_registry.go`, `cmd_*.go`
 - `config/` — INI configuration with XDG paths
 - `qrcode/` — ANSI QR code rendering
 

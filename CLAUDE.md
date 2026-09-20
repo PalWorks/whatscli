@@ -28,7 +28,7 @@ Two packages, cleanly separated:
 | Package | Responsibility | Key Files |
 |---------|---------------|-----------|
 | `main` (root) | TUI layer (tview) | `main.go`, `app_context.go`, `ui_layout.go`, `ui_handler.go`, `ui_keybindings.go`, `ui_render.go`, `ui_helpers.go` |
-| `messages/` | Business logic, WhatsApp connection, storage | `session_manager.go`, `connection.go`, `event_handler.go`, `history_sync.go`, `chat_state.go`, `storage.go`, `cmd_*.go` |
+| `messages/` | Business logic, WhatsApp connection, storage | `session_manager.go`, `connection.go`, `netctx.go`, `event_handler.go`, `history_sync.go`, `chat_state.go`, `storage.go`, `cmd_*.go` |
 | `config/` | INI config with XDG paths | `settings.go` |
 | `qrcode/` | ANSI QR code rendering | `qrcode.go` |
 
@@ -40,8 +40,11 @@ Backend → `UiMessageHandler` interface → TUI updates.
 1. **Never read `sm.client` without a lock** — always use `sm.getClient()` (acquires RLock).
 2. **Never hold `sm.mu` while doing DB writes** — acquire lock, mutate PQ/map, release lock, then write to SQLite.
 3. **Use `snapshotPQ()`** to create a deep copy of the priority queue before UI updates.
-4. **All channels are buffered (size 10)** — `BatteryChannel`, `StatusChannel`, `CommandChannel`, `ChatChannel`, `TextChannel`.
-5. **Auto-reconnect** uses exponential backoff (2s → 30s, max 5 attempts). Respects `sm.loggedOut` and `sm.started` flags.
+4. **Both channels are buffered (size 10)** — `StatusChannel`, `CommandChannel`.
+5. **Auto-reconnect** uses exponential backoff (2s → 30s, max 5 attempts). Respects `sm.loggedOut` and `sm.started` flags, aborts if already connected, and stands down on `errAlreadyConnecting`.
+6. **Network calls always use `netCtx()`/`netTransferCtx()`** (`netctx.go`), never `context.Background()`. Exempt: the QR pairing channel (user-paced), `client.Connect` (whatsmeow manages its own dial), and local sqlstore/contact-store calls.
+7. **Network I/O never runs on the command loop** — keep cheap guards (params, JID parse, DB single-row lookup, connectivity check) synchronous, then `go func(){}()` the network call and everything depending on its result.
+8. **All login paths go through `login()`** — its `sm.connecting` guard is the single point preventing overlapping attempts (startup, `/connect`, auto-reconnect).
 
 ## Command System
 

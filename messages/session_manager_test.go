@@ -34,7 +34,6 @@ func newTestSessionManager(t *testing.T) (*SessionManager, *MockUiHandler) {
 	sm.convByJID = make(map[string]*Conversation)
 	sm.CommandChannel = make(chan Command, 10)
 	sm.StatusChannel = make(chan StatusMsg, 10)
-	sm.historySyncDone = make(chan struct{}, 1)
 	sm.stop = make(chan struct{})
 
 	return sm, mock

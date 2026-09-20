@@ -67,16 +67,17 @@ func cmdExport(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 		return
 	}
 
-	msgs, err := sm.db.GetMessages(chatID)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
-		return
-	}
-
-	// JSON marshaling and the scrypt KDF (deliberately slow/memory-hard) are
-	// both slow enough to run off the command loop, matching the convention
-	// used for other non-trivial I/O in this codebase.
+	// The full-chat DB read, JSON marshaling and the scrypt KDF (deliberately
+	// slow/memory-hard) all run off the command loop (plan H2.3) — a large
+	// chat history is a different cost class than the single-row lookups
+	// other commands do synchronously.
 	go func() {
+		msgs, err := sm.db.GetMessages(chatID)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
+			return
+		}
+
 		if err := exportMessagesEncrypted(msgs, path, passphrase); err != nil {
 			sm.uiHandler.PrintError(err)
 			return

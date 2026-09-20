@@ -2,7 +2,6 @@ package messages
 
 import (
 	"container/heap"
-	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -48,82 +47,95 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 		return
 	}
 
-	jid, err := types.ParseJID(receiver)
-	if err != nil {
+	if _, err := types.ParseJID(receiver); err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
 		return
 	}
-	_ = jid // used for anchor construction
 
 	sm.uiHandler.PrintText("Requesting message history from WhatsApp servers...")
 
 	quantity := config.Config.General.BacklogMsgQuantity
 
-	// Build anchor from oldest known message (if any)
-	var anchor *types.MessageInfo
-	msgs, err := sm.db.GetMessages(receiver)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
-		return
-	}
-	existingCount := len(msgs)
-
-	if existingCount > 0 {
-		oldest := msgs[0]
-		chatJID, err := types.ParseJID(oldest.ChatId)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("invalid chat JID %q: %v", oldest.ChatId, err))
-			return
-		}
-		senderJID, err := types.ParseJID(oldest.ContactId)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("invalid sender JID %q: %v", oldest.ContactId, err))
-			return
-		}
-
-		anchor = &types.MessageInfo{
-			ID: oldest.Id,
-			MessageSource: types.MessageSource{
-				Chat:     chatJID,
-				Sender:   senderJID,
-				IsFromMe: oldest.FromMe,
-			},
-			Timestamp: time.Unix(int64(oldest.Timestamp), 0),
-		}
-		sm.uiHandler.PrintText(fmt.Sprintf("Requesting %d messages before: %s (%s)",
-			quantity, oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
-	} else {
-		sm.uiHandler.PrintText(fmt.Sprintf("Requesting latest %d messages...", quantity))
-	}
-
-	req := client.BuildHistorySyncRequest(anchor, quantity)
-
-	// Send to primary device (self)
-	target := *client.Store.ID
-	target.Device = 0
-
-	// Drain any stale completion signal left over from an unrelated prior
-	// sync, so the wait below can't mistake it for the response to *this*
-	// request.
-	select {
-	case <-sm.historySyncDone:
-	default:
-	}
-
-	resp, err := client.SendMessage(context.Background(), target, req)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
-		return
-	}
-
-	sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
-
-	// History sync arrives asynchronously; wait for the actual completion
-	// signal from processHistorySync rather than a fixed sleep, falling
-	// back to a generous timeout in case the response never arrives.
+	// Everything from the anchor lookup (a full-chat DB read) through the
+	// network send and the wait for the response runs off the command loop
+	// (plan H1.3).
 	go func() {
+		// Build anchor from oldest known message (if any)
+		var anchor *types.MessageInfo
+		msgs, err := sm.db.GetMessages(receiver)
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
+			return
+		}
+		existingCount := len(msgs)
+
+		if existingCount > 0 {
+			oldest := msgs[0]
+			chatJID, err := types.ParseJID(oldest.ChatId)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("invalid chat JID %q: %v", oldest.ChatId, err))
+				return
+			}
+			senderJID, err := types.ParseJID(oldest.ContactId)
+			if err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("invalid sender JID %q: %v", oldest.ContactId, err))
+				return
+			}
+
+			anchor = &types.MessageInfo{
+				ID: oldest.Id,
+				MessageSource: types.MessageSource{
+					Chat:     chatJID,
+					Sender:   senderJID,
+					IsFromMe: oldest.FromMe,
+				},
+				Timestamp: time.Unix(int64(oldest.Timestamp), 0),
+			}
+			sm.uiHandler.PrintText(fmt.Sprintf("Requesting %d messages before: %s (%s)",
+				quantity, oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
+		} else {
+			sm.uiHandler.PrintText(fmt.Sprintf("Requesting latest %d messages...", quantity))
+		}
+
+		req := client.BuildHistorySyncRequest(anchor, quantity)
+
+		// Send to primary device (self). During QR pairing IsConnected can
+		// be true while Store.ID is still nil (audit F7) — guard rather
+		// than panic the process from a goroutine.
+		storeID := client.Store.ID
+		if storeID == nil {
+			sm.uiHandler.PrintError(errors.New("not logged in yet — finish pairing first"))
+			return
+		}
+		target := *storeID
+		target.Device = 0
+
+		// Register interest in the next completed sync BEFORE sending the
+		// request (plan H3.1): a response processed between the send and the
+		// wait can then never slip through unobserved, and concurrent
+		// /backlog calls no longer race for a single signal — every waiter
+		// is woken by every completed sync. This replaces the old
+		// drain-stale-signal workaround entirely. cancelWaiter deregisters
+		// this waiter on every exit path so a timed-out or aborted backlog
+		// does not leave it lingering in the registry (master audit F6).
+		syncDone, cancelWaiter := sm.addSyncWaiter()
+		defer cancelWaiter()
+
+		ctx, cancel := netCtx()
+		resp, err := client.SendMessage(ctx, target, req)
+		cancel()
+		if err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
+			return
+		}
+
+		sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
+
+		// History sync arrives asynchronously; wait for the actual completion
+		// signal from processHistorySync rather than a fixed sleep, falling
+		// back to a generous timeout in case the response never arrives.
 		select {
-		case <-sm.historySyncDone:
+		case <-syncDone:
 		case <-time.After(30 * time.Second):
 		case <-sm.stop:
 			return
@@ -162,7 +174,9 @@ func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string,
 			sm.uiHandler.PrintError(errors.New("not connected"))
 			return
 		}
-		groups, err := client.GetJoinedGroups(context.Background())
+		ctx, cancel := netCtx()
+		defer cancel()
+		groups, err := client.GetJoinedGroups(ctx)
 		if err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to fetch groups: %v", err))
 			return

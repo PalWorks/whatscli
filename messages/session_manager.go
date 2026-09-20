@@ -18,6 +18,15 @@ import (
 	waLog "go.mau.fi/whatsmeow/util/log"
 )
 
+// sessionFilePath returns the base path for the WhatsApp session files
+// (session.db, session_meta.db). A package-level function variable rather
+// than a direct call (plan H5.1) so tests can point it at a temp directory:
+// config.GetSessionFilePath resolves through adrg/xdg, whose package init()
+// reads XDG_CONFIG_HOME before any t.Setenv can take effect, making the
+// real path impossible to sandbox otherwise. Production code never
+// reassigns this.
+var sessionFilePath = config.GetSessionFilePath
+
 // SessionManager deals with the connection and receives commands from the UI
 // it updates the UI accordingly
 type SessionManager struct {
@@ -31,6 +40,7 @@ type SessionManager struct {
 	statusInfo      SessionStatus
 	started         bool
 	reconnecting    bool // guards against duplicate reconnect goroutines
+	connecting      bool // set while a login attempt (incl. QR pairing) is in progress
 	loggedOut       bool // set on explicit logout to suppress auto-reconnect
 	stop            chan struct{}
 	eventHandler    *eventHandler
@@ -45,10 +55,13 @@ type SessionManager struct {
 	debugLogFile *os.File
 	debugLogger  waLog.Logger
 
-	// historySyncDone is signaled (non-blocking, buffered 1) each time
-	// processHistorySync finishes, so cmdBacklog can wait for a real
-	// completion signal instead of a fixed sleep.
-	historySyncDone chan struct{}
+	// syncWaiters holds one channel per goroutine currently waiting for a
+	// history sync to complete (see addSyncWaiter/notifySyncWaiters).
+	// Guarded by mu. Replaces the old single buffered historySyncDone
+	// channel, which concurrent /backlog waiters raced for: one waiter
+	// consumed the only signal and the others sat out their full fallback
+	// timeout (plan H3.1).
+	syncWaiters []chan struct{}
 
 	// Phase 5.7 voice recording state, guarded by mu like every other field
 	// here. recordCancel is non-nil exactly while a recording is in
@@ -100,7 +113,6 @@ func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	sm.uiHandler = finalHandler
 	sm.StatusChannel = make(chan StatusMsg, 10)
 	sm.CommandChannel = make(chan Command, 10)
-	sm.historySyncDone = make(chan struct{}, 1)
 	sm.eventHandler = &eventHandler{sm: sm}
 	return nil
 }
@@ -117,21 +129,12 @@ func (sm *SessionManager) StartManager() error {
 }
 
 func (sm *SessionManager) runManager() error {
-	client, err := sm.getConnection()
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to create WhatsApp connection: %v", err))
-		return err
-	}
-
-	if client == nil {
-		sm.uiHandler.PrintError(errors.New("could not establish WhatsApp connection"))
-		return errors.New("could not establish WhatsApp connection")
-	}
-
-	// Run login asynchronously to allow command processing
+	// Startup login runs in the background through the same guarded login()
+	// path as /connect and auto-reconnect (plan H1.5), so no two attempts
+	// can ever overlap. A failed startup connection no longer prevents the
+	// command loop from starting: the user can still /reset or /connect.
 	go func() {
-		err = sm.loginWithConnection(client)
-		if err != nil {
+		if err := sm.login(); err != nil {
 			sm.uiHandler.PrintError(err)
 		}
 	}()
@@ -172,6 +175,47 @@ func (sm *SessionManager) runManager() error {
 	}
 }
 
+// addSyncWaiter registers interest in the next completed history sync and
+// returns a channel that notifySyncWaiters will close, plus a cancel func
+// that deregisters the waiter. Register BEFORE triggering the action whose
+// sync response you want to observe, so a fast response can never slip
+// through unobserved; call cancel (e.g. via defer) once done waiting so an
+// abandoned waiter — timeout, error, or shutdown — does not linger in the
+// registry until some later, unrelated sync (master audit F6). cancel is
+// idempotent and safe after the channel was already closed by notify (it
+// simply finds nothing to remove).
+func (sm *SessionManager) addSyncWaiter() (<-chan struct{}, func()) {
+	ch := make(chan struct{})
+	sm.mu.Lock()
+	sm.syncWaiters = append(sm.syncWaiters, ch)
+	sm.mu.Unlock()
+	cancel := func() {
+		sm.mu.Lock()
+		defer sm.mu.Unlock()
+		for i, c := range sm.syncWaiters {
+			if c == ch {
+				sm.syncWaiters = append(sm.syncWaiters[:i], sm.syncWaiters[i+1:]...)
+				return
+			}
+		}
+	}
+	return ch, cancel
+}
+
+// notifySyncWaiters wakes every registered sync waiter exactly once (by
+// closing its channel) and clears the registry. Closing happens outside the
+// lock; close on a channel never blocks, but there is no reason to hold mu
+// while doing it.
+func (sm *SessionManager) notifySyncWaiters() {
+	sm.mu.Lock()
+	waiters := sm.syncWaiters
+	sm.syncWaiters = nil
+	sm.mu.Unlock()
+	for _, ch := range waiters {
+		close(ch)
+	}
+}
+
 // Shutdown performs a clean shutdown, saving data and disconnecting
 func (sm *SessionManager) Shutdown() {
 	sm.mu.Lock()
@@ -190,6 +234,18 @@ func (sm *SessionManager) Shutdown() {
 	// but we can ensure it here too just in case
 	if client := sm.getClient(); client != nil && client.IsConnected() {
 		client.Disconnect()
+	}
+
+	// Close the whatsmeow session store container (plan H2.1) — after the
+	// disconnect above, nothing uses its SQLite handle anymore.
+	sm.mu.Lock()
+	container := sm.container
+	sm.container = nil
+	sm.mu.Unlock()
+	if container != nil {
+		if err := container.Close(); err != nil {
+			fmt.Printf("warning: failed to close session store: %v\n", err)
+		}
 	}
 
 	// Close the metadata database to release file handles and flush WAL

@@ -72,11 +72,27 @@ type Message struct {
 	QuotedID      string
 	QuotedPreview string
 
+	// ReceiptStatus tracks delivery state for own outgoing messages (plan
+	// H4), driven by live events.Receipt updates: ReceiptNone (sent, or an
+	// incoming message where no state is tracked), ReceiptDelivered, or
+	// ReceiptRead. Upgrades are monotonic — see SetReceiptStatus.
+	ReceiptStatus int
+
 	// Reactions is populated by the storage layer at read time (a join
 	// against the reactions table, keyed by message ID) — it is not a column
 	// on the messages table and is never set by AddMessage.
 	Reactions []ReactionSummary
 }
+
+// Receipt status values for Message.ReceiptStatus. The numeric order matters:
+// SetReceiptStatus only ever raises the stored value, so a late "delivered"
+// receipt can never downgrade an already-"read" message (WhatsApp receipt
+// ordering differs between Android and iOS).
+const (
+	ReceiptNone      = 0
+	ReceiptDelivered = 1
+	ReceiptRead      = 2
+)
 
 // ReactionSummary aggregates all reactions of one emoji on a message, e.g.
 // "👍" with Count 2 for two people reacting with a thumbs-up.
