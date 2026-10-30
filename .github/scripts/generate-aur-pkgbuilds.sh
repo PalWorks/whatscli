@@ -18,6 +18,7 @@ pkgver=${pkgver}
 pkgrel=1
 pkgdesc='A command line interface for WhatsApp, based on go-whatsmeow and tview'
 arch=('x86_64' 'aarch64')
+license=('AGPL-3.0-only')
 url='https://github.com/${repo}'
 makedepends=('go' 'git' 'gcc')
 source=("\${pkgname}-\${pkgver}.tar.gz::https://github.com/${repo}/archive/v\${pkgver}.tar.gz")

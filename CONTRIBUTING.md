@@ -4,6 +4,10 @@ Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-se
 
 _Last updated: 2026-10-31T01:11:57+05:30 (corrected the command walkthrough, which referred to a non-existent `registerCommand`, and added the branch and review rules)_
 
+## Licensing of contributions
+
+WhatsCLI is dual licensed under AGPL-3.0-only and a paid commercial license ([LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)). By opening a pull request you agree that PalWorks may distribute your contribution under both licenses. Questions: support@palworks.ai.
+
 ## Workflow
 
 - **Branches:** `master` is the integration branch; CI runs on pushes and pull requests to it. Work on `feature/<name>`, `fix/<name>` or `chore/<name>` and open a pull request against `PalWorks/whatscli`.

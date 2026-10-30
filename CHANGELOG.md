@@ -9,6 +9,7 @@ _Last updated: 2026-10-31T01:11:55+05:30 (added [Unreleased] for the chore/catch
 Branch `chore/catch-up`, 6 commits (`eee54c7` to `f5a9b66`, 2026-10-31). Not yet merged or tagged. Release gate: the live-account checklist in [TESTING.md](TESTING.md) (ROADMAP row 15).
 
 ### Added
+- Dual licence: AGPL-3.0-only (`LICENSE`) plus paid commercial licence (`LICENSE-COMMERCIAL.md`, support@palworks.ai). GitHub private vulnerability reporting enabled.
 - Message commands and keys, previously bound to commands that did not exist: `/download` (`d`), `/open` (`o`), `/show` (`s`, images only), `/url` (`u`), `/revoke` (`r`, own messages only). All take a message ID.
 - Media metadata is stored with every message (kind, mime type, file name, minimal serialised media proto) for live messages, history sync and sent media. Sent media is now stored and shown like sent text.
 - Idempotent schema migration for the four new `messages` columns (`media_kind`, `mime_type`, `file_name`, `media_proto`).

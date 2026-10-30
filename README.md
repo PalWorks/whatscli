@@ -462,7 +462,6 @@ Short version: incoming "delete for everyone" requests are checked before they c
 The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMAP.md). Headlines:
 
 - Release gate: run the live-account checklist and a release-candidate tag (rows 15 and 17).
-- Decide the licence (row 16).
 - Merge old `@lid` chats into phone-number chats (row 13, approved, after the live checklist).
 - UI fixes: `show` freeze, status message ordering, non-blocking `/url` (rows 5, 6, 10).
 - macOS, Raspberry Pi and Homebrew releases are deferred until someone asks (row 8).
@@ -504,7 +503,10 @@ git commit -m "feat: describe the change"
 
 ## License
 
-See ROADMAP row 16.
+WhatsCLI is dual licensed (updated 2026-10-31T01:20:43+05:30):
+
+- [GNU AGPL-3.0-only](LICENSE) for open source use.
+- A paid commercial license for use without the AGPL obligations. See [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) or write to support@palworks.ai.
 
 ---
 

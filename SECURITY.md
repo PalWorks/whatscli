@@ -47,8 +47,8 @@ WhatsApp login is a QR scan from the phone (linked device). There are no passwor
 
 Do not post exploit details in a public issue.
 
-1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). [Unverified] This feature may not be enabled yet (ROADMAP row 31).
-2. Otherwise: open an issue titled "Security: please contact me" with no details, and the owner will reply with a private channel.
+1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). Enabled 2026-10-31T01:20:43+05:30.
+2. Otherwise: email support@palworks.ai.
 
 Include the version (`/help` shows it), the operating system, what you did, what happened, and what you expected. There is no bounty and no fixed response time; the project is maintained by one owner.
 

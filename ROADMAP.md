@@ -29,7 +29,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 23 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | `.github/copilot-instructions.md` still says Go 1.24 and 17 methods; `.github/PULL_REQUEST_TEMPLATE.md` is the 2025 whatsmeow-migration text. Copilot users get wrong rules. Done 2026-10-31T01:13:06+05:30. | Replace both with a pointer to AGENTS.md and a generic PR checklist (docs pass was not allowed to edit `.github/`). |
 | 24 | §3.4 | P3 | **Open** | T | L | 2026-10-31 | The `i` key sends `info` with the message ID, but `cmdInfo` ignores it and prints chat or group info, not message details. | Either implement message info or relabel the key and README entry as "chat info". |
 | 25 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | `loadRecentChats` (contact list import) still accepts only phone-number and group chats, so `@lid` contacts are not imported at start. | Reuse `isHistoryChatServer` and `canonicalChatJID` there, with a test. |
-| 31 | §3.5 | P3 | **Open** | T | L | 2026-10-31 | SECURITY.md points reporters to GitHub private vulnerability reporting, which may not be enabled on `PalWorks/whatscli`. A reporter would have no private channel. | Owner enables it in repository Settings, Code security; or names another contact in SECURITY.md. |
+| 31 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | SECURITY.md points reporters to GitHub private vulnerability reporting, which may not be enabled on `PalWorks/whatscli`. A reporter would have no private channel. | Owner enables it in repository Settings, Code security; or names another contact in SECURITY.md. |
 | 16 | §3.5 | P2 | **Done** | S | M | 2026-10-31 | Repository had no `LICENSE` file. | Dual licence added: AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). [§8.16](#816-licence) |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
@@ -136,7 +136,7 @@ Orientation only; detail is in CHANGELOG.md.
 | 23 | Stale `.github/copilot-instructions.md` and PR template | §3.5 | **Done** | T | L |
 | 24 | `info` key ignores the message ID | §3.4 | **Open** | T | L |
 | 25 | `loadRecentChats` ignores `@lid` | §3.3 | **Open** | S | L |
-| 31 | Private vulnerability reporting not confirmed enabled | §3.5 | **Open** | T | L |
+| 31 | Private vulnerability reporting not confirmed enabled | §3.5 | **Done** | T | L |
 | 16 | Licence | §3.5 | **Done** | S | M |
 | 8 | Release targets dropped (finding 8) | §3.1 | **Deferred**: owner decision D4 | M | M |
 | 18 | R3 admin revoke lookup cost | §3.2 | **Deferred** | S | L |
