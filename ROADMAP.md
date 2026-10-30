@@ -1,6 +1,6 @@
 # Roadmap & Backlog: WhatsCLI
 
-> **The single source of truth for forward-looking work.** Anything not shipped lives here. If an item needs more than a paragraph, it has a subsection in §8 or a file linked from §6. Shipped history is in [CHANGELOG.md](CHANGELOG.md), rationale in [DECISIONS.md](DECISIONS.md), system design in [ARCHITECTURE.md](ARCHITECTURE.md), the verification procedure in [TESTING.md](TESTING.md).
+> **The single source of truth for forward-looking work.** Anything not shipped lives here. If an item needs more than a paragraph, it has a subsection in §8 or a file linked from §6. Shipped history is in [CHANGELOG.md](CHANGELOG.md), system design in [ARCHITECTURE.md](ARCHITECTURE.md), the verification procedure in [TESTING.md](TESTING.md).
 >
 > **Start at §0.** It lists every open item, one row each. §2.2 is the ledger: the same open rows plus every closed one.
 >
@@ -161,11 +161,11 @@ Orientation only; detail is in CHANGELOG.md.
 
 ### 3.1 Release and CI
 
-Rows 8, 12, 17. Releases come only from `.github/workflows/release.yml`; see DECISIONS.md D4 to D6.
+Rows 8, 12, 17. Releases come only from `.github/workflows/release.yml`.
 
 ### 3.2 Security hardening
 
-Rows 18 to 22. The authorisation, allowlist and containment rules are in SECURITY.md and DECISIONS.md D14, D15, D17.
+Rows 18 to 22. The authorisation, allowlist and containment rules are in SECURITY.md.
 
 ### 3.3 Chat and message behaviour
 
@@ -220,7 +220,6 @@ Rows 14, 15. No test talks to WhatsApp; this area exists to keep that gap visibl
 |---|---|
 | TESTING.md | Test commands, conventions, the live-account checklist (steps 1 to 21) |
 | SECURITY.md | Threat notes, controls, how to report |
-| DECISIONS.md | D1 to D20 with options and consequences |
 | ARCHITECTURE.md | Components, data flow, storage, JID handling |
 | docs/archive/ | Four historic reports from February 2026, kept unchanged; open findings from them are tracked here |
 

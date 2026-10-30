@@ -13,7 +13,7 @@ WhatsCLI is dual licensed under AGPL-3.0-only and a paid commercial license ([LI
 - **Branches:** `master` is the integration branch; CI runs on pushes and pull requests to it. Work on `feature/<name>`, `fix/<name>` or `chore/<name>` and open a pull request against `PalWorks/whatscli`.
 - **Commits:** conventional prefixes (`feat:`, `fix:`, `chore:`, `docs:`, `ci:`, `style:`), one concern per commit.
 - **Before opening a pull request:** `go build ./...`, `go vet ./...`, `go test -race -count=1 ./...` pass; `gofmt` run on files you touched; docs updated (below).
-- **Upstream fixes:** this is an independent fork. Port fixes from `normen/whatscli` selectively and name the upstream commit in your message (DECISIONS.md D1).
+- **Upstream fixes:** this is an independent fork. Port fixes from `normen/whatscli` selectively and name the upstream commit in your message.
 - **Releases** are maintainer-only: a `v*` tag runs `.github/workflows/release.yml` (README, "Deployment and Releases").
 
 ## Review checklist
@@ -24,7 +24,7 @@ WhatsCLI is dual licensed under AGPL-3.0-only and a paid commercial license ([LI
 - Schema changes use `addColumnIfMissing` and keep old databases working.
 - Tests added; they fail without the change.
 - No secrets, keys, session files or chat screenshots in the diff.
-- README, CHANGELOG (`[Unreleased]`), ROADMAP and DECISIONS updated when the change is more than trivial. Each update carries a timestamp from `date --iso-8601=seconds`.
+- README, CHANGELOG (`[Unreleased]`) and ROADMAP updated when the change is more than trivial. Each update carries a timestamp from `date --iso-8601=seconds`.
 
 ## Adding a slash command
 

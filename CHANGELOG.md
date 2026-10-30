@@ -19,7 +19,7 @@ Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged
 - Tag-driven release workflow `.github/workflows/release.yml`: native CGO builds for linux/amd64, linux/arm64, windows/amd64, SHA256 checksums, GitHub release notes from git log. AUR `PKGBUILD` and `.SRCINFO` are generated as a workflow artifact only.
 - `make build` and `make install` inject the version from `git describe`; new `make lint` (alias of `vet`).
 - Tests: migration, media round trip, sanitisation, traversal and collision, command validation, backlog, revoke authorisation, `@lid` normalisation, path containment, QR quiet zone.
-- Documentation set: AGENTS.md, ARCHITECTURE.md, DECISIONS.md, ROADMAP.md, TESTING.md, SECURITY.md; historic reports moved to `docs/archive/`.
+- Documentation set: AGENTS.md, ARCHITECTURE.md, ROADMAP.md, TESTING.md, SECURITY.md; historic reports moved to `docs/archive/`.
 
 ### Changed
 - Module path `github.com/normen/whatscli` is now `github.com/PalWorks/whatscli`. Install with `go install github.com/PalWorks/whatscli@latest`.
@@ -45,7 +45,7 @@ Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged
 
 ### Removed
 - `release.sh` (cross-built without CGO, updated the upstream Homebrew tap). Replaced by `release.yml`; `make release` now prints the tag command.
-- Release artefacts and automation for macOS, Raspberry Pi (armv5) and the Homebrew tap. They are not rebuilt for now (DECISIONS.md D4, ROADMAP row 8).
+- Release artefacts and automation for macOS, Raspberry Pi (armv5) and the Homebrew tap. They are not rebuilt for now (ROADMAP row 8).
 - Stale agent and doc files replaced: `agents.md` is now `AGENTS.md`; `GEMINI.md` and `.cursorrules` are pointers.
 
 ## [1.3.0] - 2026-02-21

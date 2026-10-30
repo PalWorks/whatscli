@@ -49,7 +49,7 @@ _Last updated: 2026-10-31T01:11:53+05:30 (rewritten after the chore/catch-up bra
 
 WhatsCLI links to your WhatsApp account the same way WhatsApp Web does (QR scan, then it reconnects on its own) and gives you chats, groups, media, search and message history in a terminal. It is for developers, administrators and keyboard users who want WhatsApp without a browser or desktop app.
 
-> **Fork notice.** This repository is an independent fork of [normen/whatscli](https://github.com/normen/whatscli). Upstream is semi-dormant (last push 2026-08-08, v1.1.6). Fixes are ported selectively, never merged wholesale (see [DECISIONS.md](DECISIONS.md) D1).
+> **Fork notice.** This repository is an independent fork of [normen/whatscli](https://github.com/normen/whatscli). Upstream is semi-dormant (last push 2026-08-08, v1.1.6). Fixes are ported selectively, never merged wholesale.
 
 ### Caveats
 
@@ -411,7 +411,7 @@ whatscli/
 ├── docs/archive/                    # historic reviews (Feb 2026), unchanged
 ├── .github/workflows/ci.yml, release.yml, scripts/generate-aur-pkgbuilds.sh
 ├── Makefile, go.mod, go.sum
-└── AGENTS.md ARCHITECTURE.md CHANGELOG.md CONTRIBUTING.md DECISIONS.md
+└── AGENTS.md ARCHITECTURE.md CHANGELOG.md CONTRIBUTING.md
     ROADMAP.md SECURITY.md SKILLS.md TESTING.md (CLAUDE.md, GEMINI.md, .cursorrules point to AGENTS.md)
 ```
 
@@ -476,7 +476,6 @@ The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMA
 |---|---|
 | [AGENTS.md](AGENTS.md) | Canonical contract for AI agents; `CLAUDE.md`, `GEMINI.md`, `.cursorrules` point to it |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Components, data flow, storage, concurrency, JIDs |
-| [DECISIONS.md](DECISIONS.md) | Why things are the way they are (D1 to D20) |
 | [ROADMAP.md](ROADMAP.md) | Everything not yet done |
 | [CHANGELOG.md](CHANGELOG.md) | What shipped |
 | [TESTING.md](TESTING.md) | Tests and the live checklist |

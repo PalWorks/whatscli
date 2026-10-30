@@ -17,4 +17,4 @@
 
 ## Pointers
 
-README.md, ARCHITECTURE.md, DECISIONS.md, ROADMAP.md, TESTING.md, SECURITY.md, CONTRIBUTING.md, SKILLS.md, CHANGELOG.md. Old reviews are in `docs/archive/`.
+README.md, ARCHITECTURE.md, DECISIONS.md (local only, gitignored), ROADMAP.md, TESTING.md, SECURITY.md, CONTRIBUTING.md, SKILLS.md, CHANGELOG.md. Old reviews are in `docs/archive/`.

@@ -1,6 +1,6 @@
 # Architecture
 
-System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in [DECISIONS.md](DECISIONS.md); agent rules in [AGENTS.md](AGENTS.md).
+System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
 _Last updated: 2026-10-31T01:12:03+05:30 (initial; verified against the code at commit f5a9b66)_
 
@@ -96,7 +96,7 @@ SQLite via go-sqlite3 (CGO), WAL mode, 5 s busy timeout. No in-memory caches; ev
 
 Indexes: `idx_messages_chat_id (chat_id)`, `idx_messages_chat_ts (chat_id, timestamp)`.
 
-**Migration strategy.** `InitWithDB` creates tables with `IF NOT EXISTS`, then adds columns with `addColumnIfMissing` (`ALTER TABLE ADD COLUMN`, tolerating only "duplicate column name"). Old rows get the defaults. Older binaries still work on a migrated database because they name their columns explicitly. Never drop or retype columns. Messages stored before the media columns existed report "this is not a downloadable message" (DECISIONS.md D13).
+**Migration strategy.** `InitWithDB` creates tables with `IF NOT EXISTS`, then adds columns with `addColumnIfMissing` (`ALTER TABLE ADD COLUMN`, tolerating only "duplicate column name"). Old rows get the defaults. Older binaries still work on a migrated database because they name their columns explicitly. Never drop or retype columns. Messages stored before the media columns existed report "this is not a downloadable message" (accepted limitation).
 
 ## 5. Chat identity: phone number JIDs and LIDs
 

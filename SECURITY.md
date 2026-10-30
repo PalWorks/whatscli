@@ -1,6 +1,6 @@
 # Security
 
-Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in [DECISIONS.md](DECISIONS.md) (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
+Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in the maintainers' private decision log (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
 
 _Last updated: 2026-10-31T01:12:05+05:30 (initial; controls verified against the code at commit f5a9b66)_
 

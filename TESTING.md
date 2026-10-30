@@ -74,7 +74,7 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 | 2 | Media receive | Receive an image, a named PDF, a voice note and a video. Press `Ctrl+w`, highlight each. `d` on each; `o` on each; `s` on the image; `s` on the PDF | `d`: path printed under `download_path`, file opens correctly, no `.whatscli-*.part` left. `o`: system viewer opens the file from `preview_path`. `s` on the image: rendered by `show_command`. `s` on the PDF: "show only works for image messages" |
 | 3 | Name collision | Receive two different PDFs with the same name; download both | Second is saved as `name_<msgid>.pdf` |
 | 4 | Hostile name | Ask a contact to send a document named `..\..\evil.txt` if their client allows | Saved inside `download_path` as `evil.txt` (no escape) |
-| 5 | Old media | Highlight a media message from before the upgrade and press `d` | "this is not a downloadable message" (accepted, DECISIONS.md D13) |
+| 5 | Old media | Highlight a media message from before the upgrade and press `d` | "this is not a downloadable message" (accepted limitation) |
 | 6 | Send media | `/sendimage path`; then `d` on the sent message | It appears in the chat; `d` downloads it |
 | 7 | URL | Message containing a link; `u` | Browser opens the right URL |
 | 8 | Own revoke | `r` on your own message in a 1:1 chat, in a group, and in an `@lid` chat if you have one. Then `r` on someone else's message | Disappears on the phone, shows `[message revoked]` locally. Someone else's: "you can only revoke (delete for everyone) your own messages" |

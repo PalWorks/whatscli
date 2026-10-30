@@ -4,3 +4,6 @@ whatscli.exe
 dist/
 release-assets/
 aur-out/
+
+# Maintainer-only documents (not published)
+DECISIONS.md

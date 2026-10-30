@@ -4,4 +4,4 @@
 >
 > _Last updated: 2026-10-31T01:12:04+05:30 (reduced to a pointer; the old copy had stale Go, module, release and interface facts)_
 
-WhatsCLI is a Go terminal WhatsApp client (module `github.com/PalWorks/whatscli`). Read AGENTS.md for build commands, architecture, concurrency rules, security-sensitive code and documentation rules, then ARCHITECTURE.md, DECISIONS.md and ROADMAP.md as needed.
+WhatsCLI is a Go terminal WhatsApp client (module `github.com/PalWorks/whatscli`). Read AGENTS.md for build commands, architecture, concurrency rules, security-sensitive code and documentation rules, then ARCHITECTURE.md, ROADMAP.md and the local DECISIONS.md (gitignored) as needed.

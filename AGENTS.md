@@ -22,7 +22,7 @@
 |---|---|
 | What the product is, install, usage | README.md |
 | Components, data flow, storage schema, JID handling | ARCHITECTURE.md |
-| Why something was chosen | DECISIONS.md |
+| Why something was chosen | DECISIONS.md (maintainers only, gitignored; absent in public clones) |
 | What is open, what is next | ROADMAP.md |
 | What shipped | CHANGELOG.md |
 | How to test, live-account checklist | TESTING.md |
@@ -163,7 +163,7 @@ Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID
 5. A chat can arrive as `@lid` or `@s.whatsapp.net`. Store under the canonical JID (`canonicalChatJID`), compare people with `sameUser`, never with string equality.
 6. whatsmeow `BuildHistorySyncRequest` dereferences its anchor; never pass nil.
 7. `go test` without `-race` hides data races; CI uses `-race`.
-8. Pre-upgrade media rows have empty media columns and stay not downloadable (DECISIONS.md D13).
+8. Pre-upgrade media rows have empty media columns and stay not downloadable (decision D13).
 
 ## 12. Documentation rules (owner standard)
 
