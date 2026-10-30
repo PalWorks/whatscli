@@ -3,11 +3,11 @@ package main
 import (
 	"strings"
 
-	"code.rocketnine.space/tslocum/cbind"
+	"codeberg.org/tslocum/cbind"
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/messages"
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
 )
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {

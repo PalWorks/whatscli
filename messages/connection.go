@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/qrcode"
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/qrcode"
 
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/store/sqlstore"

@@ -7,7 +7,7 @@ import (
 
 	"go.mau.fi/whatsmeow"
 
-	"github.com/normen/whatscli/config"
+	"github.com/PalWorks/whatscli/config"
 )
 
 func cmdLogin(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {

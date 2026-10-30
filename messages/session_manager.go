@@ -8,7 +8,7 @@ import (
 
 	"github.com/gen2brain/beeep"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
-	"github.com/normen/whatscli/config"
+	"github.com/PalWorks/whatscli/config"
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"

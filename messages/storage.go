@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/normen/whatscli/config"
+	"github.com/PalWorks/whatscli/config"
 )
 
 // MessageDatabase stores messages and contact data in SQLite
