@@ -65,6 +65,15 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 		return
 	}
 
+	// Replies are stored under the canonical chat JID (jid_norm.go). An @lid
+	// chat stored before its phone-number mapping was known would never see
+	// them, so point the user at the chat where they will land.
+	if canonical, moved := sm.backlogTarget(receiver); moved {
+		sm.uiHandler.PrintText("This chat is stored under its LID form; new and older messages now go to " +
+			canonical + ". Open that chat and run " + config.Config.General.CmdPrefix + "backlog there.")
+		return
+	}
+
 	anchor, ok, err := sm.backlogAnchor(receiver)
 	if err != nil {
 		sm.uiHandler.PrintError(err)
@@ -120,6 +129,17 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 			sm.uiHandler.NewScreen(sm.getMessages(receiver))
 		}
 	}()
+}
+
+// backlogTarget returns the canonical JID of chat and whether it differs from
+// chat, i.e. whether history for chat would be stored under another chat.
+func (sm *SessionManager) backlogTarget(chat string) (string, bool) {
+	jid, err := types.ParseJID(chat)
+	if err != nil {
+		return chat, false
+	}
+	canonical := sm.canonicalChatJID(jid).String()
+	return canonical, canonical != chat
 }
 
 // backlogAnchor builds the MessageInfo of the oldest stored message in chat,

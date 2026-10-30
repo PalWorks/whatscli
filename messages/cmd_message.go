@@ -99,15 +99,29 @@ func runDownload(sm *SessionManager, client *whatsmeow.Client, cmdName string, p
 			sm.uiHandler.PrintError(err)
 			return
 		}
-		switch mode {
-		case modeShow:
-			sm.uiHandler.PrintFile(path)
-		case modeOpen:
-			sm.uiHandler.OpenFile(path)
-		default:
-			sm.uiHandler.PrintText("[::d] -> " + path + "[::-]")
-		}
+		sm.deliverDownload(mode, path)
 	}()
+}
+
+// deliverDownload hands a saved file to the UI according to mode. `open` only
+// passes allow-listed types (safeToOpen) to the system opener; anything else
+// is reported with its path so the user decides.
+func (sm *SessionManager) deliverDownload(mode downloadMode, path string) {
+	switch mode {
+	case modeShow:
+		sm.uiHandler.PrintFile(path)
+	case modeOpen:
+		if !safeToOpen(path) {
+			// Sender-chosen types such as .exe, .bat or .lnk would run.
+			sm.uiHandler.PrintText("[::d] -> " + path + "[::-]")
+			sm.uiHandler.PrintText("Saved but not opened: " + openRefusalReason(path) +
+				" Open it yourself only if you trust the sender.")
+			return
+		}
+		sm.uiHandler.OpenFile(path)
+	default:
+		sm.uiHandler.PrintText("[::d] -> " + path + "[::-]")
+	}
 }
 
 // downloadMedia saves msg's media into dir and returns the final path.
@@ -250,10 +264,11 @@ func cmdRevoke(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 }
 
 // applyRevoke marks a message revoked in SQLite and refreshes the screen if
-// its chat is currently displayed. Used for our own revokes and for revoke
-// protocol messages received from others or from our other devices.
+// its chat is currently displayed. Used for our own revokes and, after the
+// checks in handleIncomingRevoke, for revokes received from others or from our
+// other devices. chatID must be the chat the message is stored under.
 func (sm *SessionManager) applyRevoke(chatID, msgID string) {
-	updated, err := sm.db.MarkMessageRevoked(msgID)
+	updated, err := sm.db.MarkMessageRevoked(chatID, msgID)
 	if err != nil {
 		sm.uiHandler.PrintError(err)
 		return

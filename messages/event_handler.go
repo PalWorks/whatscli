@@ -183,7 +183,10 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		return // nothing to process
 	}
 
-	chatJID := evt.Info.Chat.String()
+	// Store @lid chats under the phone-number JID when known (jid_norm.go),
+	// matching history sync so one person is one chat.
+	chat := eh.sm.canonicalChatForSource(evt.Info.MessageSource)
+	chatJID := chat.String()
 	timestamp := uint64(evt.Info.Timestamp.Unix())
 
 	msg := Message{
@@ -209,7 +212,7 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 	// Resolve chat name BEFORE acquiring the write lock. getChatName()
 	// internally calls getClient() which acquires mu.RLock — calling it
 	// under mu.Lock would deadlock.
-	chatName := eh.sm.getChatName(evt.Info.Chat)
+	chatName := eh.sm.getChatName(chat)
 
 	// Update priority queue and conversation
 	eh.sm.mu.Lock()
@@ -276,7 +279,8 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 	// Delete-for-everyone from a contact or from one of our other devices.
 	if pm := evt.Message.GetProtocolMessage(); pm != nil &&
 		pm.GetType() == waE2E.ProtocolMessage_REVOKE && pm.GetKey().GetID() != "" {
-		eh.sm.applyRevoke(evt.Info.Chat.String(), pm.GetKey().GetID())
+		// Only applied when chat and revoker check out (revoke_incoming.go).
+		eh.sm.handleIncomingRevoke(evt.Info.MessageSource, pm.GetKey().GetID())
 		return
 	}
 	text, preview := extractMessageContent(evt.Message)

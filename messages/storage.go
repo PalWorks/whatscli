@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/PalWorks/whatscli/config"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // MessageDatabase stores messages and contact data in SQLite
@@ -195,12 +195,13 @@ func (md *MessageDatabase) CountMessages(chatId string) (int, error) {
 const RevokedText = "[message revoked]"
 
 // MarkMessageRevoked replaces a message's text and clears its media metadata.
-// Returns true when a row was updated.
-func (md *MessageDatabase) MarkMessageRevoked(id string) (bool, error) {
+// The row must match both the message ID and the chat, so a revoke can never
+// reach a message in another chat. Returns true when a row was updated.
+func (md *MessageDatabase) MarkMessageRevoked(chatID, id string) (bool, error) {
 	if md.db == nil {
 		return false, fmt.Errorf("database not initialized")
 	}
-	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL WHERE id = ?`, RevokedText, id)
+	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL WHERE id = ? AND chat_id = ?`, RevokedText, id, chatID)
 	if err != nil {
 		return false, fmt.Errorf("failed to mark message revoked: %w", err)
 	}

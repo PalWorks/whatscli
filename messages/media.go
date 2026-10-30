@@ -129,8 +129,14 @@ func downloadableFromMessage(msg Message) (whatsmeow.DownloadableMessage, error)
 }
 
 // sanitizeFileName reduces an untrusted file name (from a remote sender) to a
-// single path element. Backslashes are treated as separators so Windows-style
-// names cannot smuggle directories. Returns ok=false when nothing usable is left.
+// single path element that is also valid and inert on Windows. Backslashes are
+// treated as separators so Windows-style names cannot smuggle directories.
+// Characters Windows forbids (<>:"|?* and control characters; ':' would also
+// select an NTFS alternate data stream) become '_', trailing dots and spaces
+// (silently dropped by Windows) are removed, and reserved device names (CON,
+// PRN, AUX, NUL, COM0-9, LPT0-9, CONIN$, CONOUT$, with or without extension)
+// get a '_' prefix. The same rules apply on every OS so behaviour is uniform.
+// Returns ok=false when nothing usable is left.
 func sanitizeFileName(name string) (string, bool) {
 	name = strings.ReplaceAll(name, "\x00", "")
 	name = strings.ReplaceAll(name, "\\", "/")
@@ -138,7 +144,78 @@ func sanitizeFileName(name string) (string, bool) {
 	if base == "" || base == "." || base == ".." || base == "/" {
 		return "", false
 	}
+	base = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || strings.ContainsRune(`<>:"|?*`, r) {
+			return '_'
+		}
+		return r
+	}, base)
+	base = strings.TrimRight(base, ". ")
+	base = strings.TrimLeft(base, " ")
+	if base == "" {
+		return "", false
+	}
+	if isWindowsReservedName(base) {
+		base = "_" + base
+	}
 	return base, true
+}
+
+// isWindowsReservedName reports whether name's stem (the part before the first
+// dot, trailing spaces ignored) is a Windows reserved device name.
+func isWindowsReservedName(name string) bool {
+	stem := name
+	if i := strings.IndexByte(stem, '.'); i >= 0 {
+		stem = stem[:i]
+	}
+	stem = strings.ToUpper(strings.TrimRight(stem, " "))
+	switch stem {
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
+		return true
+	}
+	if len(stem) == 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) {
+		c := stem[3]
+		return c >= '0' && c <= '9'
+	}
+	// Windows also reserves COM and LPT with superscript digits 1-3.
+	for _, p := range []string{"COM", "LPT"} {
+		if strings.HasPrefix(stem, p) {
+			switch stem[len(p):] {
+			case "\u00b9", "\u00b2", "\u00b3":
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// openableExtensions lists file types handed to the system opener by `open`:
+// images, video, audio, PDF and plain text. Anything else (executables,
+// scripts, shortcuts, archives, office files with macros, HTML, SVG) is saved
+// but not opened, because the opener picks the program by extension and on
+// Windows runs executables directly (REVIEW-3 finding 2).
+var openableExtensions = map[string]bool{
+	".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true, ".bmp": true, ".heic": true, ".heif": true,
+	".mp4": true, ".m4v": true, ".mov": true, ".webm": true, ".mkv": true, ".3gp": true, ".avi": true,
+	".mp3": true, ".m4a": true, ".aac": true, ".ogg": true, ".oga": true, ".opus": true, ".wav": true, ".flac": true, ".amr": true,
+	".pdf": true,
+	".txt": true,
+}
+
+// safeToOpen reports whether a downloaded file may be passed to the system
+// opener, judged by its final on-disk extension (case-insensitive).
+func safeToOpen(filePath string) bool {
+	return openableExtensions[strings.ToLower(filepath.Ext(filePath))]
+}
+
+// openRefusalReason explains why safeToOpen refused filePath.
+func openRefusalReason(filePath string) string {
+	ext := strings.ToLower(filepath.Ext(filePath))
+	const allowed = "only images, video, audio, PDF and plain text are opened automatically."
+	if ext == "" {
+		return "the file has no extension; " + allowed
+	}
+	return ext + " files can run code or macros; " + allowed
 }
 
 // downloadFileName chooses the on-disk name for a message's media: the

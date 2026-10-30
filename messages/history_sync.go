@@ -7,7 +7,9 @@ import (
 	"fmt"
 
 	"go.mau.fi/whatsmeow/proto/waHistorySync"
+	"go.mau.fi/whatsmeow/proto/waWeb"
 	"go.mau.fi/whatsmeow/types"
+	"go.mau.fi/whatsmeow/types/events"
 )
 
 // loadRecentChats fetches recent chats from WhatsApp and adds them to the database
@@ -39,7 +41,6 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 		}
 
-
 		for jid, contact := range contacts {
 			if !contact.Found {
 				continue
@@ -70,7 +71,6 @@ func (sm *SessionManager) loadRecentChats() {
 					name = jid.User
 				}
 			}
-
 
 			// Update PQ under lock, collect DB write for outside
 			sm.mu.Lock()
@@ -126,7 +126,15 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 		sm.uiHandler.PrintError(errors.New("not connected — cannot process history sync"))
 		return
 	}
+	sm.storeHistorySync(data, client.ParseWebMessage)
+}
 
+// webMessageParser is client.ParseWebMessage; a seam so tests can feed history
+// sync data without a connected client.
+type webMessageParser func(chatJID types.JID, webMsg *waWeb.WebMessageInfo) (*events.Message, error)
+
+// storeHistorySync stores the conversations and messages of a history sync.
+func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, parseWebMessage webMessageParser) {
 	conversations := data.GetConversations()
 	if len(conversations) == 0 {
 		sm.uiHandler.PrintText(fmt.Sprintf("History sync (%s): no conversations", data.GetSyncType()))
@@ -152,12 +160,13 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 			continue
 		}
 
-		// Skip non-chat JIDs (status broadcasts, etc.)
-		if chatJID.Server != "s.whatsapp.net" && chatJID.Server != "g.us" {
+		// Skip non-chat JIDs (status broadcasts, etc.). @lid chats are kept
+		// and stored under their phone-number JID when the mapping is known.
+		if !isHistoryChatServer(chatJID.Server) {
 			continue
 		}
-
-		jidStr := chatJID.String()
+		storeJID := sm.historyChatJID(chatJID, conv.GetPnJID())
+		jidStr := storeJID.String()
 
 		// --- Extract conversation metadata from proto ---
 		lastMsgTimestamp := int64(conv.GetLastMsgTimestamp())
@@ -185,7 +194,7 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 				continue
 			}
 
-			evt, err := client.ParseWebMessage(chatJID, webMsg)
+			evt, err := parseWebMessage(chatJID, webMsg)
 			if err != nil {
 				continue
 			}
@@ -257,7 +266,7 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 			}
 
 			// Fill in name if we only had a phone number
-			if name != "" && (existingConv.Name == existingConv.JID || existingConv.Name == chatJID.User) {
+			if name != "" && (existingConv.Name == existingConv.JID || existingConv.Name == chatJID.User || existingConv.Name == storeJID.User) {
 				existingConv.Name = name
 				updated = true
 			}
@@ -288,7 +297,7 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 		} else {
 			// New conversation — use history name or fall back to JID user
 			if name == "" {
-				name = chatJID.User
+				name = storeJID.User
 			}
 			newConv := &Conversation{
 				JID:         jidStr,
@@ -339,6 +348,28 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 
 	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
 		len(toUpsert), totalMessages))
+}
+
+// isHistoryChatServer reports whether a history sync conversation on this JID
+// server is a chat we store: phone-number DMs, LID DMs and groups.
+func isHistoryChatServer(server string) bool {
+	return server == types.DefaultUserServer || server == types.HiddenUserServer || server == types.GroupServer
+}
+
+// historyChatJID returns the JID a history sync conversation is stored under.
+// For an @lid conversation the phone-number JID carried in the conversation
+// (pnJID) is used first, then the LID store; without either the @lid JID is
+// kept. Other chats are returned unchanged.
+func (sm *SessionManager) historyChatJID(chat types.JID, pnJID string) types.JID {
+	if chat.Server != types.HiddenUserServer {
+		return chat
+	}
+	if pnJID != "" {
+		if pn, err := types.ParseJID(pnJID); err == nil && pn.Server == types.DefaultUserServer && pn.User != "" {
+			return pn.ToNonAD()
+		}
+	}
+	return sm.canonicalChatJID(chat)
 }
 
 // loadRecentMessages loads the most recent messages for a chat
