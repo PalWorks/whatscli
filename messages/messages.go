@@ -70,10 +70,10 @@ type Message struct {
 
 // internal contact representation to abstract from message lib
 type Chat struct {
-	Id      string
-	IsGroup bool
-	Name    string
-	Unread  int
+	Id          string
+	IsGroup     bool
+	Name        string
+	Unread      int
 	LastMessage int64
 }
 

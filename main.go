@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 

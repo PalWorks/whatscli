@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"codeberg.org/tslocum/cbind"
-	"github.com/atotto/clipboard"
-	"github.com/gdamore/tcell/v2"
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
+	"github.com/atotto/clipboard"
+	"github.com/gdamore/tcell/v2"
 )
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {

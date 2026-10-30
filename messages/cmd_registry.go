@@ -42,7 +42,7 @@ func init() {
 		"add":         cmdAdd,
 		"remove":      cmdRemove,
 		"admin":       cmdAdmin,
-		"promote":     cmdAdmin,       // alias
+		"promote":     cmdAdmin, // alias
 		"removeadmin": cmdRemoveAdmin,
 		"demote":      cmdRemoveAdmin, // alias
 
