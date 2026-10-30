@@ -1,3 +1,6 @@
 .DS_Store
 whatscli
 whatscli.exe
+dist/
+release-assets/
+aur-out/
