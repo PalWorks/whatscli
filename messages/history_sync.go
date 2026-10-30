@@ -139,6 +139,11 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 	var toUpsert []Conversation
 	totalMessages := 0
 	addMsgErrors := 0
+	mediaErrors := 0
+	currentChatChanged := false
+	sm.mu.RLock()
+	currentChat := sm.currentReceiver
+	sm.mu.RUnlock()
 
 	for _, conv := range conversations {
 		chatJIDStr := conv.GetID()
@@ -208,10 +213,15 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 				ContactName:  senderName,
 				ContactShort: senderName,
 			}
+			if err := attachMediaInfo(&msg, evt.Message); err != nil {
+				mediaErrors++
+			}
 
 			// AddMessage uses INSERT OR IGNORE, so duplicates are skipped
 			if err := sm.db.AddMessage(msg); err != nil {
 				addMsgErrors++
+			} else if jidStr == currentChat {
+				currentChatChanged = true
 			}
 
 			// Track the most recent message for the conversation preview
@@ -311,6 +321,20 @@ func (sm *SessionManager) processHistorySync(data *waHistorySync.HistorySync) {
 
 	if addMsgErrors > 0 {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to store %d history messages", addMsgErrors))
+	}
+	if mediaErrors > 0 {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to keep media metadata for %d history messages", mediaErrors))
+	}
+
+	// ON_DEMAND responses (from /backlog) usually arrive after the backlog
+	// command stopped polling, so refresh the open chat here as well.
+	if currentChatChanged {
+		sm.mu.RLock()
+		stillCurrent := sm.currentReceiver == currentChat
+		sm.mu.RUnlock()
+		if stillCurrent {
+			sm.uiHandler.NewScreen(sm.getMessages(currentChat))
+		}
 	}
 
 	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",

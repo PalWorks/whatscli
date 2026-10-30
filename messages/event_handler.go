@@ -196,6 +196,10 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		ContactName:  eh.getContactName(evt.Info.Sender),
 		ContactShort: eh.getContactShort(evt.Info.Sender),
 	}
+	if err := attachMediaInfo(&msg, evt.Message); err != nil {
+		// Keep the text message; only the download metadata is lost.
+		eh.sm.uiHandler.PrintError(fmt.Errorf("message %s: %w", msg.Id, err))
+	}
 
 	// Persist message
 	if err := eh.sm.db.AddMessage(msg); err != nil {
@@ -269,6 +273,12 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 
 // Handle incoming messages — dispatches to extractMessageContent then processIncomingMessage.
 func (eh *eventHandler) handleMessage(evt *events.Message) {
+	// Delete-for-everyone from a contact or from one of our other devices.
+	if pm := evt.Message.GetProtocolMessage(); pm != nil &&
+		pm.GetType() == waE2E.ProtocolMessage_REVOKE && pm.GetKey().GetID() != "" {
+		eh.sm.applyRevoke(evt.Info.Chat.String(), pm.GetKey().GetID())
+		return
+	}
 	text, preview := extractMessageContent(evt.Message)
 	eh.processIncomingMessage(evt, text, preview)
 }

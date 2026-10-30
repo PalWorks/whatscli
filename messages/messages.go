@@ -59,6 +59,13 @@ type Message struct {
 	FromMe       bool
 	Forwarded    bool
 	Text         string
+	// Media metadata (empty for text messages). MediaProto holds a serialized
+	// waE2E.Message containing only the media sub-message, which carries the
+	// DirectPath/MediaKey/hashes needed to download it later.
+	MediaKind  string
+	MimeType   string
+	FileName   string
+	MediaProto []byte
 }
 
 // internal contact representation to abstract from message lib

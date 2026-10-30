@@ -44,8 +44,9 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 	}
 
 	// Backward-compatible migration: add is_archived column for existing databases.
-	// SQLite ignores the ALTER if the column already exists when using this pattern.
-	md.db.Exec(`ALTER TABLE conversations ADD COLUMN is_archived BOOLEAN DEFAULT 0`)
+	if err := md.addColumnIfMissing("conversations", "is_archived", "BOOLEAN DEFAULT 0"); err != nil {
+		return err
+	}
 
 	_, err = md.db.Exec(`
 	CREATE TABLE IF NOT EXISTS messages (
@@ -66,8 +67,39 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		return fmt.Errorf("failed to create messages table: %w", err)
 	}
 
+	// Backward-compatible migration: media metadata columns (Phase 2a).
+	// Existing rows receive the defaults, so old databases keep working and
+	// pre-migration messages simply report "not a downloadable message".
+	mediaColumns := []struct{ name, def string }{
+		{"media_kind", "TEXT NOT NULL DEFAULT ''"},
+		{"mime_type", "TEXT NOT NULL DEFAULT ''"},
+		{"file_name", "TEXT NOT NULL DEFAULT ''"},
+		{"media_proto", "BLOB"},
+	}
+	for _, col := range mediaColumns {
+		if err := md.addColumnIfMissing("messages", col.name, col.def); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
+
+// addColumnIfMissing runs ALTER TABLE ... ADD COLUMN and treats SQLite's
+// "duplicate column name" error as success, so the migration is idempotent.
+// Any other error is returned.
+func (md *MessageDatabase) addColumnIfMissing(table, column, definition string) error {
+	_, err := md.db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition))
+	if err != nil && !strings.Contains(strings.ToLower(err.Error()), "duplicate column name") {
+		return fmt.Errorf("failed to add column %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+// messageColumns is the column list shared by every message SELECT so that
+// collectMessages can scan rows uniformly.
+const messageColumns = `id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
+	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto`
 
 // escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
 // treated as literal characters in a LIKE ? ESCAPE '\' clause.
@@ -95,13 +127,88 @@ func (md *MessageDatabase) AddMessage(msg Message) error {
 	}
 	_, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
-	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
+	 media_kind, mime_type, file_name, media_proto)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName,
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
+		msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto,
 	)
 	return err
+}
+
+// GetMessage returns a single message by ID. found is false when no row exists.
+func (md *MessageDatabase) GetMessage(id string) (msg Message, found bool, err error) {
+	if md.db == nil {
+		return Message{}, false, fmt.Errorf("database not initialized")
+	}
+	rows, err := md.db.Query(`SELECT `+messageColumns+` FROM messages WHERE id = ? LIMIT 1`, id)
+	if err != nil {
+		return Message{}, false, fmt.Errorf("failed to query message: %w", err)
+	}
+	defer rows.Close()
+	msgs, err := collectMessages(rows)
+	if err != nil {
+		return Message{}, false, err
+	}
+	if len(msgs) == 0 {
+		return Message{}, false, nil
+	}
+	return msgs[0], true, nil
+}
+
+// GetOldestMessage returns the oldest stored message of a chat, used as the
+// anchor for on-demand history sync requests.
+func (md *MessageDatabase) GetOldestMessage(chatId string) (msg Message, found bool, err error) {
+	if md.db == nil {
+		return Message{}, false, fmt.Errorf("database not initialized")
+	}
+	rows, err := md.db.Query(`SELECT `+messageColumns+` FROM messages WHERE chat_id = ? ORDER BY timestamp ASC LIMIT 1`, chatId)
+	if err != nil {
+		return Message{}, false, fmt.Errorf("failed to query oldest message: %w", err)
+	}
+	defer rows.Close()
+	msgs, err := collectMessages(rows)
+	if err != nil {
+		return Message{}, false, err
+	}
+	if len(msgs) == 0 {
+		return Message{}, false, nil
+	}
+	return msgs[0], true, nil
+}
+
+// CountMessages returns the number of stored messages for a chat.
+func (md *MessageDatabase) CountMessages(chatId string) (int, error) {
+	if md.db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	var n int
+	if err := md.db.QueryRow(`SELECT COUNT(*) FROM messages WHERE chat_id = ?`, chatId).Scan(&n); err != nil {
+		return 0, fmt.Errorf("failed to count messages: %w", err)
+	}
+	return n, nil
+}
+
+// RevokedText replaces the text of a message deleted for everyone.
+const RevokedText = "[message revoked]"
+
+// MarkMessageRevoked replaces a message's text and clears its media metadata.
+// Returns true when a row was updated.
+func (md *MessageDatabase) MarkMessageRevoked(id string) (bool, error) {
+	if md.db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL WHERE id = ?`, RevokedText, id)
+	if err != nil {
+		return false, fmt.Errorf("failed to mark message revoked: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read revoke result: %w", err)
+	}
+	return n > 0, nil
 }
 
 // UpsertConversation updates or inserts a conversation
@@ -145,7 +252,7 @@ func (md *MessageDatabase) GetMessages(chatId string) ([]Message, error) {
 	if md.db == nil {
 		return nil, fmt.Errorf("database not initialized")
 	}
-	rows, err := md.db.Query(`SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text FROM messages WHERE chat_id = ? ORDER BY timestamp ASC`, chatId)
+	rows, err := md.db.Query(`SELECT `+messageColumns+` FROM messages WHERE chat_id = ? ORDER BY timestamp ASC`, chatId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)
 	}
@@ -170,13 +277,13 @@ func (md *MessageDatabase) SearchMessages(chatId, keyword string, limit int) ([]
 	var err error
 	if chatId != "" {
 		rows, err = md.db.Query(`
-			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+			SELECT `+messageColumns+`
 			FROM messages
 			WHERE chat_id = ? AND text LIKE ? ESCAPE '\'
 			ORDER BY timestamp DESC LIMIT ?`, chatId, likePattern, limit)
 	} else {
 		rows, err = md.db.Query(`
-			SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+			SELECT `+messageColumns+`
 			FROM messages
 			WHERE text LIKE ? ESCAPE '\'
 			ORDER BY timestamp DESC LIMIT ?`, likePattern, limit)
@@ -196,7 +303,7 @@ func (md *MessageDatabase) GetMessagesPaginated(chatId string, beforeTimestamp u
 		return nil, fmt.Errorf("database not initialized")
 	}
 	rows, err := md.db.Query(`
-		SELECT id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text
+		SELECT `+messageColumns+`
 		FROM messages
 		WHERE chat_id = ? AND timestamp < ?
 		ORDER BY timestamp DESC LIMIT ?`, chatId, beforeTimestamp, limit)
@@ -214,7 +321,7 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 	for rows.Next() {
 		var msg Message
 		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text); err != nil {
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto); err != nil {
 			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)

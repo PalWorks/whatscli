@@ -52,6 +52,13 @@ func init() {
 		"sendvideo": cmdMedia,
 		"sendaudio": cmdMedia,
 
+		// Message commands (cmd_message.go); param is the message ID
+		"download": cmdDownload,
+		"open":     cmdOpen,
+		"show":     cmdShow,
+		"url":      cmdURL,
+		"revoke":   cmdRevoke,
+
 		// Search commands (cmd_search.go)
 		"search":         cmdSearch,
 		"search-contact": cmdSearchContact,
