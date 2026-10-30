@@ -30,4 +30,5 @@ vet:
 lint: vet
 
 release:
-	./release.sh
+	@echo "Releases are built by .github/workflows/release.yml."
+	@echo "Tag and push: git tag vX.Y.Z && git push origin vX.Y.Z"
