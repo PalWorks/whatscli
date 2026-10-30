@@ -6,7 +6,7 @@ _Last updated: 2026-10-31T01:11:55+05:30 (added [Unreleased] for the chore/catch
 
 ## [Unreleased]
 
-Branch `chore/catch-up`, 6 commits (`eee54c7` to `f5a9b66`, 2026-10-31). Not yet merged or tagged. Release gate: the live-account checklist in [TESTING.md](TESTING.md) (ROADMAP row 15).
+Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged. Release gate: the live-account checklist in [TESTING.md](TESTING.md) (ROADMAP row 15).
 
 ### Added
 - Dual licence: AGPL-3.0-only (`LICENSE`) plus paid commercial licence (`LICENSE-COMMERCIAL.md`, support@palworks.ai). GitHub private vulnerability reporting enabled.
