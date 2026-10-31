@@ -2,7 +2,7 @@
 
 Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in the maintainers' private decision log (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
 
-_Last updated: 2026-10-31T14:38:07+00:00 (SE1 points to renderImage and ui_opener.go)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: release workflow has run on real tags, actions pinned to SHAs, local_path reuse and part-file sweep controls; licence and reporting dates in UTC)_
 
 ## 1. What is trusted and what is not
 
@@ -15,11 +15,13 @@ WhatsCLI is a linked device of one WhatsApp account. Everything that arrives fro
 | Spoofed incoming revoke blanks someone else's stored message (any contact could, before the fix) | A revoke applies only if the stored message is in the same chat and the revoker is one of our own devices, the original sender (devices ignored, LID and phone number equal when mapped), or a current group admin confirmed with `GetGroupInfo` (15 s timeout, errors mean not admin). Otherwise ignored silently. The SQL update is also scoped `WHERE id = ? AND chat_id = ?` | `messages/revoke_incoming.go`, `messages/storage.go` `MarkMessageRevoked`, `messages/event_handler.go` | `revoke_incoming_test.go` (cross-chat spoof, 12 rule cases, LID, admin), `TestMarkMessageRevoked_ScopedToChat` |
 | Sender-chosen file runs when opened (Windows opener runs `.exe`, `.bat`, `.lnk`) | `open` hands only allowlisted extensions to the system opener: images, video, audio, `.pdf`, `.txt`. Other types are saved and the path printed with a note. Judged on the final on-disk extension, case-insensitive, so `a.pdf.exe` is refused | `messages/media.go` `safeToOpen`, `messages/cmd_message.go` `deliverDownload` | `media_safety_test.go` (13 allowed, 32 refused, open gate) |
 | Path traversal and unsafe names from the sender (`../..`, `..\..`, NTFS streams, `CON`, `NUL`) | `sanitizeFileName`: NUL removed, `\` treated as `/`, `path.Base`, `<>:"|?*` and control characters become `_`, trailing dots and spaces trimmed, reserved device names prefixed `_`, empty rejected (falls back to message ID plus mime extension). `safeJoin` confirms containment with `filepath.Rel`. Existing non-regular files are never overwritten. Files are written to a mode 0600 temp file and renamed | `messages/media.go`, `messages/cmd_message.go` `downloadMedia` | `media_test.go`, `media_safety_test.go` |
+| A repeat download reuses a recorded path that now points elsewhere | `messages.local_path` is reused only if `ResolveFileWithin` places it directly in the target folder as a regular file that is not a symlink; otherwise the normal sanitised download runs. Revoke clears `local_path` | `messages/cmd_message.go` `reusableLocalPath`, `messages/storage.go` | `local_path_test.go` |
+| Startup sweep deletes files it does not own | Only regular files named exactly `.whatscli-<digits>.part`, directly in the configured download and preview folders, are removed; symlinks, directories, other names and subfolders are left alone; the entry is re-checked with `Lstat` before removal | `messages/partfiles.go` | `partfiles_test.go` |
 | `show` renders a file outside the download or preview directory | `ResolveFileWithin`: file and directories are absolute and symlink-resolved; containment by `filepath.Rel`; sibling directories (`Downloads2`), `..`, the directory itself and blank config values are rejected | `messages/pathcheck.go`, `ui_render.go` `renderImage` | `TestResolveFileWithin` (13 cases) |
 | Malicious link opened by `/url` | Only the first `http` or `https` URL with a host; trailing punctuation trimmed. The opener is exec'd without a shell (Linux, macOS) or through `rundll32` (Windows) | `messages/media.go` `firstURL`, `messages/cmd_message.go` `cmdURL`, `ui_opener.go` `openerCommand` | `TestFirstURL`, `TestCmdURL` |
 | SQL injection | All user data uses placeholders; `addColumnIfMissing` builds SQL only from compile-time constants; search escapes `LIKE` wildcards | `messages/storage.go` | `storage_test.go` |
 | Clipboard backend panics | `recover` around read and write; error shown, no crash | `ui_keybindings.go` | manual (TESTING.md step 11) |
-| Release pipeline abuse | Top-level `permissions: contents: read`; only the release job has `contents: write`; `GITHUB_TOKEN` only, no other secrets; tag input passed through `env` and validated by regex, never interpolated into scripts; `persist-credentials: false` | `.github/workflows/release.yml` | not run on a real tag yet (ROADMAP row 17) |
+| Release pipeline abuse | Top-level `permissions: contents: read`; only the release job has `contents: write`; `GITHUB_TOKEN` only, no other secrets; tag input passed through `env` and validated by regex, never interpolated into scripts; `persist-credentials: false`; every action pinned to a commit SHA, bumped by Dependabot weekly (`.github/dependabot.yml`) | `.github/workflows/release.yml`, `.github/workflows/ci.yml` | ran on real tags `v1.4.0` to `v1.6.0` and their `-rc1` pre-releases |
 
 ## 2. Known limits
 
@@ -27,7 +29,8 @@ WhatsCLI is a linked device of one WhatsApp account. Everything that arrives fro
 - Each revoke by a non-sender in a group costs one group info request; a non-admin can trigger them (row 18).
 - A revoke that arrives before its target is ignored (row 19). A revoke overwrites the stored text and media data and cannot be undone (row 22).
 - `show` runs the external viewer named in `show_command` with the file path. The command comes from the user's own config, not from senders.
-- Actions in the workflows are pinned to major tags, not commit SHAs (row 12).
+- Actions are pinned to commit SHAs; a Dependabot pull request that changes a SHA needs the same review as any other change to the workflows.
+- The startup sweep has no age threshold: a second WhatsCLI instance started during a download would remove the first one's temp file (accepted).
 - `contact_id` is stored in the form received; do not treat it as a stable identity across phone-number and LID forms (row 21).
 
 ## 3. Secrets and local data
@@ -36,7 +39,7 @@ WhatsCLI is a linked device of one WhatsApp account. Everything that arrives fro
 - `~/.config/whatscli/session.db` holds the linked-device keys. Anyone who can read it can act as this linked device until it is unlinked from the phone (Settings, Linked Devices). The app does not set file permissions itself (verified: no `chmod` or restrictive mode in the code); [Unverified] the directory mode depends on the `xdg` library and your umask. Keep the directory private and out of backups and sync folders you do not control.
 - `session_meta.db` holds your message history in plain text. Same advice.
 - `whatscli --debug` writes verbose protocol logs to the terminal. [Inference] They can contain metadata about your chats; do not paste them into public issues without review.
-- Never commit `~/.config/whatscli`, `*.db`, `session.gob`, screenshots of chats, or `.env` files. `.gitignore` covers the binary, `dist/`, `release-assets/` and `aur-out/` only; add entries if you create other local files.
+- Never commit `~/.config/whatscli`, `*.db`, `session.gob`, screenshots of chats, or `.env` files. `.gitignore` covers the binaries (`whatscli`, `whatscli.exe`), `dist/`, `release-assets/`, `aur-out/`, `.DS_Store` and the maintainers' local decision log only; add entries if you create other local files.
 - The dev machine's session was never used by automated work; live checks use a non-production number (TESTING.md).
 
 ## 4. Authentication
@@ -47,7 +50,7 @@ WhatsApp login is a QR scan from the phone (linked device). There are no passwor
 
 Do not post exploit details in a public issue.
 
-1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). Enabled 2026-10-31T01:20:43+05:30.
+1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). Enabled 2026-10-30T19:50:43+00:00.
 2. Otherwise: email support@palworks.ai.
 
 Include the version (`/help` shows it), the operating system, what you did, what happened, and what you expected. There is no bounty and no fixed response time; the project is maintained by one owner.

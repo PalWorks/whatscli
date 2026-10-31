@@ -2,7 +2,12 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T15:39:00+00:00 (released v1.6.0)_
+_Last updated: 2026-10-31T15:59:33+00:00 (Unreleased section; licence date in UTC)_
+
+## [Unreleased]
+
+### Added
+- `/more` is listed in `/help`.
 
 ## [1.6.0] - 2026-10-31
 

@@ -2,7 +2,7 @@
 
 > Claude Code reads this file automatically. The canonical agent contract is **[AGENTS.md](AGENTS.md)**; read it first. Do not duplicate rules here.
 >
-> _Last updated: 2026-10-31T01:11:58+05:30 (reduced to a pointer plus a short essentials list; stale facts removed)_
+> _Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: rc tags are pre-releases, UTC doc timestamps)_
 
 ## Essentials (full rules in AGENTS.md)
 
@@ -12,8 +12,8 @@
 - Chats can be `@lid` or `@s.whatsapp.net`: use `canonicalChatJID` and `sameUser` (`messages/jid_norm.go`).
 - Security-sensitive: `messages/revoke_incoming.go`, `messages/media.go` (sanitise, open allowlist), `messages/pathcheck.go`. Read SECURITY.md before changing.
 - Do not touch `~/.config/whatscli`, do not run against a real account, do not commit or push unless asked.
-- Releases are built by `.github/workflows/release.yml` on a `v*` tag. There is no `release.sh` any more.
-- Docs: timestamp every update (`date --iso-8601=seconds`), label every table, no emojis or em-dashes, keep README, CHANGELOG, ROADMAP and DECISIONS current in the same change.
+- Releases are built by `.github/workflows/release.yml` on a `v*` tag; a tag with `-` (for example `v1.6.0-rc1`) is published as a pre-release. There is no `release.sh` any more.
+- Docs: timestamp every update in UTC (`date -u --iso-8601=seconds`), label every table, no emojis or em-dashes, keep README, CHANGELOG, ROADMAP and DECISIONS current in the same change.
 
 ## Pointers
 

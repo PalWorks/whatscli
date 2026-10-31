@@ -2,7 +2,7 @@
 
 > This document describes the key development patterns, conventions, and technical skills required to effectively contribute to WhatsCLI. It serves as a deep-dive companion to `CONTRIBUTING.md`. Rules live in [AGENTS.md](AGENTS.md); design in [ARCHITECTURE.md](ARCHITECTURE.md).
 >
-> _Last updated: 2026-10-31T14:38:13+00:00 (interface now 18 methods)_
+> _Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: interface listing, schema, storage methods, event list, mock fields, root context)_
 
 ## Required Skills
 
@@ -89,6 +89,7 @@ The `UiMessageHandler` interface (18 methods) allows the backend to update the U
 type UiMessageHandler interface {
     NewMessage(Message)
     NewScreen([]Message)
+    NewScreenWithStatus(msgs []Message, status string, errs ...error)
     SetChats([]Chat)
     UpdateChatList([]*Conversation)
     PrintError(error)
@@ -96,9 +97,10 @@ type UiMessageHandler interface {
     PrintFile(string)
     PrintQR(string)
     SetStatus(SessionStatus)
-    OpenFile(string)
+    OpenFile(string) error
     ShowColorList()
     Clear()
+    ReplaceText(string)
     UpdateQR(qr string, attempt int, timeout int)
     PrintCommands()
     PrintHelp()
@@ -206,7 +208,8 @@ CREATE TABLE messages (
     timestamp INTEGER, from_me BOOLEAN, forwarded BOOLEAN, text TEXT,
     -- added by addColumnIfMissing (idempotent ALTER TABLE):
     media_kind TEXT NOT NULL DEFAULT '', mime_type TEXT NOT NULL DEFAULT '',
-    file_name TEXT NOT NULL DEFAULT '', media_proto BLOB
+    file_name TEXT NOT NULL DEFAULT '', media_proto BLOB,
+    local_path TEXT  -- where the media was last saved; NULL until the first download
 );
 CREATE INDEX idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX idx_messages_chat_ts ON messages(chat_id, timestamp);
@@ -218,12 +221,16 @@ CREATE INDEX idx_messages_chat_ts ON messages(chat_id, timestamp);
 
 | Method | Purpose |
 |--------|---------|
-| `AddMessage(msg)` | INSERT OR IGNORE: idempotent message storage |
+| `AddMessage(msg)` | INSERT OR IGNORE, then fills empty media columns of a known row in the same chat (never a revoked row); returns a `StoreResult` so callers redraw only on change |
 | `UpsertConversation(c)` | INSERT ON CONFLICT UPDATE: create or update chat metadata |
-| `GetMessage(id)` / `GetOldestMessage(chat)` / `CountMessages(chat)` | Single message, backlog anchor, count for the backlog wait |
-| `MarkMessageRevoked(chatID, id)` | Sets `[message revoked]`, clears media; scoped by chat |
+| `GetMessage(id)` / `GetOldestMessage(chat)` / `GetLatestMessage(chat)` / `CountMessages(chat)` | Single message, backlog anchor, chat preview, count for the backlog wait and `/more` |
+| `NthTimestampBefore(chat, before, n)` / `GetMessagesSince(chat, since)` | Chat view paging: anchor of the next page, messages at or after the anchor |
+| `MarkMessageRevoked(chatID, id)` | Sets `[message revoked]`, clears media and `local_path`; scoped by chat |
+| `DeleteMessage(chatID, id)` | Removes a row ("Delete for me"); scoped by chat |
+| `SetLocalPath(chatID, id, path)` | Records where media was saved; scoped by chat |
+| `DeleteEmptyConversations()` | Removes one-to-one chat rows with no messages, time, unread count or pin; groups kept (startup) |
 | `GetMessages(chatId)` | All messages for a chat, ordered by timestamp ASC |
-| `GetMessagesPaginated(chatId, before, limit)` | Older messages before timestamp, DESC (caller reverses) |
+| `GetMessagesPaginated(chatId, before, limit)` | Older messages before timestamp, DESC (caller reverses); not used by the chat view |
 | `SearchMessages(chatId, keyword, limit)` | LIKE search with proper escaping, newest first |
 
 ---
@@ -257,13 +264,15 @@ whatsmeow Client
     ↓ AddEventHandler()
 eventHandler.Handle(evt interface{})
     ↓ type switch
-    ├── *events.Message → process, store in SQLite, notify UI
-    ├── *events.Connected → update status, load chats
-    ├── *events.Disconnected → trigger reconnect
-    ├── *events.HistorySync → bulk message import
-    ├── *events.Receipt → update read status
-    └── ... other event types
+    ├── *events.Message → process (or authorise a revoke), store in SQLite, notify UI
+    ├── *events.Connected → clear reconnect and logout flags, update status
+    ├── *events.Disconnected → update status, schedule reconnect
+    ├── *events.LoggedOut → mark logged out, print the reason
+    ├── *events.DeleteForMe → remove the stored row, move the preview
+    └── *events.HistorySync → bulk message import (goroutine)
 ```
+
+Other event types are ignored.
 
 ---
 
@@ -285,13 +294,15 @@ func TestSomething(t *testing.T) {
 
 ```go
 type MockUiHandler struct {
-    messages []string
-    errors   []error
+    Texts       []string
+    Errors      []error
+    Screens     [][]Message
+    ScreenTexts []string // status printed with each NewScreenWithStatus
+    OpenErr     error    // returned by OpenFile
     // ... captures all UI calls for assertions
 }
 
-func (m *MockUiHandler) PrintText(s string) { m.messages = append(m.messages, s) }
-// ... implements all 16 UiMessageHandler methods
+// ... implements all 18 UiMessageHandler methods
 ```
 
 ### Race Detection
@@ -335,7 +346,8 @@ Never compare JIDs as strings to decide whether two addresses are the same perso
 go func() {
     client := sm.getClient()          // re-fetch, the captured client may be stale
     if client == nil { return }
-    // download, send, poll ...
+    ctx := sm.rootContext()           // cancelled by Shutdown, so quitting stops the work
+    // download, send, poll ... with ctx
 }()
 ```
 

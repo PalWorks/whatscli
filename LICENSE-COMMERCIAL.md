@@ -1,6 +1,6 @@
 # Commercial License
 
-Updated 2026-10-31T01:20:43+05:30.
+Updated 2026-10-30T19:50:43+00:00.
 
 WhatsCLI is dual licensed:
 

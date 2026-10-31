@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T15:01:08+00:00 (chat_view.go added)_
+> _Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: files, root context, part-file sweep, version string, UTC timestamps)_
 
 ## 1. Project
 
@@ -11,7 +11,7 @@
 - Module path: `github.com/PalWorks/whatscli`
 - Go directive `1.26.0`, `toolchain go1.27.3` (whatsmeow requires 1.26.0). An older system Go auto-downloads the toolchain.
 - CGO is required (SQLite via `go-sqlite3`). Linux: `apt install gcc`.
-- Version string: `VERSION` in `main.go` (`v1.3.0`); `make build` and the release workflow override it with `-X main.VERSION=...`.
+- Version string: `VERSION` in `main.go` defaults to `v1.3.0`; `make build`, `make install` and the release workflow override it with `-X main.VERSION=...` (the v1.6.0 release binary reports `v1.6.0`). A plain `go build` or `go install github.com/PalWorks/whatscli@latest` injects nothing, so the top bar and `/help` show `v1.3.0`.
 - Licence: dual, AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). Every Go file starts with an SPDX line (`qrcode/qrcode.go` stays BSD-3-Clause); `.github/scripts/check-spdx.sh` enforces it in CI.
 
 ## 2. Where to read what
@@ -66,7 +66,7 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
-              ui_keybindings.go, ui_render.go, ui_helpers.go
+              ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
@@ -81,17 +81,19 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | File | Role |
 |---|---|
 | `messages.go` | Data types and the `UiMessageHandler` interface |
-| `session_manager.go` | `SessionManager`, event loop, lifecycle, test seams |
+| `session_manager.go` | `SessionManager`, event loop, lifecycle, root context (`rootContext()`, cancelled first in `Shutdown`), part-file sweep at `Init`, test seams |
 | `connection.go` | Login, QR flow, auto-reconnect, `getClient()` |
-| `event_handler.go` | whatsmeow events: messages, connect, disconnect, logout, history sync, incoming revokes |
-| `history_sync.go` | History sync storage, ON_DEMAND refresh, `@lid` handling |
+| `event_handler.go` | whatsmeow events: messages, connect, disconnect, logout, delete for me, history sync, incoming revokes |
+| `history_sync.go` | History sync storage, ON_DEMAND refresh, `@lid` handling, contact list import (`importContacts`) |
 | `chat_state.go` | Current chat, unread, `snapshotPQ()`, `sendText` |
-| `storage.go` | `MessageDatabase` (SQLite), migrations, `RevokedText` |
+| `storage.go` | `MessageDatabase` (SQLite), migrations, `StoreResult`, `RevokedText` |
 | `priority_queue.go` | Heap ordering of conversations |
 | `media.go` | Media metadata extraction and storage, file name sanitisation, open allowlist, `firstURL` |
 | `jid_norm.go` | One canonical chat JID per person (`@lid` to phone number) |
 | `lid_merge.go` | Merges chats stored under `@lid` into the phone-number chat once the mapping is known |
 | `chat_view.go` | Paging of the open chat: `viewAnchor` (under `sm.mu`), page sizes, anchor lowered when older messages arrive |
+| `delete_for_me.go` | "Delete for me" from your other devices (`events.DeleteForMe`): removes the stored row and moves the chat preview |
+| `partfiles.go` | Startup sweep of leftover `.whatscli-<digits>.part` download temp files |
 | `revoke_incoming.go` | Authorisation of incoming revokes |
 | `pathcheck.go` | `ResolveFileWithin`: symlink-aware directory containment |
 | `cmd_registry.go` | Command name to handler map |
@@ -110,9 +112,11 @@ qrcode/       ANSI QR rendering (qrcode.go)
 2. Never hold `sm.mu` during a SQLite write or a network call. Lock, mutate the queue or map, unlock, then write.
 3. Use `snapshotPQ()` for a deep copy of the priority queue before UI updates.
 4. All channels are buffered (size 10): `BatteryChannel`, `StatusChannel`, `CommandChannel`, `ChatChannel`, `TextChannel`. Do not change sizes without understanding back-pressure.
-5. Never block `runManager`. Validation runs on the event loop; network and waits (downloads, revoke send, backlog 5 s poll, group admin lookup) run in goroutines.
+5. Never block `runManager`. Validation runs on the event loop; network and waits (downloads, revoke send, backlog 5 s poll, group admin lookup, `/info` group lookup) run in goroutines.
 6. Auto-reconnect uses exponential backoff (2 s to 30 s, 5 attempts) and respects `sm.loggedOut`, `sm.started` and `sm.reconnecting`.
 7. `UiHandler` methods queue work with `go ctx.App.QueueUpdateDraw`, so ordering between two calls is not guaranteed. Print status that follows a redraw with `NewScreenWithStatus` (one queued update).
+8. Work that outlives a command (downloads, backlog and its poll, own revokes, the incoming-revoke admin check, `/info` group lookup) derives its context from `sm.rootContext()`, which `Shutdown` cancels first.
+9. `sm.viewAnchor` (oldest timestamp shown in the open chat, `chat_view.go`) is guarded by `sm.mu` like `currentReceiver`.
 
 ## 7. Commands
 
@@ -143,8 +147,9 @@ Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID
 ## 9. Security-sensitive code (read SECURITY.md before changing)
 
 - Incoming revokes: `revoke_incoming.go`. Never apply a revoke without the chat and sender checks. `MarkMessageRevoked` is scoped by `chat_id` and must stay so.
-- Opening files: `open` passes only allowlisted extensions to the system opener (`safeToOpen` in `media.go`). `/url` passes only http and https URLs with a host.
-- File names from senders go through `sanitizeFileName` and `safeJoin`; writes go to a temp file then rename. `show` uses `ResolveFileWithin`.
+- Opening files: `open` passes only allowlisted extensions to the system opener (`safeToOpen` in `media.go`). `/url` passes only http and https URLs with a host. The opener (`ui_opener.go`) runs without a shell and is never waited on by the caller.
+- File names from senders go through `sanitizeFileName` and `safeJoin`; writes go to a temp file then rename. `show` uses `ResolveFileWithin`; a repeat download reuses `messages.local_path` only if `ResolveFileWithin` places it directly in the target folder as a regular, non-symlink file.
+- The startup sweep (`partfiles.go`) removes only regular files named exactly `.whatscli-<digits>.part`, directly in the download and preview folders.
 - No secrets, tokens or keys in code, docs, tests, logs or screenshots.
 
 ## 10. Code conventions
@@ -169,7 +174,7 @@ Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID
 
 ## 12. Documentation rules (owner standard)
 
-- Every doc update carries a timestamp to the second in ISO 8601 with offset, from `date --iso-8601=seconds`.
+- Every doc update carries a timestamp to the second in ISO 8601 in UTC, from `date -u --iso-8601=seconds` (public repository).
 - Every table has a visible numbered label line above it.
 - No emojis, no em-dashes or double dashes as punctuation.
 - Every problem raised carries options, trade-offs and a recommendation. End reports with the decision needed or the next action.
