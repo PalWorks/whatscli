@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T17:32:04+00:00 (v1.6.5: onboarding and help window)._
+> _Last updated: 2026-10-31T18:03:42+00:00 (v1.6.6: edits, Ctrl+g help)._
 
 ## 0. North star: every open item, one row each
 
@@ -101,16 +101,18 @@ Orientation only; detail is in CHANGELOG.md.
 | Senders shown by saved contact name, else phone number, resolved at display time (row 21) | v1.6.3 (2026-10-31) |
 | Find a chat by name: `Ctrl+f` or `/select <name>` with a drop-down of matches | v1.6.4 (2026-10-31) |
 | Welcome screen, `F1` help window, top bar with key hints; dead battery figure removed | v1.6.5 (2026-10-31) |
+| Edited messages update; `Ctrl+g` help key | v1.6.6 (2026-10-31) |
 
 ## 2. Next up
 
-### 2.1 Status: v1.6.5 released (updated 2026-10-31T17:32:04+00:00)
+### 2.1 Status: v1.6.6 released (updated 2026-10-31T18:03:42+00:00)
 
-- `v1.6.5` adds onboarding: a welcome screen, an `F1` help window and key hints in the top bar; the battery figure that multi-device WhatsApp no longer sends is removed. `v1.6.5-rc1` kept as a pre-release.
+- `v1.6.6` applies message edits and moves the help key to `Ctrl+g`. `v1.6.6-rc1` kept as a pre-release.
 - Next: rows 14 (needs an `@lid` chat on a live account), 35 and the deferred security rows.
 
 Earlier status, kept for the record:
 
+- v1.6.5: adds onboarding: a welcome screen, an `F1` help window and key hints in the top bar; the battery figure that multi-device WhatsApp no longer sends is removed. `v1.6.5-rc1` kept as a pre-release.
 - v1.6.4: adds finding a chat by name (`Ctrl+f`, `/select <name>`); checked with unit tests and an offline run of the real UI. `v1.6.4-rc1` kept as a pre-release.
 - v1.6.3: shows senders by saved contact name, else phone number (row 21, display time only). On a real account, 6,015 of 6,017 LID senders had a known phone number. `v1.6.3-rc1` kept as a pre-release.
 - v1.6.2: adds scroll bars and fixes the chat list jumping when a row near its end was clicked; checked with unit tests and an offline run of the real UI with mouse clicks and drags. `v1.6.2-rc1` kept as a pre-release.
@@ -229,7 +231,7 @@ Rows 14, 15. No test talks to WhatsApp; this area exists to keep that gap visibl
 
 | Document | Covers |
 |---|---|
-| TESTING.md | Test commands, conventions, the live-account checklist (steps 1 to 34) |
+| TESTING.md | Test commands, conventions, the live-account checklist (steps 1 to 35) |
 | SECURITY.md | Threat notes, controls, how to report |
 | ARCHITECTURE.md | Components, data flow, storage, JID handling |
 | docs/archive/ | Four historic reports from February 2026, kept unchanged; open findings from them are tracked here |
@@ -261,4 +263,4 @@ The anchor uses the chat and sender JIDs as stored. After D16 that is usually th
 
 ### 8.15 Live-account checklist as a release gate
 
-Everything WhatsApp-facing is covered only by fakes. The procedure (34 steps, covering migration, media, revoke both ways, backlog, `@lid`, opener gate, show with symlinks, clipboard, QR, chat paging, group info, Delete for me, repeat download and the part-file sweep) is in TESTING.md. Use a non-production number and a copy of `session_meta.db`. Record each run in TESTING.md Table T3 and summarise it in row 15. Options: (A) run it manually before each tag (current); (B) build a client seam to cover the `cmdRevoke` success path in unit tests (the download goroutine is already covered through the `mediaDownloader` seam) while keeping the live run for protocol behaviour. Recommendation: A now (current practice); B is not started.
+Everything WhatsApp-facing is covered only by fakes. The procedure (35 steps, covering migration, media, revoke both ways, backlog, `@lid`, opener gate, show with symlinks, clipboard, QR, chat paging, group info, Delete for me, repeat download and the part-file sweep) is in TESTING.md. Use a non-production number and a copy of `session_meta.db`. Record each run in TESTING.md Table T3 and summarise it in row 15. Options: (A) run it manually before each tag (current); (B) build a client seam to cover the `cmdRevoke` success path in unit tests (the download goroutine is already covered through the `mediaDownloader` seam) while keeping the live run for protocol behaviour. Recommendation: A now (current practice); B is not started.

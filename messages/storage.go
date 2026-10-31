@@ -312,6 +312,24 @@ func (md *MessageDatabase) MarkMessageRevoked(chatID, id string) (bool, error) {
 	return n > 0, nil
 }
 
+// UpdateMessageText replaces the text of a stored message after an edit. The
+// row must match the message ID and the chat, and a revoked message is never
+// changed. Returns true when a row was updated.
+func (md *MessageDatabase) UpdateMessageText(chatID, id, text string) (bool, error) {
+	if md.db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`UPDATE messages SET text = ? WHERE id = ? AND chat_id = ? AND COALESCE(text, '') <> ?`, text, id, chatID, RevokedText)
+	if err != nil {
+		return false, fmt.Errorf("failed to update message text: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read update result: %w", err)
+	}
+	return n > 0, nil
+}
+
 // DeleteMessage removes a stored message. The row must match both the message
 // ID and the chat. Returns true when a row was deleted.
 func (md *MessageDatabase) DeleteMessage(chatID, id string) (bool, error) {

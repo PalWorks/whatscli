@@ -306,6 +306,12 @@ func (eh *eventHandler) handleMessage(evt *events.Message) {
 		eh.sm.handleIncomingRevoke(evt.Info.MessageSource, pm.GetKey().GetID())
 		return
 	}
+	// Edit by the sender, from a contact or from one of our other devices.
+	if pm := evt.Message.GetProtocolMessage(); pm != nil &&
+		pm.GetType() == waE2E.ProtocolMessage_MESSAGE_EDIT && pm.GetKey().GetID() != "" {
+		eh.sm.handleIncomingEdit(evt.Info.MessageSource, pm.GetKey().GetID(), pm.GetEditedMessage())
+		return
+	}
 	text, preview := extractMessageContent(evt.Message)
 	eh.processIncomingMessage(evt, text, preview)
 }

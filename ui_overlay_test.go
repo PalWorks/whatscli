@@ -17,7 +17,7 @@ func TestHelpTextListsEveryCommandAndKey(t *testing.T) {
 			t.Errorf("help lacks /%s", h.name)
 		}
 	}
-	for _, key := range []string{km.FindChat, km.FocusMessages, km.CommandQuit, km.MessageDownload, "F1"} {
+	for _, key := range []string{km.FindChat, km.FocusMessages, km.CommandQuit, km.MessageDownload, helpKey, "F1"} {
 		if !strings.Contains(got, key) {
 			t.Errorf("help lacks key %q", key)
 		}
@@ -29,7 +29,7 @@ func TestWelcomeTextIsShort(t *testing.T) {
 	if n := strings.Count(got, "\n"); n > 11 {
 		t.Errorf("welcome card has %d lines; keep it to the essentials", n)
 	}
-	for _, want := range []string{"Welcome to WhatsCLI", config.Config.Keymap.FindChat, "F1", "/help"} {
+	for _, want := range []string{"Welcome to WhatsCLI", config.Config.Keymap.FindChat, helpKey, "/help"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("welcome lacks %q", want)
 		}
@@ -38,7 +38,7 @@ func TestWelcomeTextIsShort(t *testing.T) {
 
 func TestHintAndStatusText(t *testing.T) {
 	h := hintText(config.Config.Keymap, "/")
-	for _, want := range []string{"F1", "Help", config.Config.Keymap.FindChat, "Find chat", config.Config.Keymap.CommandQuit} {
+	for _, want := range []string{helpKey, "Help", config.Config.Keymap.FindChat, "Find chat", config.Config.Keymap.CommandQuit} {
 		if !strings.Contains(h, want) {
 			t.Errorf("hint bar lacks %q: %q", want, h)
 		}

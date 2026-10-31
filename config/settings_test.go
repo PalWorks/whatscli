@@ -29,7 +29,7 @@ func TestDefaults_KeyBindings(t *testing.T) {
 		{"SwitchPanels", Config.Keymap.SwitchPanels, "Tab"},
 		{"FocusInput", Config.Keymap.FocusInput, "Ctrl+Space"},
 		{"CommandQuit", Config.Keymap.CommandQuit, "Ctrl+q"},
-		{"CommandHelp", Config.Keymap.CommandHelp, "Ctrl+?"},
+		{"CommandHelp", Config.Keymap.CommandHelp, "Ctrl+g"},
 	}
 
 	for _, tt := range tests {

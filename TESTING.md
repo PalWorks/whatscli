@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T17:32:04+00:00 (step 34, ui_overlay_test.go)_
+_Last updated: 2026-10-31T18:03:42+00:00 (step 35, edit tests)_
 
 ## 1. Commands
 
@@ -24,7 +24,7 @@ Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race 
 
 ## 3. Test layout
 
-**Table T1: Test files (184 top-level tests at v1.6.5)**
+**Table T1: Test files (187 top-level tests at v1.6.6)**
 
 | File | Tests | Covers |
 |---|---|---|
@@ -57,6 +57,7 @@ Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race 
 | `ui_scrollbar_test.go` | 4 | Scroll thumb size and position, click-to-offset mapping, bar hit test, chat list time cell with unread count |
 | `ui_overlay_test.go` | 3 | Help window lists every command and key; welcome text stays short; top bar hints and state, no battery |
 | `messages/display_names_test.go` | 3 | Sender label order (saved name, phone number, `~PushName`, LID), contact saved under the LID, no stores, `getMessages` labels without changing stored rows |
+| `messages/edit_incoming_test.go` | 3 | Edits by the sender and by our other device, refused edits (other sender, other chat, not yours, unknown, revoked), edit across LID and phone-number forms |
 | `ui_helpers_test.go` | 1 | `chatForID` |
 
 ## 4. Conventions
@@ -120,7 +121,8 @@ Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Ta
 | 31 | Click near the list end | Click each of the last three visible rows of the Chats list | Each click opens that chat; the list does not move |
 | 32 | Sender names | Open a group and a one-to-one chat with messages from people shown before as long LID numbers | Each sender shows the saved contact name, else `+<phone>`; only a sender with a private number shows `~Name` or a LID |
 | 33 | Find a chat | Press `Ctrl+f`, type part of a name, press `Down` and `Enter`; then enter `/select zzzq` | The list narrows as you type and the chosen chat opens; `No chat matches "zzzq"` is printed |
-| 34 | Welcome and help | Start WhatsCLI; press `F1` (or enter `/help`), scroll, press `Esc` | The pane shows "Welcome to WhatsCLI" with five keys; the top bar shows the version, online or offline, and the main keys, with no battery figure; the help window lists every command and closes on `Esc`, focus back on the input |
+| 34 | Welcome and help | Start WhatsCLI; press `Ctrl+g` (or `F1`, or enter `/help`), scroll, press `Esc` | The pane shows "Welcome to WhatsCLI" with five keys; the top bar shows the version, online or offline, and the main keys, with no battery figure; the help window lists every command and closes on `Esc`, focus back on the input |
+| 35 | Edited message | Send a message to "Message yourself" from the phone, then edit it on the phone | WhatsCLI shows the new text followed by `(edited)` |
 
 **Table T3: Run record (copy one row per run)**
 

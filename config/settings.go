@@ -96,7 +96,7 @@ var Config = IniFile{
 		Pasteuser:       "Ctrl+v",
 		CommandConnect:  "Ctrl+r",
 		CommandQuit:     "Ctrl+q",
-		CommandHelp:     "Ctrl+?",
+		CommandHelp:     "Ctrl+g",
 		MessageDownload: "d",
 		MessageInfo:     "i",
 		MessageOpen:     "o",

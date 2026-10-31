@@ -2,9 +2,15 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T17:32:04+00:00 (released v1.6.5)_
+_Last updated: 2026-10-31T18:03:42+00:00 (released v1.6.6)_
 
 ## [Unreleased]
+
+## [1.6.6] - 2026-10-31
+
+### Fixed
+- Edited messages now update: an edit from the sender (or from your phone, for your own messages) replaces the stored text, marked `(edited)`. Before, edits were ignored. Edits are checked like revokes: same chat, same sender, never on a deleted message.
+- The help key works in every terminal: `Ctrl+g` (shown in the top bar) opens and closes the help window. `F1` still works where the terminal passes it on; Xfce Terminal keeps `F1` for its own manual, and `Ctrl+?` is sent as Backspace by many terminals, so it is no longer the default `command_help`.
 
 ## [1.6.5] - 2026-10-31
 
