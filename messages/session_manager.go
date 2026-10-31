@@ -51,8 +51,9 @@ type SessionManager struct {
 	rootCancel context.CancelFunc
 
 	// Test seams; nil in production. Set before use, never mutated afterwards.
-	lidMapperOverride lidMapper        // replaces client.Store.LIDs
-	groupInfoOverride groupInfoFetcher // replaces client.GetGroupInfo
+	lidMapperOverride    lidMapper        // replaces client.Store.LIDs
+	groupInfoOverride    groupInfoFetcher // replaces client.GetGroupInfo
+	contactNamesOverride contactNames     // replaces client.Store.Contacts
 }
 
 // initialize the SessionManager

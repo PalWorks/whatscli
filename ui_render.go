@@ -47,7 +47,7 @@ func getTextMessageString(msg *messages.Message) string {
 	if msg.FromMe { //msg from me
 		out += "[-::d](" + time + ") [" + colorMe + "::b]Me: [-::-]" + text
 	} else { // message from others
-		out += "[-::d](" + time + ") [" + colorContact + "::b]" + msg.ContactShort + ": [-::-]" + text
+		out += "[-::d](" + time + ") [" + colorContact + "::b]" + tview.Escape(msg.ContactShort) + ": [-::-]" + text
 	}
 	out += "[\"\"]"
 	return out

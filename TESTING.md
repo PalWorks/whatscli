@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T16:55:57+00:00 (verified at v1.6.2; owner use of v1.6.2 recorded in Table T3)_
+_Last updated: 2026-10-31T17:01:57+00:00 (step 32, display_names_test.go)_
 
 ## 1. Commands
 
@@ -24,7 +24,7 @@ Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race 
 
 ## 3. Test layout
 
-**Table T1: Test files (175 top-level tests after v1.6.1)**
+**Table T1: Test files (178 top-level tests at v1.6.3)**
 
 | File | Tests | Covers |
 |---|---|---|
@@ -55,6 +55,7 @@ Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race 
 | `ui_complete_test.go` | 6 | Command list matches the registry; drop-down entries, completed text, echo line and tag escaping |
 | `version_test.go` | 1 | Version shown: injected tag, `go install` module version, `dev` |
 | `ui_scrollbar_test.go` | 4 | Scroll thumb size and position, click-to-offset mapping, bar hit test, chat list time cell with unread count |
+| `messages/display_names_test.go` | 3 | Sender label order (saved name, phone number, `~PushName`, LID), contact saved under the LID, no stores, `getMessages` labels without changing stored rows |
 | `ui_helpers_test.go` | 1 | `chatForID` |
 
 ## 4. Conventions
@@ -116,6 +117,7 @@ Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Ta
 | 29 | Open at latest | Scroll up in a long chat with `PgUp`, then open another chat | The new chat shows its latest message at the bottom |
 | 30 | Scroll bars | With the mouse on, open a long chat; drag the thumb on the message pane's right border up; click the middle of the Chats bar | The thumb shows near the bottom first; dragging scrolls to older messages; the click moves the chat list to its middle without opening a chat |
 | 31 | Click near the list end | Click each of the last three visible rows of the Chats list | Each click opens that chat; the list does not move |
+| 32 | Sender names | Open a group and a one-to-one chat with messages from people shown before as long LID numbers | Each sender shows the saved contact name, else `+<phone>`; only a sender with a private number shows `~Name` or a LID |
 
 **Table T3: Run record (copy one row per run)**
 

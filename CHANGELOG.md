@@ -2,9 +2,14 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T16:39:26+00:00 (released v1.6.2)_
+_Last updated: 2026-10-31T17:01:57+00:00 (released v1.6.3)_
 
 ## [Unreleased]
+
+## [1.6.3] - 2026-10-31
+
+### Changed
+- Message senders are shown by the name saved in your phone's contacts, else by their phone number (`+<digits>`), resolved when the chat is drawn. A sender WhatsApp identifies only by a LID whose phone number is not shared shows their WhatsApp name as `~Name`, else the LID number. Before, many senders showed as a bare LID number. Stored sender IDs are unchanged, so read receipts and backlog requests are unaffected (ROADMAP row 21).
 
 ## [1.6.2] - 2026-10-31
 
