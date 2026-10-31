@@ -112,6 +112,7 @@ func (sm *SessionManager) loadRecentChats() {
 		sm.uiHandler.UpdateChatList(safeList)
 
 		sm.uiHandler.PrintText("Chats loaded.")
+		sm.mergeKnownLIDChats()
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
 	}
@@ -348,6 +349,10 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 
 	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
 		len(toUpsert), totalMessages))
+
+	// History sync also teaches whatsmeow LID mappings; merge chats that
+	// were stored under a LID before (ROADMAP row 13).
+	sm.mergeKnownLIDChats()
 }
 
 // isHistoryChatServer reports whether a history sync conversation on this JID

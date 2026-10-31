@@ -2,7 +2,7 @@
 
 System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T01:12:03+05:30 (initial; verified against the code at commit f5a9b66)_
+_Last updated: 2026-10-31T07:38:43+00:00 (added lid_merge.go)_
 
 ## 1. Components
 
@@ -30,7 +30,7 @@ _Last updated: 2026-10-31T01:12:03+05:30 (initial; verified against the code at 
 | Session | `messages/session_manager.go`, `connection.go` | `SessionManager`: event loop `runManager`, login and QR flow, reconnect with backoff, `getClient()` |
 | Events | `messages/event_handler.go`, `history_sync.go`, `chat_state.go` | Handle whatsmeow events (message, connected, disconnected, logged out, history sync), store messages, keep the chat priority queue |
 | Commands | `messages/cmd_*.go`, `cmd_registry.go` | One handler per slash command; registry filled in `init()` |
-| Media and safety | `messages/media.go`, `pathcheck.go`, `revoke_incoming.go`, `jid_norm.go` | Media metadata, file name sanitisation, open allowlist, containment, revoke authorisation, canonical JIDs |
+| Media and safety | `messages/media.go`, `pathcheck.go`, `revoke_incoming.go`, `jid_norm.go`, `lid_merge.go` | Media metadata, file name sanitisation, open allowlist, containment, revoke authorisation, canonical JIDs, merge of old `@lid` chats |
 | Storage | `messages/storage.go` | `MessageDatabase`: `conversations` and `messages` tables |
 | Config | `config/settings.go` | INI at `<XDG_CONFIG>/whatscli/whatscli.config`; four sections |
 | QR | `qrcode/qrcode.go` | Renders a QR code as ANSI with the full 4-module quiet zone |
