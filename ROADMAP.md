@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T13:03:59+00:00 (v1.5.0 released; row 15 smoke run on v1.5.0-rc1)._
+> _Last updated: 2026-10-31T14:17:22+00:00 (SPDX headers added to all Go files, checked in CI)._
 
 ## 0. North star: every open item, one row each
 
@@ -278,7 +278,7 @@ Everything WhatsApp-facing is covered only by fakes. The procedure (21 steps, co
 
 ### 8.16 Licence
 
-Done. WhatsCLI is dual licensed under AGPL-3.0-only ([LICENSE](LICENSE)) and a paid commercial licence ([LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)); contact support@palworks.ai.
+Done. WhatsCLI is dual licensed under AGPL-3.0-only ([LICENSE](LICENSE)) and a paid commercial licence ([LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)); contact support@palworks.ai. Every Go file carries an SPDX line, checked in CI; `qrcode/qrcode.go` is third-party BSD-3-Clause code and keeps that licence.
 
 ### 8.17 First release run unverified
 

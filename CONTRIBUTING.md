@@ -2,9 +2,11 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T01:11:57+05:30 (corrected the command walkthrough, which referred to a non-existent `registerCommand`, and added the branch and review rules)_
+_Last updated: 2026-10-31T14:17:27+00:00 (SPDX header rule for new Go files)_
 
 ## Licensing of contributions
+
+New Go files start with `// SPDX-License-Identifier: AGPL-3.0-only` followed by a blank line; CI checks this.
 
 WhatsCLI is dual licensed under AGPL-3.0-only and a paid commercial license ([LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md)). By opening a pull request you agree that PalWorks may distribute your contribution under both licenses. Questions: support@palworks.ai.
 
