@@ -4,6 +4,7 @@ package messages
 
 import (
 	"container/heap"
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -40,6 +41,13 @@ type SessionManager struct {
 	priorityQueue   PriorityQueue
 	convByJID       map[string]*Conversation
 	debug           bool // T-2: enable verbose WhatsApp protocol logging
+
+	// Root context for work that outlives a command: downloads, backlog
+	// requests and polling, revoke requests. Cancelled by Shutdown. Created
+	// lazily (rootContext) so test SessionManagers built without Init work.
+	ctxOnce    sync.Once
+	rootCtx    context.Context
+	rootCancel context.CancelFunc
 
 	// Test seams; nil in production. Set before use, never mutated afterwards.
 	lidMapperOverride lidMapper        // replaces client.Store.LIDs
@@ -80,7 +88,20 @@ func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	sm.ChatChannel = make(chan Chat, 10)
 	sm.TextChannel = make(chan *waProto.Message, 10)
 	sm.eventHandler = &eventHandler{sm: sm}
+
+	// Remove temp files left by downloads cut short by quitting (row 11).
+	sweepDownloadFolders(config.Config.General.DownloadPath, config.Config.General.PreviewPath)
 	return nil
+}
+
+// rootContext returns the context cancelled by Shutdown.
+func (sm *SessionManager) rootContext() context.Context {
+	sm.ctxOnce.Do(sm.initRootContext)
+	return sm.rootCtx
+}
+
+func (sm *SessionManager) initRootContext() {
+	sm.rootCtx, sm.rootCancel = context.WithCancel(context.Background())
 }
 
 // starts the receiver and message handling go routine
@@ -156,6 +177,10 @@ func (sm *SessionManager) runManager() error {
 
 // Shutdown performs a clean shutdown, saving data and disconnecting
 func (sm *SessionManager) Shutdown() {
+	// Stop downloads, backlog polling and pending revoke requests first.
+	sm.ctxOnce.Do(sm.initRootContext)
+	sm.rootCancel()
+
 	sm.mu.Lock()
 	if sm.started {
 		close(sm.stop)

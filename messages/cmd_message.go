@@ -96,8 +96,12 @@ func runDownload(sm *SessionManager, client *whatsmeow.Client, cmdName string, p
 			sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 			return
 		}
-		path, err := sm.fetchMedia(context.Background(), client, msg, dir)
+		ctx := sm.rootContext()
+		path, err := sm.fetchMedia(ctx, client, msg, dir)
 		if err != nil {
+			if ctx.Err() != nil {
+				return // shutting down; the temp file was removed
+			}
 			sm.uiHandler.PrintError(err)
 			return
 		}
@@ -194,7 +198,7 @@ func downloadMedia(ctx context.Context, dl mediaDownloader, msg Message, dir str
 		}
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(full), ".whatscli-*.part")
+	tmp, err := os.CreateTemp(filepath.Dir(full), partFilePattern)
 	if err != nil {
 		return "", fmt.Errorf("create temporary file: %w", err)
 	}
@@ -304,7 +308,7 @@ func cmdRevoke(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 		// EmptyJID sender marks the key FromMe, independent of whether our own
 		// ID was stored in phone-number or LID form.
 		revoke := client.BuildRevoke(chatJID, types.EmptyJID, types.MessageID(msg.Id))
-		if _, err := client.SendMessage(context.Background(), chatJID, revoke); err != nil {
+		if _, err := client.SendMessage(sm.rootContext(), chatJID, revoke); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("revoke message: %w", err))
 			return
 		}

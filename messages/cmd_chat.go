@@ -108,12 +108,19 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 			sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 			return
 		}
-		if _, err := client.SendPeerMessage(context.Background(), req); err != nil {
+		ctx := sm.rootContext()
+		if _, err := client.SendPeerMessage(ctx, req); err != nil {
+			if ctx.Err() != nil {
+				return // shutting down
+			}
 			sm.uiHandler.PrintError(fmt.Errorf("failed to request message history: %w", err))
 			return
 		}
 
-		after, err := sm.waitForNewMessages(receiver, before, backlogWait, backlogPoll)
+		after, err := sm.waitForNewMessages(ctx, receiver, before, backlogWait, backlogPoll)
+		if ctx.Err() != nil {
+			return // shutting down
+		}
 		if err != nil {
 			sm.uiHandler.PrintError(err)
 		}
@@ -176,10 +183,12 @@ func (sm *SessionManager) backlogAnchor(chat string) (*types.MessageInfo, bool, 
 	}, true, nil
 }
 
-// waitForNewMessages polls the message count of chat until it exceeds before
-// or timeout elapses, and returns the last count seen.
-func (sm *SessionManager) waitForNewMessages(chat string, before int, timeout, interval time.Duration) (int, error) {
+// waitForNewMessages polls the message count of chat until it exceeds before,
+// timeout elapses or ctx is cancelled, and returns the last count seen.
+func (sm *SessionManager) waitForNewMessages(ctx context.Context, chat string, before int, timeout, interval time.Duration) (int, error) {
 	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
 	for {
 		n, err := sm.db.CountMessages(chat)
 		if err != nil {
@@ -188,7 +197,11 @@ func (sm *SessionManager) waitForNewMessages(chat string, before int, timeout, i
 		if n > before || !time.Now().Before(deadline) {
 			return n, nil
 		}
-		time.Sleep(interval)
+		select {
+		case <-ctx.Done():
+			return n, ctx.Err()
+		case <-ticker.C:
+		}
 	}
 }
 
