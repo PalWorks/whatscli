@@ -2,12 +2,29 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T14:17:22+00:00 (SPDX licence headers)_
+_Last updated: 2026-10-31T14:38:01+00:00 (v1.6.0 changes under Unreleased)_
 
 ## [Unreleased]
 
 ### Added
 - Every Go source file starts with an SPDX licence line (`AGPL-3.0-only`; `BSD-3-Clause` for the third-party `qrcode/qrcode.go`), and CI fails when one is missing (`.github/scripts/check-spdx.sh`).
+- `@lid` contacts are imported at start and name their phone-number chat when the mapping is known.
+- "Delete for me" done on the phone removes the message here too and updates the chat preview.
+- A repeat download of the same media reuses the file saved before instead of saving a second copy (new nullable column `messages.local_path`).
+- Leftover `.whatscli-<digits>.part` files from an interrupted download are removed at startup.
+
+### Fixed
+- `show` no longer freezes the screen or leaves defunct processes: the viewer runs in the background with a 15 s timeout and its errors are shown.
+- `/url` and `open` no longer block other commands, and a failing system opener is reported.
+- Status lines after `/more`, `/backlog`, `/revoke`, history sync and chat merges are no longer wiped by the redraw that follows.
+- `/info` in a group no longer blocks other commands while waiting for WhatsApp (15 s timeout).
+- Quitting cancels running downloads, backlog requests and revokes.
+- Messages stored before media support gain download details when WhatsApp sends them again; a redelivered message no longer redraws the chat, bumps the unread count or notifies twice.
+
+### Changed
+- The `i` key is labelled "chat info" and no longer sends a message ID.
+- The `skratchdot/open-golang` dependency is replaced by a small built-in opener.
+- CI: actions pinned to commit SHAs (kept current by Dependabot), the Go 1.26 leg really runs Go 1.26, AUR versions are valid for release candidates, and release notes start from the previous final release.
 
 ## [1.5.0] - 2026-10-31
 

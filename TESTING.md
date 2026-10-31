@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T13:03:59+00:00 (v1.5.0 release candidate smoke run recorded in Table T3)_
+_Last updated: 2026-10-31T14:38:01+00:00 (mock method count)_
 
 ## 1. Commands
 
@@ -46,7 +46,7 @@ Last verified when this file was written: build, vet and `go test -race -count=1
 
 - Table-driven tests preferred (`storage_test.go`, `media_safety_test.go` are examples).
 - Storage tests use in-memory SQLite: `db, _ := sql.Open("sqlite3", ":memory:")`, then `md.InitWithDB(db)`. Never call `Init()` in tests; it opens the real config path.
-- Use `MockUiHandler` (`messages/mock_ui_handler.go`) for backend tests; it implements all 16 `UiMessageHandler` methods.
+- Use `MockUiHandler` (`messages/mock_ui_handler.go`) for backend tests; it implements all 18 `UiMessageHandler` methods.
 - No test talks to WhatsApp. Use the seams: `mediaDownloader` (fake downloads), `lidMapperOverride` (fake LID store), `groupInfoOverride` (fake group metadata), `webMessageParser` (history sync without a connected client; a zero `whatsmeow.Client{}` parses incoming messages).
 - Every security rule gets a negative test (what must not happen). Authors of the revoke, open and path fixes also ran mutation checks: reverting each control made at least one test fail. Repeat that when you change a control.
 - All tests run with `-race`.

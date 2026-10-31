@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T14:17:22+00:00 (SPDX headers added to all Go files, checked in CI)._
+> _Last updated: 2026-10-31T14:37:42+00:00 (rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32 and new row 36 done for v1.6.0; rows 34 and 35 added)._
 
 ## 0. North star: every open item, one row each
 
@@ -17,28 +17,31 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | # | Bucket | Priority | State | Size | Impact | Raised | Problem | Solution or next step |
 |---|---|---|---|---|---|---|---|---|
 | 17 | §3.1 | P1 | **Done** | S | H | 2026-10-31 | Done 2026-10-31: `v1.4.0-rc1` then `v1.4.0` built all three archives; checksums verified. The release workflow has never run on a real tag. If `ubuntu-24.04-arm` or the Windows CGO build fails, the first release fails and blocks the `release` job. | Tag a release candidate on a throwaway tag, check the 3 archives and checksums, then the real tag. [§8.17](#817-first-release-run-unverified) |
-| 12 | §3.1 | P2 | **Open** | S | M | 2026-10-31 | CI and release hygiene: mutable action tags in a `contents: write` job, Go 1.26 matrix leg may run 1.27.3, AUR `pkgver` invalid for `-rc` tags, release notes pick the wrong previous tag. | One small CI change covering all four plus `go mod tidy`. [§8.12](#812-ci-and-release-hygiene) |
+| 12 | §3.1 | P2 | **Done** | S | M | 2026-10-31 | Done 2026-10-31 (PR 10): actions pinned to commit SHAs with Dependabot weekly bumps; `GOTOOLCHAIN=local` plus a `go version` check so the 1.26 leg runs 1.26 (CI showed go1.26.10); AUR `pkgver` maps `-` to `_` (`1.6.0_rc1`) while the source URL keeps the tag; release notes start from `.github/scripts/previous-tag.sh` (previous final tag for a final, previous tag for an rc); `go mod tidy`. CI and release hygiene: mutable action tags in a `contents: write` job, Go 1.26 matrix leg may run 1.27.3, AUR `pkgver` invalid for `-rc` tags, release notes pick the wrong previous tag. | One small CI change covering all four plus `go mod tidy`. [§8.12](#812-ci-and-release-hygiene) |
 | 13 | §3.3 | P2 | **Done** | M | M | 2026-10-31 | Done 2026-10-31 in v1.5.0 (`messages/lid_merge.go`, tests in `lid_merge_test.go`); dry run on a copy of real data merged 8 duplicates. R1: an `@lid` chat stored before its phone-number mapping was known stays a separate chat from the person's phone-number chat, so one person can appear twice. | Approved (owner, 2026-10-31, D20): merge the `@lid` rows into the phone-number chat once the mapping is known. Start after the live-account checklist (row 15, step 17) has measured how often it occurs. [§8.13](#813-r1-lid-duplicate-merge) |
 | 14 | §3.6 | P2 | **Open** | S | M | 2026-10-31 | Partly verified 2026-10-31: the phone answered a backlog request in a phone-number chat; no `@lid` chat was available to test. [Unverified] The phone may not answer an ON_DEMAND backlog request when the anchor chat is a phone-number JID but its own record is LID. `/backlog` would silently do nothing there. | Verify with checklist step 17 on a live account; if no reply, send the anchor in LID form via `GetLIDForPN`. [§8.14](#814-r2-backlog-anchor-jid-form) |
-| 6 | §3.4 | P2 | **Open** | S | M | 2026-10-31 | `show` runs the viewer on the UI goroutine: a slow viewer freezes all input and redraws, and every use leaves a zombie process (`Wait` is never called). | Run the viewer off the UI goroutine with `cmd.Output()` under a timeout, then `QueueUpdateDraw` only to write the bytes (review option A). |
-| 10 | §3.4 | P2 | **Open** | S | M | 2026-10-31 | "Loaded N additional messages" and "revoked: id" can be wiped by the redraw that follows, because UI updates are queued from separate goroutines. The user cannot tell whether the action worked. | Print status after the redraw inside one queued update, or use the status bar (review option A). Ordered UI channel is a later refactor. |
-| 5 | §3.4 | P3 | **Open** | S | L | 2026-10-31 | `/url` runs the system opener synchronously on the event loop and discards its error. A hanging opener or terminal browser stops all commands. | Use `open.Start`, `go cmd.Wait()`, and return the error through `PrintError`; change `OpenFile` to return an error (touches the interface and mock). |
-| 7 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | `INSERT OR IGNORE` never fills media metadata on rows stored before the upgrade, and every history chunk redraws the open chat even if nothing new was stored. | Upsert that fills media columns only when empty and never on a revoked row, and return whether a row changed (review option A). Owner accepted old media for now (D13). |
-| 9 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | The first repeat download of a named document saves a second copy `<stem>_<id>`; the reuse comment holds only from the third download. | Record the saved path in SQLite (`local_path`) and reuse it, or accept the duplicate and fix the comment. |
-| 11 | §3.3 | P3 | **Open** | M | L | 2026-10-31 | Downloads use `context.Background()`. Quitting mid-download leaves `.whatscli-*.part` files in Downloads, and they accumulate. | Root context cancelled in `Shutdown`, used for downloads, backlog and revoke; sweep stale `.part` files at startup. |
+| 6 | §3.4 | P2 | **Done** | S | M | 2026-10-31 | Done 2026-10-31 (PR 12): `renderImage` runs the viewer in its own goroutine with a 15 s timeout and `Output()`, so it is always reaped; only writing the output is queued on the UI goroutine; viewer errors are shown. `show` runs the viewer on the UI goroutine: a slow viewer freezes all input and redraws, and every use leaves a zombie process (`Wait` is never called). | Run the viewer off the UI goroutine with `cmd.Output()` under a timeout, then `QueueUpdateDraw` only to write the bytes (review option A). |
+| 10 | §3.4 | P2 | **Done** | S | M | 2026-10-31 | Done 2026-10-31 (PR 12) with option A: `NewScreenWithStatus` redraws and prints status and errors in one queued update, used by `/more`, `/backlog`, `/revoke`, history sync, "Chats loaded." and the LID merge. The ordered UI channel stays a possible later refactor. "Loaded N additional messages" and "revoked: id" can be wiped by the redraw that follows, because UI updates are queued from separate goroutines. The user cannot tell whether the action worked. | Print status after the redraw inside one queued update, or use the status bar (review option A). Ordered UI channel is a later refactor. |
+| 5 | §3.4 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 12): `ui_opener.go` starts the opener without a shell and without blocking, waits for it in the background and reports a start failure or non-zero exit; `OpenFile` returns an error. The `open-golang` dependency is removed. `/url` runs the system opener synchronously on the event loop and discards its error. A hanging opener or terminal browser stops all commands. | Use `open.Start`, `go cmd.Wait()`, and return the error through `PrintError`; change `OpenFile` to return an error (touches the interface and mock). |
+| 7 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 11): `AddMessage` returns a `StoreResult`; a known row in the same chat gets empty media columns filled (never on a revoked row, never replacing media); history sync redraws only when a row changed, and a redelivered live message no longer bumps unread or notifies. Old rows gain media only when WhatsApp sends them again. `INSERT OR IGNORE` never fills media metadata on rows stored before the upgrade, and every history chunk redraws the open chat even if nothing new was stored. | Upsert that fills media columns only when empty and never on a revoked row, and return whether a row changed (review option A). Owner accepted old media for now (D13). |
+| 9 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 11) with option (a): new nullable column `messages.local_path`; a repeat download reuses the recorded file only if it is a regular, non-symlink file directly inside the target folder (`ResolveFileWithin`). One path is kept per message, so alternating `download` and `open` with different download and preview folders can still create a second copy (accepted). The first repeat download of a named document saves a second copy `<stem>_<id>`; the reuse comment holds only from the third download. | Record the saved path in SQLite (`local_path`) and reuse it, or accept the duplicate and fix the comment. |
+| 11 | §3.3 | P3 | **Done** | M | L | 2026-10-31 | Done 2026-10-31 (PR 11): a root context on `SessionManager`, cancelled first in `Shutdown`, covers downloads, backlog (and its poll), own revokes and the incoming-revoke admin check; startup removes only regular files named `.whatscli-<digits>.part` directly in the download and preview folders. A second instance started during a download would remove the first one's temp file (accepted; add an age threshold if anyone runs two instances). Downloads use `context.Background()`. Quitting mid-download leaves `.whatscli-*.part` files in Downloads, and they accumulate. | Root context cancelled in `Shutdown`, used for downloads, backlog and revoke; sweep stale `.part` files at startup. |
 | 23 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | `.github/copilot-instructions.md` still says Go 1.24 and 17 methods; `.github/PULL_REQUEST_TEMPLATE.md` is the 2025 whatsmeow-migration text. Copilot users get wrong rules. Done 2026-10-31T01:13:06+05:30. | Replace both with a pointer to AGENTS.md and a generic PR checklist (docs pass was not allowed to edit `.github/`). |
-| 24 | §3.4 | P3 | **Open** | T | L | 2026-10-31 | The `i` key sends `info` with the message ID, but `cmdInfo` ignores it and prints chat or group info, not message details. | Either implement message info or relabel the key and README entry as "chat info". |
-| 25 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | `loadRecentChats` (contact list import) still accepts only phone-number and group chats, so `@lid` contacts are not imported at start. | Reuse `isHistoryChatServer` and `canonicalChatJID` there, with a test. |
+| 24 | §3.4 | P3 | **Done** | T | L | 2026-10-31 | Done 2026-10-31 (PR 12) with option relabel: the `i` key sends `info` without a message ID and is labelled "chat info". The `i` key sends `info` with the message ID, but `cmdInfo` ignores it and prints chat or group info, not message details. | Either implement message info or relabel the key and README entry as "chat info". |
+| 25 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 9): `importContacts` uses `isHistoryChatServer` and `canonicalChatJID`; a mapped `@lid` contact names its phone-number chat, an unmapped one stays `@lid`; only groups still create new chats; an `@lid` contact with no name is skipped so a bare LID number never replaces a real name. `loadRecentChats` (contact list import) still accepts only phone-number and group chats, so `@lid` contacts are not imported at start. | Reuse `isHistoryChatServer` and `canonicalChatJID` there, with a test. |
 | 31 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | SECURITY.md points reporters to GitHub private vulnerability reporting, which may not be enabled on `PalWorks/whatscli`. A reporter would have no private channel. | Owner enables it in repository Settings, Code security; or names another contact in SECURITY.md. |
 | 16 | §3.5 | P2 | **Done** | S | M | 2026-10-31 | Repository had no `LICENSE` file. | Dual licence added: AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). [§8.16](#816-licence) |
-| 32 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | "Delete for me" on the phone (the only delete offered in "Message yourself") is synced to linked devices as app state, but WhatsCLI ignores it, so the message stays visible (live run 2026-10-31). | Handle whatsmeow's `events.DeleteForMe` by removing or marking the stored row, with a test. |
+| 32 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 9): `events.DeleteForMe` removes the stored message (matched to its chat in either JID form), moves the preview to the newest remaining message and redraws the open chat. Deletes made while WhatsCLI was unlinked are not applied (row 35). "Delete for me" on the phone (the only delete offered in "Message yourself") is synced to linked devices as app state, but WhatsCLI ignores it, so the message stays visible (live run 2026-10-31). | Handle whatsmeow's `events.DeleteForMe` by removing or marking the stored row, with a test. |
 | 33 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A in v1.5.0 (owner choice); copy of real data: 8,456 to 504 chat rows. History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
+| 34 | §3.4 | P3 | **Decision** | S | L | 2026-10-31 | `/more` can never load anything: the chat view already shows every stored message, so there is nothing older to page in. | Options: (A) open chats with the latest N messages and let `/more` page older ones in (faster for long chats); (B) remove `/more` and point to `/backlog`; (C) keep it and say "all stored messages are shown". Recommendation A. |
+| 36 | §3.4 | P3 | **Done** | T | L | 2026-10-31 | Done 2026-10-31: `/info` in a group called `GetGroupInfo` on the command loop with no timeout, so a slow server blocked every command. It now runs in a goroutine with a 15 s timeout from the root context. | Same pattern as the incoming-revoke admin check. |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
 | 19 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R4: a revoke that arrives before its target (offline queue order) is ignored, so the message stays visible. | Remember pending revokes briefly. Accepted for now. |
 | 20 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R5: the open allowlist judges only the extension; a PDF or image viewer exploit is still possible, as in any client. | Also check that media kind matches the extension. Small gain; accepted. |
 | 21 | §3.3 | P3 | **Deferred** | S | L | 2026-10-31 | Not done with row 13 (2026-10-31): `ContactId` is sent back to WhatsApp as the participant in read receipts (`markChatAsRead`) and backlog anchors (`backlogAnchor`), so rewriting stored LIDs to phone numbers could break those in LID-addressed groups. Normalise only at display time if names need it. R6: `ContactId` is stored in whatever form arrives (phone number or LID); only chat IDs are normalised. Names or search by contact may show an LID number until whatsmeow knows the contact. | Normalise `ContactId` together with the row 13 merge. |
 | 22 | §3.2 | P3 | **Deferred** | M | L | 2026-10-31 | A spoofed or mistaken revoke overwrites text and media data, which cannot be recovered (review option C). | Add a `revoked` flag column and keep the original data; needs another migration. Authorisation (D14) already closes the spoof. |
+| 35 | §3.3 | P3 | **Deferred** | S | L | 2026-10-31 | A "Delete for me" made on the phone while WhatsCLI was unlinked is not applied after relinking, because whatsmeow suppresses app-state events during a full sync. | Set `EmitAppStateEventsOnFullSync` and handle the replayed mark-read, pin and archive events too; only if users report ghost messages. |
 | 15 | §3.6 | P1 | **Recurring** | M | H | 2026-10-31 | No automated test talks to WhatsApp, so media, revoke, backlog, `@lid`, show and QR behaviour is verified only by unit tests with fakes. Last full run: 2026-10-31 on `ddbb7f9`, 12 steps passed, 5 bugs fixed, 8 skipped; smoke run on `v1.5.0-rc1` 2026-10-31 passed (TESTING Table T3). | Run the full live-account checklist in [TESTING.md](TESTING.md) on a non-production number before every tagged release. [§8.15](#815-live-account-checklist-as-a-release-gate) |
 
 **Reading the narrow columns.** Bucket is the §3 area: 3.1 Release and CI, 3.2 Security hardening, 3.3 Chat and message behaviour, 3.4 UI, 3.5 Docs and repository hygiene, 3.6 Verification. Size: T trivial, S small, M medium, L large, ? unknown. Impact: H high, M medium, L low. A long-form note for a row is in §8, linked from the end of its solution cell.
@@ -109,13 +112,14 @@ Orientation only; detail is in CHANGELOG.md.
 
 ## 2. Next up
 
-### 2.1 Status: v1.5.0 released (updated 2026-10-31T13:03:59+00:00)
+### 2.1 Status: v1.6.0 in preparation (updated 2026-10-31T14:38:13+00:00)
 
-- `v1.5.0` tagged on `master` at `07f62c0` (rows 13 and 33); release assets and checksums verified; `v1.5.0-rc1` kept as a pre-release after a live smoke run (TESTING Table T3).
-- Next: the open P2 rows.
+- Merged to `master` after v1.5.0: rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32 and 36 (PRs 8 to 12 and this docs PR); SPDX headers on every Go file.
+- Next: live-account checklist (row 15) on a `v1.6.0-rc1` build, then the `v1.6.0` tag. Open decision: row 34.
 
 Earlier status, kept for the record:
 
+- v1.5.0: `v1.5.0` tagged on `master` at `07f62c0` (rows 13 and 33); release assets and checksums verified; `v1.5.0-rc1` kept as a pre-release after a live smoke run (TESTING Table T3).
 - v1.4.0 (2026-10-31T07:03:48+00:00): `chore/catch-up` merged to `master` (PR 2) and tagged `v1.4.0`; release assets and checksums verified; `v1.4.0-rc1` kept as a pre-release. `go install github.com/PalWorks/whatscli@v1.4.0` resolves.
 - v1.4.0 next step at the time: row 13 (approved), then the open P2 rows.
 
@@ -136,18 +140,18 @@ Earlier status, kept for the record:
 | # | Item | Section | State | Size | Impact |
 |---|---|---|---|---|---|
 | 17 | First release workflow run unverified | §3.1 | **Done** 2026-10-31 | S | H |
-| 12 | CI and release hygiene (review finding 12) | §3.1 | **Open** | S | M |
+| 12 | CI and release hygiene (review finding 12) | §3.1 | **Done** 2026-10-31 | S | M |
 | 13 | R1 `@lid` duplicate merge | §3.3 | **Done** 2026-10-31 (v1.5.0) | M | M |
 | 14 | R2 backlog anchor JID form | §3.6 | **Open**: verify live | S | M |
-| 6 | `show` freezes UI, leaks zombie (finding 6) | §3.4 | **Open** | S | M |
-| 10 | UI update ordering (finding 10) | §3.4 | **Open** | S | M |
-| 5 | `/url` blocks the event loop (finding 5) | §3.4 | **Open** | S | L |
-| 7 | Media metadata never backfilled; spurious redraws (finding 7) | §3.3 | **Open** | S | L |
-| 9 | Repeat download duplicates a named file (finding 9) | §3.3 | **Open** | S | L |
-| 11 | Downloads not cancellable; orphan `.part` files (finding 11) | §3.3 | **Open** | M | L |
+| 6 | `show` freezes UI, leaks zombie (finding 6) | §3.4 | **Done** 2026-10-31 | S | M |
+| 10 | UI update ordering (finding 10) | §3.4 | **Done** 2026-10-31 | S | M |
+| 5 | `/url` blocks the event loop (finding 5) | §3.4 | **Done** 2026-10-31 | S | L |
+| 7 | Media metadata never backfilled; spurious redraws (finding 7) | §3.3 | **Done** 2026-10-31 | S | L |
+| 9 | Repeat download duplicates a named file (finding 9) | §3.3 | **Done** 2026-10-31 | S | L |
+| 11 | Downloads not cancellable; orphan `.part` files (finding 11) | §3.3 | **Done** 2026-10-31 | M | L |
 | 23 | Stale `.github/copilot-instructions.md` and PR template | §3.5 | **Done** | T | L |
-| 24 | `info` key ignores the message ID | §3.4 | **Open** | T | L |
-| 25 | `loadRecentChats` ignores `@lid` | §3.3 | **Open** | S | L |
+| 24 | `info` key ignores the message ID | §3.4 | **Done** 2026-10-31 | T | L |
+| 25 | `loadRecentChats` ignores `@lid` | §3.3 | **Done** 2026-10-31 | S | L |
 | 31 | Private vulnerability reporting not confirmed enabled | §3.5 | **Done** | T | L |
 | 16 | Licence | §3.5 | **Done** | S | M |
 | 8 | Release targets dropped (finding 8) | §3.1 | **Deferred**: owner decision D4 | M | M |
@@ -157,7 +161,10 @@ Earlier status, kept for the record:
 | 21 | R6 `ContactId` normalisation | §3.3 | **Deferred**: display-time only (see §0) | S | L |
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
 | 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last full run 2026-10-31 (`ddbb7f9`); smoke run on `v1.5.0-rc1` | M | H |
-| 32 | "Delete for me" from the phone not mirrored | §3.3 | **Open** | S | L |
+| 32 | "Delete for me" from the phone not mirrored | §3.3 | **Done** 2026-10-31 | S | L |
+| 34 | `/more` has nothing to page | §3.4 | **Decision** | S | L |
+| 35 | Delete for me while unlinked not applied | §3.3 | **Deferred** | S | L |
+| 36 | `/info` blocks the command loop | §3.4 | **Done** 2026-10-31 | T | L |
 | 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (v1.5.0) | S | L |
 | 1 | Incoming revoke authorisation (finding 1) | §3.2 | **Done** 2026-10-31, Was Medium | M | H |
 | 2 | Open allowlist and Windows-safe names (finding 2) | §3.2 | **Done** 2026-10-31, Was Small | S | M |
@@ -183,11 +190,11 @@ Rows 18 to 22. The authorisation, allowlist and containment rules are in SECURIT
 
 ### 3.3 Chat and message behaviour
 
-Rows 7, 9, 11, 13, 21, 25. Rows 13 (approved, D20) and 21 belong together: merging old `@lid` chats and normalising `ContactId` touch the same stored rows and the in-memory queue.
+Rows 7, 9, 11, 13, 21, 25, 32, 35 (open: 21, 35). Rows 13 (approved, D20) and 21 belong together: merging old `@lid` chats and normalising `ContactId` touch the same stored rows and the in-memory queue.
 
 ### 3.4 UI
 
-Rows 5, 6, 10, 24. Rows 5, 6 and 10 all come from `UiHandler` queuing work with `go QueueUpdateDraw`; an ordered update channel would fix 10 everywhere (review option B, larger refactor).
+Rows 5, 6, 10, 24, 34, 36 (open: 34). Rows 5, 6 and 10 came from `UiHandler` queuing work with `go QueueUpdateDraw`; an ordered update channel would fix 10 everywhere (review option B, larger refactor).
 
 ### 3.5 Docs and repository hygiene
 
@@ -217,7 +224,6 @@ Rows 14, 15. No test talks to WhatsApp; this area exists to keep that gap visibl
 | Item | Why |
 |---|---|
 | Merging upstream wholesale | Independent fork (D1); port fixes selectively |
-| Backfilling media for messages stored before the upgrade | Owner accepted old media as non-downloadable (D13); revisit via row 7 if users ask |
 | Revoking other people's messages as a group admin from WhatsCLI | Needs an admin check and sender JID handling under LID; own messages only (D11) |
 | Local check of the revoke time window | The server decides and its error is shown; the exact window is [Unverified] |
 | Opening Office files, HTML, SVG or archives from `open` | They can run macros or scripts (D15); users open them by hand |
