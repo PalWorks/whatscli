@@ -122,9 +122,6 @@ Earlier status, kept for the record:
 - v1.5.0: `v1.5.0` tagged on `master` at `07f62c0` (rows 13 and 33); release assets and checksums verified; `v1.5.0-rc1` kept as a pre-release after a live smoke run (TESTING Table T3).
 - v1.4.0 (2026-10-31T07:03:48+00:00): `chore/catch-up` merged to `master` (PR 2) and tagged `v1.4.0`; release assets and checksums verified; `v1.4.0-rc1` kept as a pre-release. `go install github.com/PalWorks/whatscli@v1.4.0` resolves.
 - v1.4.0 next step at the time: row 13 (approved), then the open P2 rows.
-
-Earlier status, kept for the record:
-
 - Code: 6 commits ahead of `master`; build, vet and `go test -race -count=1 ./...` pass (verified when this file was written). Not merged, not tagged.
 - Gates before tagging: row 15 (live-account checklist, TESTING.md) and row 17 (first workflow run on a release candidate tag).
 - Approved next after the gates: row 13, merge old `@lid` chats (owner, 2026-10-31, D20), once checklist step 17 has measured how often it occurs.
