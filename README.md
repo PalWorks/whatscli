@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T14:38:07+00:00 (chat info key, open-golang removed)_
+_Last updated: 2026-10-31T15:01:08+00:00 (chat paging and /more)_
 
 ---
 
@@ -70,7 +70,7 @@ WhatsCLI links to your WhatsApp account the same way WhatsApp Web does (QR scan,
 | Media | Download (`d`), download and open (`o`), show images in the terminal (`s`), open the first link (`u`). Media you send is stored and can be downloaded again |
 | Safety on media | Only images, video, audio, PDF and plain text are opened automatically; other types are saved and the path is printed. Sender file names are sanitised and confined to the download folder |
 | Delete for everyone | `r` or `/revoke` on your own messages; deletions from your phone, a contact or a group admin update the local copy (checked, see [Security](#security)) |
-| History | `/more` pages older messages from local storage; `/backlog` asks your phone for older messages of the open chat |
+| History | A chat opens with its newest 200 messages; `/more` shows 200 older ones from local storage; `/backlog` asks your phone for older messages of the open chat |
 | Search | `/search` over messages, `/search-contact` over contacts |
 | Groups | Create, rename, leave, add, remove, promote, demote, sync metadata |
 | Persistence | SQLite with WAL; chats and messages survive restarts |
@@ -319,7 +319,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 |---|---|
 | `/select <chat-id>` | Open a chat |
 | `/send <chat-id> <text>` | Send text to a chat |
-| `/more` | Load older messages from local storage |
+| `/more` | Show 200 older messages from local storage |
 | `/backlog` | Request older messages from the phone |
 | `/read` | Mark the chat as read |
 | `/info` | Show chat or group info |

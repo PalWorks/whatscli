@@ -16,8 +16,10 @@ import (
 // setCurrentReceiver sets the currently selected chat and refreshes the
 // message view. Automatically marks the chat as read in the background.
 func (sm *SessionManager) setCurrentReceiver(id string) {
+	anchor := sm.openViewAnchor(id) // DB read, outside sm.mu
 	sm.mu.Lock()
 	sm.currentReceiver = id
+	sm.viewAnchor = anchor
 	// Check if conversation has unread messages
 	hasUnread := false
 	if conv := sm.convByJID[id]; conv != nil && conv.Unread > 0 {
@@ -167,9 +169,16 @@ func (sm *SessionManager) getChatName(jid types.JID) string {
 	return jid.User
 }
 
-// getMessages retrieves all messages for one chat id.
+// getMessages returns the messages to show for wid: from the view anchor
+// for the open chat, the newest page for any other chat.
 func (sm *SessionManager) getMessages(wid string) []Message {
-	msgs, err := sm.db.GetMessages(wid)
+	sm.mu.RLock()
+	open, anchor := sm.currentReceiver == wid, sm.viewAnchor
+	sm.mu.RUnlock()
+	if !open {
+		anchor = sm.openViewAnchor(wid)
+	}
+	msgs, err := sm.db.GetMessagesSince(wid, anchor)
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
 		return []Message{}

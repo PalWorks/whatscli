@@ -4,6 +4,7 @@ package messages
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -240,6 +241,41 @@ func (md *MessageDatabase) GetOldestMessage(chatId string) (msg Message, found b
 		return Message{}, false, nil
 	}
 	return msgs[0], true, nil
+}
+
+// NthTimestampBefore returns the timestamp of the n-th newest message of a
+// chat older than before, or 0 when the chat has fewer than n such messages.
+func (md *MessageDatabase) NthTimestampBefore(chatId string, before uint64, n int) (uint64, error) {
+	if md.db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	if n <= 0 {
+		return before, nil
+	}
+	var ts uint64
+	err := md.db.QueryRow(`SELECT timestamp FROM messages WHERE chat_id = ? AND timestamp < ?
+		ORDER BY timestamp DESC LIMIT 1 OFFSET ?`, chatId, before, n-1).Scan(&ts)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("failed to page messages: %w", err)
+	}
+	return ts, nil
+}
+
+// GetMessagesSince returns a chat's messages at or after since, oldest first.
+func (md *MessageDatabase) GetMessagesSince(chatId string, since uint64) ([]Message, error) {
+	if md.db == nil {
+		return nil, fmt.Errorf("database not initialized")
+	}
+	rows, err := md.db.Query(`SELECT `+messageColumns+` FROM messages WHERE chat_id = ? AND timestamp >= ? ORDER BY timestamp ASC`, chatId, since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query messages: %w", err)
+	}
+	defer rows.Close()
+
+	return collectMessages(rows)
 }
 
 // CountMessages returns the number of stored messages for a chat.
