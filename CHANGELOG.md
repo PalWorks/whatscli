@@ -2,9 +2,19 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T17:21:02+00:00 (released v1.6.4)_
+_Last updated: 2026-10-31T17:32:04+00:00 (released v1.6.5)_
 
 ## [Unreleased]
+
+## [1.6.5] - 2026-10-31
+
+### Added
+- Help window: `F1`, `/help` or `Ctrl+?` opens a window over the screen with every key and command, grouped (getting around, keys for a selected message, all commands with their arguments). `Esc`, `Enter` or `q` closes it.
+- The top bar shows the main keys on the right: `F1` Help, `Ctrl+f` Find chat, `/` Commands, `Ctrl+q` Quit.
+
+### Changed
+- The start screen of the message pane is a titled welcome with the five essentials instead of the full command list.
+- The top bar shows the version and the connection state only. The phone battery figure (`0% l s`) is removed: multi-device WhatsApp no longer sends it, so it always read 0%.
 
 ## [1.6.4] - 2026-10-31
 

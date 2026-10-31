@@ -170,9 +170,10 @@ func (u UiHandler) ReplaceText(txt string) {
 	})
 }
 
+// PrintHelp opens the help window (the /help command).
 func (u UiHandler) PrintHelp() {
 	go ctx.App.QueueUpdateDraw(func() {
-		PrintHelp()
+		showOverlay("help")
 	})
 }
 
