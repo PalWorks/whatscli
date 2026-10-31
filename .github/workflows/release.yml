@@ -120,7 +120,10 @@ jobs:
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* --clobber
           else
-            gh release create "$RELEASE_TAG" release-assets/* --verify-tag --title "$RELEASE_TAG" --notes-file notes.txt
+            # Release candidates (tags with a '-') are pre-releases and never "Latest".
+            flags=()
+            case "$RELEASE_TAG" in *-*) flags=(--prerelease --latest=false) ;; esac
+            gh release create "$RELEASE_TAG" release-assets/* --verify-tag --title "$RELEASE_TAG" --notes-file notes.txt "${flags[@]}"
           fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

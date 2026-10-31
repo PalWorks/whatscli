@@ -2,9 +2,11 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T15:01:08+00:00 (chat paging, row 34)_
+_Last updated: 2026-10-31T15:39:00+00:00 (released v1.6.0)_
 
-## [Unreleased]
+## [1.6.0] - 2026-10-31
+
+Responsiveness, storage and sync fixes (ROADMAP rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32, 34 and 36). Verified with unit tests and a live run on `v1.6.0-rc1` (TESTING Table T3).
 
 ### Added
 - Every Go source file starts with an SPDX licence line (`AGPL-3.0-only`; `BSD-3-Clause` for the third-party `qrcode/qrcode.go`), and CI fails when one is missing (`.github/scripts/check-spdx.sh`).
@@ -25,7 +27,7 @@ _Last updated: 2026-10-31T15:01:08+00:00 (chat paging, row 34)_
 ### Changed
 - The `i` key is labelled "chat info" and no longer sends a message ID.
 - The `skratchdot/open-golang` dependency is replaced by a small built-in opener.
-- CI: actions pinned to commit SHAs (kept current by Dependabot), the Go 1.26 leg really runs Go 1.26, AUR versions are valid for release candidates, and release notes start from the previous final release.
+- CI: actions pinned to commit SHAs (kept current by Dependabot), the Go 1.26 leg really runs Go 1.26, AUR versions are valid for release candidates, and release notes start from the previous final release. Release candidate tags are published as pre-releases and never marked Latest.
 
 ## [1.5.0] - 2026-10-31
 
