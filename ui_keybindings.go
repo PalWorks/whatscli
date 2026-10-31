@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"codeberg.org/tslocum/cbind"
 	"github.com/PalWorks/whatscli/config"
@@ -40,8 +41,11 @@ func handleFocusContacts(ev *tcell.EventKey) *tcell.EventKey {
 }
 
 func handleSwitchPanels(ev *tcell.EventKey) *tcell.EventKey {
-	ResetMsgSelection()
 	focus := ctx.App.GetFocus()
+	if focus == ctx.TextInput && commandListOpen() {
+		return ev // Tab picks from the command drop-down (ui_complete.go)
+	}
+	ResetMsgSelection()
 	if focus == ctx.TextInput {
 		if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
 			ctx.App.SetFocus(ctx.StatusTable)
@@ -416,6 +420,8 @@ func EnterCommand(key tcell.Key) {
 			return
 		}
 		if strings.HasPrefix(cmd, config.Config.General.CmdPrefix) {
+			PrintText(commandEcho(cmd, time.Now()))
+			ctx.TextView.ScrollToEnd()
 			input := strings.Fields(cmd)
 			// Input[0] is the command (e.g., "/help")
 			// We remove the prefix to get "help"

@@ -42,12 +42,21 @@ func (u UiHandler) NewScreenWithStatus(msgs []messages.Message, status string, e
 	})
 }
 
-// renderScreen replaces the message pane with msgs. UI goroutine only.
+// renderedChat is the chat the message pane last showed (UI goroutine only).
+var renderedChat string
+
+// renderScreen replaces the message pane with msgs. UI goroutine only. A
+// newly opened chat starts at its latest message; a redraw of the same chat
+// keeps the user's scroll position.
 func renderScreen(msgs []messages.Message) {
 	ctx.TextView.Clear()
 	screen := getMessagesString(msgs)
 	ctx.TextView.SetText(screen)
 	ctx.CurRegions = msgs
+	if ctx.CurrentReceiver.Id != renderedChat {
+		renderedChat = ctx.CurrentReceiver.Id
+		ctx.TextView.ScrollToEnd()
+	}
 	if screen == "" {
 		if ctx.CurrentReceiver.Id == "" {
 			PrintHelp()

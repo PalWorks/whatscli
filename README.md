@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: install and release download, go install version, test counts, structure, roadmap headlines; licence and reporting dates in UTC)_
+_Last updated: 2026-10-31T16:18:40+00:00 (command list, command echo, open at latest message, Status box, go install version)_
 
 ---
 
@@ -156,7 +156,7 @@ macOS, Raspberry Pi (armv5) and Homebrew are not released for now (ROADMAP row 8
 go install github.com/PalWorks/whatscli@latest
 ```
 
-Needs a C compiler (SQLite is built through CGO). `@latest` resolves to `v1.6.0` (checked with `go list -m github.com/PalWorks/whatscli@latest` on 2026-10-31). `go install` does not inject the version, so the top bar and `/help` of a binary built this way show `v1.3.0`, the default in `main.go`; release binaries and `make install` show the real tag.
+Needs a C compiler (SQLite is built through CGO). `@latest` resolves to `v1.6.0` (checked with `go list -m github.com/PalWorks/whatscli@latest` on 2026-10-31). From v1.6.1 a binary built this way shows the module version it was installed at (for example `v1.6.1`) in the top bar and `/help`; release binaries and `make install` show the tag they were built from.
 
 ### From source
 
@@ -274,7 +274,9 @@ A QR code appears in the terminal. On your phone: WhatsApp, Settings, Linked Dev
 
 ### Moving around
 
-- `Tab` cycles panels; select a chat with the arrow keys and Enter; type and press Enter to send.
+- `Tab` cycles panels; select a chat with the arrow keys and Enter; type and press Enter to send. A chat opens at its latest message; scrolling up stays where you put it until you open another chat.
+- Type `/` on the input line to see the commands with a short description; keep typing to narrow the list (`/lo` shows `/login` and `/logout`), move with `Up` and `Down`, pick with `Tab` or `Enter`. Every command you enter is echoed in the message pane with its time, for example `(31-10-26 21:28:40) > /logout` (a command that redraws the chat, such as `/select`, replaces the echo with the chat).
+- The Status box lists the WhatsApp Status updates (stories) of your contacts that arrived while WhatsCLI was linked, not your own status. History sync does not include them, so it stays empty until a contact posts one.
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
 - `Ctrl+p` toggles mouse support (off lets the terminal select text).
 
@@ -442,7 +444,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-164 top-level unit tests across the packages at v1.6.0, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+171 top-level unit tests across the packages (164 at v1.6.0), using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 

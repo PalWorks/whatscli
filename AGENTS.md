@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: files, root context, part-file sweep, version string, UTC timestamps)_
+> _Last updated: 2026-10-31T16:18:40+00:00 (ui_complete.go, version.go, command hint rule)_
 
 ## 1. Project
 
@@ -11,7 +11,7 @@
 - Module path: `github.com/PalWorks/whatscli`
 - Go directive `1.26.0`, `toolchain go1.27.3` (whatsmeow requires 1.26.0). An older system Go auto-downloads the toolchain.
 - CGO is required (SQLite via `go-sqlite3`). Linux: `apt install gcc`.
-- Version string: `VERSION` in `main.go` defaults to `v1.3.0`; `make build`, `make install` and the release workflow override it with `-X main.VERSION=...` (the v1.6.0 release binary reports `v1.6.0`). A plain `go build` or `go install github.com/PalWorks/whatscli@latest` injects nothing, so the top bar and `/help` show `v1.3.0`.
+- Version string: `make build`, `make install` and the release workflow set `VERSION` in `main.go` with `-X main.VERSION=...`. When it is empty, `appVersion()` (`version.go`) uses the module version recorded by `go install`, else `dev`.
 - Licence: dual, AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). Every Go file starts with an SPDX line (`qrcode/qrcode.go` stays BSD-3-Clause); `.github/scripts/check-spdx.sh` enforces it in CI.
 
 ## 2. Where to read what
@@ -66,7 +66,8 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
-              ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go
+              ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
+              ui_complete.go (command drop-down and echo), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
@@ -130,7 +131,7 @@ To add a command:
 
 1. Write the handler in the right `messages/cmd_*.go` file; one function per command; use `checkParam()` and `sm.printCommandUsage()`.
 2. Register it in the map in `cmd_registry.go` `init()`.
-3. Add it to `PrintHelp()` in `ui_helpers.go`.
+3. Add it to `PrintHelp()` in `ui_helpers.go` and to `commandHints` in `ui_complete.go` (`TestCommandHintsCoverRegistry` fails otherwise).
 4. If it needs a key, add a `[keymap]` field in `config/settings.go` and bind it in `ui_keybindings.go`.
 5. Add tests, update README command table, CHANGELOG and this file.
 

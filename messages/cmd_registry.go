@@ -2,7 +2,11 @@
 
 package messages
 
-import "go.mau.fi/whatsmeow"
+import (
+	"sort"
+
+	"go.mau.fi/whatsmeow"
+)
 
 // commandHandler is the function signature for all command handlers.
 // sm provides access to SessionManager fields and helpers.
@@ -65,4 +69,14 @@ func init() {
 		"search":         cmdSearch,
 		"search-contact": cmdSearchContact,
 	}
+}
+
+// CommandNames returns every registered command name, aliases included, sorted.
+func CommandNames() []string {
+	names := make([]string, 0, len(commandRegistry))
+	for name := range commandRegistry {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }

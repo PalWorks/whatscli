@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: CI facts, test counts, steps 22 to 26 for the v1.6.0 checks)_
+_Last updated: 2026-10-31T16:18:49+00:00 (steps 27 to 29: command list, echo, open at latest)_
 
 ## 1. Commands
 
@@ -24,7 +24,7 @@ Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race 
 
 ## 3. Test layout
 
-**Table T1: Test files (164 top-level tests at v1.6.0)**
+**Table T1: Test files (171 top-level tests after v1.6.0)**
 
 | File | Tests | Covers |
 |---|---|---|
@@ -52,6 +52,8 @@ Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race 
 | `ui_render_test.go` | 10 | UI rendering helpers |
 | `ui_image_test.go` | 5 | `renderImage`: output, timeout, child holding stdout, viewer failure, refusals |
 | `ui_opener_test.go` | 4 | `startOpener` start failure, no blocking and reaping, clean exit; target passed as one argument |
+| `ui_complete_test.go` | 6 | Command list matches the registry; drop-down entries, completed text, echo line and tag escaping |
+| `version_test.go` | 1 | Version shown: injected tag, `go install` module version, `dev` |
 | `ui_helpers_test.go` | 1 | `chatForID` |
 
 ## 4. Conventions
@@ -108,6 +110,9 @@ Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Ta
 | 24 | Delete for me | In "Message yourself", send a message from WhatsCLI or the phone, then "Delete for me" on the phone while WhatsCLI is running | The message disappears from WhatsCLI and the chat preview moves back to the newest remaining message |
 | 25 | Repeat download | `d` twice on the same named document, then `o` on it | One file in `download_path` (no `<stem>_<id>` copy); `open` reuses the saved file |
 | 26 | Part-file sweep | Quit during a large video download; then plant `.whatscli-123456.part`, `.whatscli-abc.part` and `keep.part` in `download_path` and start WhatsCLI | No `.part` left by the quit; at start only `.whatscli-123456.part` is removed, the other two stay |
+| 27 | Command list | On the input line type `/lo`, press `Down`, then `Tab`; type `/sendi` and `Tab` | The list shows `/login` and `/logout` with descriptions; the input becomes `/logout`, then `/sendimage ` |
+| 28 | Command echo | Enter `/info` in a chat | `(<date> <time>) > /info` appears before its output |
+| 29 | Open at latest | Scroll up in a long chat with `PgUp`, then open another chat | The new chat shows its latest message at the bottom |
 
 **Table T3: Run record (copy one row per run)**
 

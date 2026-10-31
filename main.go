@@ -12,7 +12,10 @@ import (
 	"github.com/rivo/tview"
 )
 
-var VERSION string = "v1.3.0"
+// VERSION is set at build time with -X main.VERSION=<tag> (make build and the
+// release workflow). When it is empty, appVersion falls back to the module
+// version that go install records.
+var VERSION string
 
 const batchSize = 50
 
@@ -55,7 +58,7 @@ func main() {
 	ctx.TopBar = tview.NewTextView()
 	ctx.TopBar.SetDynamicColors(true)
 	ctx.TopBar.SetScrollable(false)
-	ctx.TopBar.SetText("[::b] WhatsCLI " + VERSION + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
+	ctx.TopBar.SetText("[::b] WhatsCLI " + appVersion() + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
 	ctx.TopBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 
 	ctx.TextView = tview.NewTextView().
@@ -75,7 +78,16 @@ func main() {
 	ctx.TextInput.SetFieldBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
 	ctx.TextInput.SetFieldTextColor(tcell.ColorNames[config.Config.Colors.InputText])
 	ctx.TextInput.SetDoneFunc(EnterCommand)
+	setupCommandCompletion(ctx.TextInput)
 	ctx.TextInput.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// While a command name is typed, Tab and the arrow keys belong to
+		// the command drop-down (ui_complete.go), not to panels or scrolling.
+		if commandListOpen() {
+			switch event.Key() {
+			case tcell.KeyTab, tcell.KeyUp, tcell.KeyDown, tcell.KeyPgUp, tcell.KeyPgDn:
+				return event
+			}
+		}
 		if event.Key() == tcell.KeyTab {
 			if ctx.StatusTable != nil && ctx.StatusTable.GetRowCount() > 0 {
 				ctx.App.SetFocus(ctx.StatusTable)
