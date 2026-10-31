@@ -55,7 +55,7 @@ func TestDeleteEmptyConversations(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := sm.db.AddMessage(Message{Id: "M1", ChatId: "withmsg@s.whatsapp.net", Text: "x"}); err != nil {
+	if _, err := sm.db.AddMessage(Message{Id: "M1", ChatId: "withmsg@s.whatsapp.net", Text: "x"}); err != nil {
 		t.Fatal(err)
 	}
 

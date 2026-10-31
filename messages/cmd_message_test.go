@@ -157,7 +157,7 @@ func TestWaitForNewMessages(t *testing.T) {
 	// Returns early when a row arrives.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		_ = md.AddMessage(Message{Id: "X", ChatId: "c", Timestamp: 1})
+		_, _ = md.AddMessage(Message{Id: "X", ChatId: "c", Timestamp: 1})
 	}()
 	start = time.Now()
 	n, err = sm.waitForNewMessages("c", 0, 5*time.Second, 5*time.Millisecond)

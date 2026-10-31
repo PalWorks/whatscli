@@ -176,7 +176,7 @@ func (sm *SessionManager) storeSentMedia(client *whatsmeow.Client, chatID string
 	if err := attachMediaInfo(&newMsg, waMsg); err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("sent media %s: %w", id, err))
 	}
-	if err := sm.db.AddMessage(newMsg); err != nil {
+	if _, err := sm.db.AddMessage(newMsg); err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to save sent media: %w", err))
 		return
 	}

@@ -121,13 +121,33 @@ func (md *MessageDatabase) Close() error {
 	return nil
 }
 
-// AddMessage persists a message to SQLite.
-// Returns nil on success, or an error if the insert fails.
-func (md *MessageDatabase) AddMessage(msg Message) error {
+// StoreResult reports what AddMessage did with a message.
+type StoreResult int
+
+const (
+	// StoreUnchanged means the message ID was already stored and nothing changed.
+	StoreUnchanged StoreResult = iota
+	// StoreInserted means a new row was written.
+	StoreInserted
+	// StoreMediaFilled means an existing row without media metadata (stored
+	// before the media columns existed) received it.
+	StoreMediaFilled
+)
+
+// Changed reports whether the database row was written.
+func (r StoreResult) Changed() bool { return r != StoreUnchanged }
+
+// AddMessage persists a message to SQLite. The message ID is the primary key
+// and the first write wins for text, sender and timestamp. A later write of
+// the same ID only fills the media columns, and only when the stored row has
+// none, is in the same chat and is not revoked; it never clears or replaces
+// media metadata. The result says whether a row was inserted, filled or left
+// unchanged, so callers redraw only when something changed.
+func (md *MessageDatabase) AddMessage(msg Message) (StoreResult, error) {
 	if md.db == nil {
-		return fmt.Errorf("database not initialized")
+		return StoreUnchanged, fmt.Errorf("database not initialized")
 	}
-	_, err := md.db.Exec(`
+	res, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
 	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
 	 media_kind, mime_type, file_name, media_proto)
@@ -137,7 +157,40 @@ func (md *MessageDatabase) AddMessage(msg Message) error {
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 		msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto,
 	)
-	return err
+	if err != nil {
+		return StoreUnchanged, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to read insert result: %w", err)
+	}
+	if n > 0 {
+		return StoreInserted, nil
+	}
+	if msg.MediaKind == "" || len(msg.MediaProto) == 0 {
+		return StoreUnchanged, nil
+	}
+	// Backfill media metadata on a row stored without it (ROADMAP row 7).
+	// The WHERE clause is checked atomically by SQLite, so a revoke that
+	// lands between the two statements still wins.
+	res, err = md.db.Exec(`
+	UPDATE messages SET media_kind = ?, mime_type = ?, file_name = ?, media_proto = ?
+	WHERE id = ? AND chat_id = ?
+	  AND COALESCE(media_kind, '') = ''
+	  AND (media_proto IS NULL OR length(media_proto) = 0)
+	  AND COALESCE(text, '') <> ?
+	`, msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto, msg.Id, msg.ChatId, RevokedText)
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to fill media metadata: %w", err)
+	}
+	n, err = res.RowsAffected()
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to read media fill result: %w", err)
+	}
+	if n > 0 {
+		return StoreMediaFilled, nil
+	}
+	return StoreUnchanged, nil
 }
 
 // GetMessage returns a single message by ID. found is false when no row exists.

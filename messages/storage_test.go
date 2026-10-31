@@ -27,7 +27,7 @@ func newTestDB(t *testing.T) *MessageDatabase {
 // addTestMsg is a helper that calls AddMessage and fails the test on error.
 func addTestMsg(t *testing.T, md *MessageDatabase, msg Message) {
 	t.Helper()
-	if err := md.AddMessage(msg); err != nil {
+	if _, err := md.AddMessage(msg); err != nil {
 		t.Fatalf("AddMessage failed for %s: %v", msg.Id, err)
 	}
 }
@@ -119,9 +119,9 @@ func TestAddMessage_DuplicateIgnored(t *testing.T) {
 
 	addTestMsg(t, md, msg)
 
-	// Insert duplicate with different text — should be ignored (INSERT OR IGNORE)
+	// Insert duplicate with different text: the first write wins for text.
 	msg.Text = "duplicate"
-	_ = md.AddMessage(msg) // no error expected for IGNORE
+	_, _ = md.AddMessage(msg) // no error expected for IGNORE
 
 	result, err := md.GetMessages("chat1")
 	if err != nil {

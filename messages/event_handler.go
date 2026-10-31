@@ -208,9 +208,26 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		eh.sm.uiHandler.PrintError(fmt.Errorf("message %s: %w", msg.Id, err))
 	}
 
-	// Persist message
-	if err := eh.sm.db.AddMessage(msg); err != nil {
+	// Persist message. A redelivered message ID changes nothing (no
+	// unread count, notification or redraw); one that only gained media
+	// metadata redraws the open chat (ROADMAP row 7). On a storage error
+	// the message is still shown, as before.
+	res, err := eh.sm.db.AddMessage(msg)
+	if err != nil {
 		eh.sm.uiHandler.PrintError(fmt.Errorf("failed to save message: %v", err))
+		res = StoreInserted
+	}
+	switch res {
+	case StoreUnchanged:
+		return
+	case StoreMediaFilled:
+		eh.sm.mu.RLock()
+		isCurrent := chatJID == eh.sm.currentReceiver
+		eh.sm.mu.RUnlock()
+		if isCurrent {
+			eh.sm.uiHandler.NewScreen(eh.sm.getMessages(chatJID))
+		}
+		return
 	}
 
 	// Resolve chat name BEFORE acquiring the write lock. getChatName()
