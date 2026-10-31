@@ -214,6 +214,41 @@ func (md *MessageDatabase) MarkMessageRevoked(chatID, id string) (bool, error) {
 	return n > 0, nil
 }
 
+// DeleteMessage removes a stored message. The row must match both the message
+// ID and the chat. Returns true when a row was deleted.
+func (md *MessageDatabase) DeleteMessage(chatID, id string) (bool, error) {
+	if md.db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`DELETE FROM messages WHERE id = ? AND chat_id = ?`, id, chatID)
+	if err != nil {
+		return false, fmt.Errorf("failed to delete message: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read delete result: %w", err)
+	}
+	return n > 0, nil
+}
+
+// GetLatestMessage returns the newest stored message of a chat. found is false
+// when the chat has none.
+func (md *MessageDatabase) GetLatestMessage(chatId string) (msg Message, found bool, err error) {
+	if md.db == nil {
+		return Message{}, false, fmt.Errorf("database not initialized")
+	}
+	rows, err := md.db.Query(`SELECT `+messageColumns+` FROM messages WHERE chat_id = ? ORDER BY timestamp DESC LIMIT 1`, chatId)
+	if err != nil {
+		return Message{}, false, fmt.Errorf("failed to query latest message: %w", err)
+	}
+	defer rows.Close()
+	msgs, err := collectMessages(rows)
+	if err != nil || len(msgs) == 0 {
+		return Message{}, false, err
+	}
+	return msgs[0], true, nil
+}
+
 // UpsertConversation updates or inserts a conversation
 func (md *MessageDatabase) UpsertConversation(c Conversation) error {
 	_, err := md.db.Exec(`
