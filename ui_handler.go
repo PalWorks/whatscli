@@ -10,7 +10,6 @@ import (
 	"github.com/PalWorks/whatscli/messages"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
-	"github.com/skratchdot/open-golang/open"
 )
 
 type UiHandler struct{}
@@ -93,8 +92,11 @@ func (u UiHandler) PrintFile(path string) {
 	})
 }
 
-func (u UiHandler) OpenFile(path string) {
-	open.Run(path)
+// OpenFile starts the system opener for path (a file or URL) without
+// waiting for it. A start failure is returned; a failure reported by the
+// opener when it exits is printed later.
+func (u UiHandler) OpenFile(path string) error {
+	return startOpener(openerCommand(path), u.PrintError)
 }
 
 func (u UiHandler) SetStatus(status messages.SessionStatus) {

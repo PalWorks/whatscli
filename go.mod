@@ -14,7 +14,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/rivo/tview v0.42.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
-	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	go.mau.fi/whatsmeow v0.0.0-20261030132714-6f46ecaf9e95
 	google.golang.org/protobuf v1.36.12
 	gopkg.in/ini.v1 v1.67.3

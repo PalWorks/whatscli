@@ -13,7 +13,9 @@ type UiMessageHandler interface {
 	PrintFile(string)
 	PrintQR(string)
 	SetStatus(SessionStatus)
-	OpenFile(string)
+	// OpenFile hands a file or URL to the system opener without blocking and
+	// returns an error if the opener could not be started.
+	OpenFile(string) error
 	ShowColorList()
 	Clear()
 	// ReplaceText clears the message pane and prints text in a single draw.

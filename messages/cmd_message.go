@@ -124,7 +124,9 @@ func (sm *SessionManager) deliverDownload(mode downloadMode, path string) {
 				" Open it yourself only if you trust the sender.")
 			return
 		}
-		sm.uiHandler.OpenFile(path)
+		if err := sm.uiHandler.OpenFile(path); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("open %s: %w", path, err))
+		}
 	default:
 		sm.uiHandler.PrintText("[::d] -> " + path + "[::-]")
 	}
@@ -265,7 +267,11 @@ func cmdURL(sm *SessionManager, client *whatsmeow.Client, cmdName string, params
 		return
 	}
 	sm.uiHandler.PrintText("[::d]opening " + link + "[::-]")
-	sm.uiHandler.OpenFile(link)
+	// OpenFile only starts the opener; a hanging browser never blocks
+	// runManager (ROADMAP row 5).
+	if err := sm.uiHandler.OpenFile(link); err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("open link: %w", err))
+	}
 }
 
 // ErrRevokeNotOwn is returned when trying to revoke someone else's message.

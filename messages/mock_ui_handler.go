@@ -19,6 +19,8 @@ type MockUiHandler struct {
 	QuitCalled  int
 	ColorCalled int
 	CmdsCalled  int
+	// OpenErr is returned by OpenFile.
+	OpenErr error
 }
 
 func NewMockUiHandler() *MockUiHandler {
@@ -34,7 +36,6 @@ func (m *MockUiHandler) PrintText(text string)            { m.Texts = append(m.T
 func (m *MockUiHandler) PrintFile(path string)            { m.Files = append(m.Files, path) }
 func (m *MockUiHandler) PrintQR(qr string)                { m.QRCodes = append(m.QRCodes, qr) }
 func (m *MockUiHandler) SetStatus(s SessionStatus)        { m.Statuses = append(m.Statuses, s) }
-func (m *MockUiHandler) OpenFile(path string)             { m.Files = append(m.Files, path) }
 func (m *MockUiHandler) ShowColorList()                   { m.ColorCalled++ }
 func (m *MockUiHandler) Clear()                           { m.ClearCalled++ }
 func (m *MockUiHandler) ReplaceText(text string) {
@@ -45,3 +46,9 @@ func (m *MockUiHandler) UpdateQR(_ string, _ int, _ int) {}
 func (m *MockUiHandler) PrintCommands()                  { m.CmdsCalled++ }
 func (m *MockUiHandler) PrintHelp()                      { m.HelpCalled++ }
 func (m *MockUiHandler) Quit()                           { m.QuitCalled++ }
+
+// OpenFile records path and returns OpenErr.
+func (m *MockUiHandler) OpenFile(path string) error {
+	m.Files = append(m.Files, path)
+	return m.OpenErr
+}
