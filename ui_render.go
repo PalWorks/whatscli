@@ -3,9 +3,9 @@
 package main
 
 import (
-	"bufio"
+	"context"
+	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -226,38 +226,53 @@ func RenderChatTable() {
 	ctx.RenderingList = false
 }
 
-// prints an image attachment to the TextView (by message id)
-func PrintImage(path string) {
-	// Only files strictly inside the configured download or preview directory
-	// are shown. Both sides are symlink-resolved and containment is checked
-	// with filepath.Rel (audit S-2, REVIEW-3 finding 4).
+// imageViewerTimeout bounds one run of show_command, so a hung viewer is
+// killed instead of leaving the image request pending forever.
+const imageViewerTimeout = 15 * time.Second
+
+// renderImage runs the image viewer showCommand on path and returns what it
+// writes to standard output (ANSI text). It blocks until the viewer exits or
+// timeout passes, so it must run off the UI goroutine (ROADMAP row 6); the
+// process is always waited for, so no zombie is left.
+//
+// Only files strictly inside one of dirs (the configured download and
+// preview directories) are shown. Both sides are symlink-resolved and
+// containment is checked with filepath.Rel (audit S-2, REVIEW-3 finding 4).
+func renderImage(showCommand, path string, timeout time.Duration, dirs ...string) ([]byte, error) {
 	if _, err := os.Stat(path); err != nil {
-		PrintError(fmt.Errorf("file not found: %v", err))
-		return
+		return nil, fmt.Errorf("file not found: %v", err)
 	}
-	resolvedPath, err := messages.ResolveFileWithin(path,
-		config.Config.General.DownloadPath, config.Config.General.PreviewPath)
+	resolvedPath, err := messages.ResolveFileWithin(path, dirs...)
 	if err != nil {
-		PrintError(err)
-		return
+		return nil, err
 	}
 
-	cmdParts := strings.Split(config.Config.General.ShowCommand, " ")
+	cmdParts := strings.Fields(showCommand)
+	if len(cmdParts) == 0 {
+		return nil, errors.New("show_command is not configured")
+	}
 	cmdParts = append(cmdParts, resolvedPath)
-	var cmd *exec.Cmd
-	size := len(cmdParts)
-	if size > 1 {
-		cmd = exec.Command(cmdParts[0], cmdParts[1:]...)
-	} else if size > 0 {
-		cmd = exec.Command(cmdParts[0])
+
+	runCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(runCtx, cmdParts[0], cmdParts[1:]...)
+	// If the viewer leaves a child holding stdout open, stop waiting for it
+	// shortly after the viewer itself was killed.
+	cmd.WaitDelay = time.Second
+	out, err := cmd.Output()
+	if runCtx.Err() == context.DeadlineExceeded {
+		return nil, fmt.Errorf("image viewer %s timed out after %s", cmdParts[0], timeout)
 	}
-	var stdout io.ReadCloser
-	if stdout, err = cmd.StdoutPipe(); err == nil {
-		if err = cmd.Start(); err == nil {
-			reader := bufio.NewReader(stdout)
-			io.Copy(tview.ANSIWriter(ctx.TextView), reader)
-			return
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			msg := strings.TrimSpace(string(exitErr.Stderr))
+			if len(msg) > 200 {
+				msg = msg[:200] + "..."
+			}
+			return nil, fmt.Errorf("image viewer %s: %w: %s", cmdParts[0], err, msg)
 		}
+		return nil, fmt.Errorf("image viewer %s: %w", cmdParts[0], err)
 	}
-	PrintError(err)
+	return out, nil
 }

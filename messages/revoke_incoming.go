@@ -47,11 +47,11 @@ func (sm *SessionManager) handleIncomingRevoke(src types.MessageSource, targetID
 	}
 	switch sm.decideRevoke(src, target) {
 	case revokeApply:
-		sm.applyRevoke(target.ChatId, target.Id)
+		sm.applyRevoke(target.ChatId, target.Id, "")
 	case revokeCheckAdmin:
 		go func() {
 			if sm.isGroupAdmin(src.Chat, src.Sender, src.SenderAlt) {
-				sm.applyRevoke(target.ChatId, target.Id)
+				sm.applyRevoke(target.ChatId, target.Id, "")
 			}
 		}()
 	}

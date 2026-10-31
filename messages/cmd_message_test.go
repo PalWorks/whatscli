@@ -4,6 +4,7 @@ package messages
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -173,8 +174,33 @@ func TestWaitForNewMessages(t *testing.T) {
 func TestApplyRevoke_UnknownIDIsNoop(t *testing.T) {
 	sm, mock := newTestSessionManager(t)
 	sm.currentReceiver = "c@s.whatsapp.net"
-	sm.applyRevoke("c@s.whatsapp.net", "MISSING")
+	sm.applyRevoke("c@s.whatsapp.net", "MISSING", "")
 	if len(mock.Screens) != 0 || len(mock.Errors) != 0 {
 		t.Errorf("unexpected UI activity: screens=%d errors=%v", len(mock.Screens), mock.Errors)
+	}
+}
+
+func TestCmdURL_OpenErrorReported(t *testing.T) {
+	sm, mock := newTestSessionManager(t)
+	mock.OpenErr = errors.New("start xdg-open: executable file not found")
+	addTestMsg(t, sm.db, Message{Id: "U1", ChatId: "c@s.whatsapp.net", Text: "see https://example.org/x"})
+
+	cmdURL(sm, nil, "url", []string{"U1"})
+	if len(mock.Files) != 1 {
+		t.Fatalf("opener not called: %v", mock.Files)
+	}
+	if len(mock.Errors) != 1 || !errors.Is(mock.Errors[0], mock.OpenErr) ||
+		!strings.Contains(mock.Errors[0].Error(), "open link") {
+		t.Fatalf("errors = %v, want the opener error wrapped", mock.Errors)
+	}
+}
+
+func TestDeliverDownload_OpenErrorReported(t *testing.T) {
+	sm, mock := newTestSessionManager(t)
+	mock.OpenErr = errors.New("start xdg-open: executable file not found")
+	sm.deliverDownload(modeOpen, "/tmp/x/photo.jpg")
+	if len(mock.Errors) != 1 || !errors.Is(mock.Errors[0], mock.OpenErr) ||
+		!strings.Contains(mock.Errors[0].Error(), "photo.jpg") {
+		t.Fatalf("errors = %v, want the opener error with the path", mock.Errors)
 	}
 }

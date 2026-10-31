@@ -33,6 +33,36 @@ func (sm *SessionManager) setCurrentReceiver(id string) {
 	}
 }
 
+// showStatus prints status (and errs) for an action that may also have
+// changed the open chat. With refreshChat set, the chat is redrawn and the
+// status printed after it in one UI update, so the redraw cannot wipe it
+// (ROADMAP row 10); otherwise errs and status are just printed.
+func (sm *SessionManager) showStatus(refreshChat, status string, errs ...error) {
+	if refreshChat != "" {
+		sm.uiHandler.NewScreenWithStatus(sm.getMessages(refreshChat), status, errs...)
+		return
+	}
+	for _, err := range errs {
+		if err != nil {
+			sm.uiHandler.PrintError(err)
+		}
+	}
+	if status != "" {
+		sm.uiHandler.PrintText(status)
+	}
+}
+
+// refreshTarget returns chat if it is still the open chat, else "", so a
+// background job only redraws the chat the user is looking at.
+func (sm *SessionManager) refreshTarget(chat string) string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	if sm.currentReceiver == chat {
+		return chat
+	}
+	return ""
+}
+
 // markChatAsRead sends read receipts for the most recent incoming messages
 // in the given chat and resets the unread counter in PQ and DB.
 // Safe for background use — returns silently on any failure.

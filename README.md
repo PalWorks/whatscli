@@ -212,7 +212,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `message_open` | `o` | Download and open |
 | `message_show` | `s` | Show image |
 | `message_url` | `u` | Open link |
-| `message_info` | `i` | Chat info (the message ID is sent but ignored) |
+| `message_info` | `i` | Chat info (the open chat or group) |
 | `message_revoke` | `r` | Delete for everyone (own messages) |
 
 </details>
