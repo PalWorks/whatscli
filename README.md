@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T15:01:08+00:00 (chat paging and /more)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: install and release download, go install version, test counts, structure, roadmap headlines)_
 
 ---
 
@@ -55,7 +55,7 @@ WhatsCLI links to your WhatsApp account the same way WhatsApp Web does (QR scan,
 
 - A personal client, not an automation framework: there is no scripting or bot API.
 - WhatsApp does not endorse third-party clients; a protocol change can break features until whatsmeow is updated.
-- No automated test talks to WhatsApp. Media, revoke, backlog and `@lid` behaviour is covered by unit tests with fakes and by a manual live-account checklist ([TESTING.md](TESTING.md)) that has not yet been run on this branch.
+- No automated test talks to WhatsApp. Media, revoke, backlog and `@lid` behaviour is covered by unit tests with fakes and by a manual live-account checklist ([TESTING.md](TESTING.md)); its runs are recorded in TESTING.md Table T3 (the latest, on the `v1.6.0-rc1` candidate, covered part of it).
 - Messages and your linked-device session are stored unencrypted on disk (see [Security](#security)).
 
 ---
@@ -67,9 +67,10 @@ WhatsCLI links to your WhatsApp account the same way WhatsApp Web does (QR scan,
 | Category | Capabilities |
 |---|---|
 | Messaging | Send text, images, video, audio and documents. Receive text, images, video, audio, documents, stickers, contacts, locations and reactions (shown as message content) |
-| Media | Download (`d`), download and open (`o`), show images in the terminal (`s`), open the first link (`u`). Media you send is stored and can be downloaded again |
+| Media | Download (`d`), download and open (`o`), show images in the terminal (`s`), open the first link (`u`). Media you send is stored and can be downloaded again. A repeat download reuses the file saved before; temp files left by a download cut short by quitting are removed at the next start |
 | Safety on media | Only images, video, audio, PDF and plain text are opened automatically; other types are saved and the path is printed. Sender file names are sanitised and confined to the download folder |
 | Delete for everyone | `r` or `/revoke` on your own messages; deletions from your phone, a contact or a group admin update the local copy (checked, see [Security](#security)) |
+| Delete for me | "Delete for me" done on your phone while WhatsCLI is linked removes the message here too and updates the chat preview |
 | History | A chat opens with its newest 200 messages; `/more` shows 200 older ones from local storage; `/backlog` asks your phone for older messages of the open chat |
 | Search | `/search` over messages, `/search-contact` over contacts |
 | Groups | Create, rename, leave, add, remove, promote, demote, sync metadata |
@@ -112,7 +113,8 @@ All persistence goes through `MessageDatabase`; the WhatsApp session is kept sep
 | Notifications | [beeep](https://github.com/gen2brain/beeep) |
 | Clipboard | [clipboard](https://github.com/atotto/clipboard) |
 | Key bindings | [cbind](https://codeberg.org/tslocum/cbind) |
-| CI and release | GitHub Actions (Go 1.26 and 1.27 test matrix; tag-driven release) |
+| System opener | Built in (`ui_opener.go`): `xdg-open` on Linux, `open` on macOS, `rundll32 url.dll,FileProtocolHandler` on Windows, no shell |
+| CI and release | GitHub Actions with actions pinned to commit SHAs (Dependabot, weekly); Go 1.26 and 1.27 test matrix; tag-driven release |
 
 ---
 
@@ -122,16 +124,31 @@ All persistence goes through `MessageDatabase`; the WhatsApp session is kept sep
 
 Each release on [GitHub Releases](https://github.com/PalWorks/whatscli/releases) has:
 
-**Table I1: Release assets (from `.github/workflows/release.yml`)**
+**Table I1: Release assets (names from `.github/workflows/release.yml`, checked against the v1.6.0 release)**
 
-| Platform | Asset |
-|---|---|
-| Linux x86_64 | `whatscli-<tag>-linux-amd64.tar.gz` |
-| Linux arm64 | `whatscli-<tag>-linux-arm64.tar.gz` |
-| Windows x86_64 | `whatscli-<tag>-windows-amd64.zip` |
-| Checksums | `whatscli-<tag>-checksums.txt` (SHA256) |
+| Platform | Asset (v1.6.0) | Contains |
+|---|---|---|
+| Linux x86_64 | `whatscli-v1.6.0-linux-amd64.tar.gz` | `whatscli` |
+| Linux arm64 | `whatscli-v1.6.0-linux-arm64.tar.gz` | `whatscli` |
+| Windows x86_64 | `whatscli-v1.6.0-windows-amd64.zip` | `whatscli.exe` |
+| Checksums | `whatscli-v1.6.0-checksums.txt` | SHA256 of the three archives |
 
-macOS, Raspberry Pi (armv5) and Homebrew are not released for now (decision D4); macOS users build from source. [Unverified] No release has been produced by this workflow yet (ROADMAP row 17); the Windows build has not been tested on a live account.
+Other versions follow the same pattern with their tag. The latest release is v1.6.0; tags with a `-` (such as `v1.6.0-rc1`) are pre-releases and never marked Latest.
+
+```bash
+# with the GitHub CLI
+gh release download v1.6.0 --repo PalWorks/whatscli \
+  --pattern 'whatscli-v1.6.0-linux-amd64.tar.gz' --pattern 'whatscli-v1.6.0-checksums.txt'
+# or with curl
+curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.0/whatscli-v1.6.0-linux-amd64.tar.gz
+curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.0/whatscli-v1.6.0-checksums.txt
+
+sha256sum -c --ignore-missing whatscli-v1.6.0-checksums.txt
+tar -xzf whatscli-v1.6.0-linux-amd64.tar.gz      # extracts ./whatscli
+./whatscli
+```
+
+macOS, Raspberry Pi (armv5) and Homebrew are not released for now (ROADMAP row 8); macOS users build from source. The Windows build has not been run through the live-account checklist (TESTING.md Table T3).
 
 ### With go install
 
@@ -139,7 +156,7 @@ macOS, Raspberry Pi (armv5) and Homebrew are not released for now (decision D4);
 go install github.com/PalWorks/whatscli@latest
 ```
 
-Needs a C compiler (SQLite is built through CGO) and downloads the Go toolchain it needs automatically. [Inference] `@latest` resolves to the newest tag, and the existing `v1.3.0` tag predates the module rename, so until the next tag is pushed use `@master` after the branch is merged.
+Needs a C compiler (SQLite is built through CGO). `@latest` resolves to `v1.6.0` (checked with `go list -m github.com/PalWorks/whatscli@latest` on 2026-10-31). `go install` does not inject the version, so the top bar and `/help` of a binary built this way show `v1.3.0`, the default in `main.go`; release binaries and `make install` show the real tag.
 
 ### From source
 
@@ -147,11 +164,11 @@ Needs a C compiler (SQLite is built through CGO) and downloads the Go toolchain 
 git clone https://github.com/PalWorks/whatscli.git
 cd whatscli
 make build        # ./whatscli, version from git describe
-make install      # into $GOPATH/bin
+make install      # into $(go env GOPATH)/bin, version from git describe
 make run          # go run .
 ```
 
-**Prerequisites:** Go 1.26 or newer (an older Go downloads the 1.27.3 toolchain on its own) and gcc or clang. Linux: `sudo apt install gcc`.
+**Prerequisites:** Go 1.21 or newer with the default `GOTOOLCHAIN=auto`: `go.mod` asks for `go 1.26.0` and `toolchain go1.27.3`, so an older Go downloads go1.27.3 by itself. Go 1.26 also builds the code with `GOTOOLCHAIN=local` (CI tests 1.26 and 1.27). Plus gcc or clang; Linux: `sudo apt install gcc`.
 
 ### Optional helpers
 
@@ -395,10 +412,11 @@ Configurable under `[keymap]`.
 whatscli/
 ├── main.go, app_context.go          # entry point, shared UI state
 ├── ui_layout.go, ui_handler.go      # layout, UiMessageHandler implementation
-├── ui_keybindings.go, ui_render.go, ui_helpers.go
-├── ui_render_test.go
+├── ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go
+├── ui_*_test.go
 ├── messages/                        # business logic (no TUI dependency)
 │   ├── session_manager.go, connection.go, event_handler.go, history_sync.go, chat_state.go
+│   ├── chat_view.go, delete_for_me.go, lid_merge.go, partfiles.go
 │   ├── storage.go, priority_queue.go, messages.go, mock_ui_handler.go
 │   ├── media.go, jid_norm.go, revoke_incoming.go, pathcheck.go
 │   ├── cmd_registry.go and cmd_basic, cmd_connection, cmd_chat, cmd_group, cmd_media,
@@ -408,8 +426,9 @@ whatscli/
 ├── qrcode/                          # ANSI QR renderer
 ├── doc/screenshot.png
 ├── docs/archive/                    # historic reviews (Feb 2026), unchanged
-├── .github/workflows/ci.yml, release.yml, scripts/generate-aur-pkgbuilds.sh
-├── Makefile, go.mod, go.sum
+├── .github/workflows/ci.yml, release.yml; .github/dependabot.yml
+├── .github/scripts/check-spdx.sh, previous-tag.sh, generate-aur-pkgbuilds.sh
+├── Makefile, go.mod, go.sum, LICENSE, LICENSE-COMMERCIAL.md
 └── AGENTS.md ARCHITECTURE.md CHANGELOG.md CONTRIBUTING.md
     ROADMAP.md SECURITY.md SKILLS.md TESTING.md (CLAUDE.md, GEMINI.md, .cursorrules point to AGENTS.md)
 ```
@@ -423,7 +442,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-104 unit tests across the packages (counted when this file was written), using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 21-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+164 top-level unit tests across the packages at v1.6.0, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 
@@ -433,7 +452,7 @@ Releases are built by `.github/workflows/release.yml`. `release.sh` and the Home
 
 1. Merge to `master` with CI green; run the live checklist ([TESTING.md](TESTING.md)).
 2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The workflow validates the tag, builds natively with CGO (linux/amd64, linux/arm64, windows/amd64) with the version injected, packages archives, writes SHA256 checksums, and creates the GitHub release with notes from `git log`. It also generates AUR `PKGBUILD` and `.SRCINFO` as a workflow artifact (not published).
+3. The workflow validates the tag, builds natively with CGO (linux/amd64, linux/arm64, windows/amd64) with the version injected, packages archives, writes SHA256 checksums, and creates the GitHub release with notes from `git log` since the previous tag (`.github/scripts/previous-tag.sh`: the previous final tag for a final release, the previous tag of any kind for a release candidate). A tag with a `-` (for example `v1.6.0-rc1`) becomes a pre-release and is never marked Latest. It also generates AUR `PKGBUILD` and `.SRCINFO` as a workflow artifact (not published).
 4. Re-run for an existing tag: Actions, Release, Run workflow, enter the tag.
 5. Download a binary, run it, confirm the version in the top bar.
 
@@ -460,10 +479,10 @@ Short version: incoming "delete for everyone" requests are checked before they c
 
 The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMAP.md). Headlines:
 
-- Release gate: run the live-account checklist and a release-candidate tag (rows 15 and 17).
-- Merge old `@lid` chats into phone-number chats (row 13, approved, after the live checklist).
-- UI fixes: `show` freeze, status message ordering, non-blocking `/url` (rows 5, 6, 10).
-- macOS, Raspberry Pi and Homebrew releases are deferred until someone asks (row 8).
+- Shipped in v1.6.0: chat paging and `/more`, non-blocking `/info`, `show` and `/url`, Delete for me, repeat downloads reuse the saved file, part-file sweep, SHA-pinned CI.
+- Open: row 14, whether the phone answers `/backlog` in a chat whose own record is LID (needs an `@lid` chat on a live account).
+- Release gate: the live-account checklist before every tag (row 15, recurring).
+- Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18 to 22, `ContactId` normalisation (row 21).
 
 ---
 

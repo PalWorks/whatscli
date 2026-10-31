@@ -1,8 +1,8 @@
 # Architecture
 
-System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
+System design of WhatsCLI as it is in the code at `v1.6.0`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T15:01:08+00:00 (chat paging: chat_view.go)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: opener, root context, part-file sweep, delete for me, chat view, show and /info off the loop)_
 
 ## 1. Components
 
@@ -26,8 +26,8 @@ _Last updated: 2026-10-31T15:01:08+00:00 (chat paging: chat_view.go)_
 
 | Component | Files | Responsibility |
 |---|---|---|
-| TUI | `main.go`, `app_context.go`, `ui_layout.go`, `ui_handler.go`, `ui_keybindings.go`, `ui_render.go`, `ui_helpers.go` | tview widgets, key bindings (cbind), rendering, help text. `UiHandler` implements `messages.UiMessageHandler` and queues every update with `go ctx.App.QueueUpdateDraw` |
-| Session | `messages/session_manager.go`, `connection.go` | `SessionManager`: event loop `runManager`, login and QR flow, reconnect with backoff, `getClient()` |
+| TUI | `main.go`, `app_context.go`, `ui_layout.go`, `ui_handler.go`, `ui_keybindings.go`, `ui_render.go`, `ui_helpers.go`, `ui_opener.go` | tview widgets, key bindings (cbind), rendering, help text, image viewer (`renderImage`), system opener (`openerCommand`, `startOpener`). `UiHandler` implements `messages.UiMessageHandler` and queues every update with `go ctx.App.QueueUpdateDraw` |
+| Session | `messages/session_manager.go`, `connection.go`, `partfiles.go` | `SessionManager`: event loop `runManager`, login and QR flow, reconnect with backoff, `getClient()`, root context cancelled first in `Shutdown`, startup sweep of leftover download temp files |
 | Events | `messages/event_handler.go`, `history_sync.go`, `chat_state.go`, `chat_view.go`, `delete_for_me.go` | Handle whatsmeow events (message, connected, disconnected, logged out, history sync, delete for me), store messages, keep the chat priority queue; the open chat shows messages from a view anchor (newest 200, `/more` adds 200) |
 | Commands | `messages/cmd_*.go`, `cmd_registry.go` | One handler per slash command; registry filled in `init()` |
 | Media and safety | `messages/media.go`, `pathcheck.go`, `revoke_incoming.go`, `jid_norm.go`, `lid_merge.go` | Media metadata, file name sanitisation, open allowlist, containment, revoke authorisation, canonical JIDs, merge of old `@lid` chats |
@@ -45,18 +45,26 @@ _Last updated: 2026-10-31T15:01:08+00:00 (chat paging: chat_view.go)_
 
 - `*events.Message`: `handleMessage` unwraps, `processIncomingMessage` builds a `Message` (with media metadata via `attachMediaInfo`), stores it under the canonical chat JID, updates the conversation, and notifies. REVOKE protocol messages go to `handleIncomingRevoke` instead.
 - `*events.Connected`, `Disconnected`, `LoggedOut`: update status; `Disconnected` starts `scheduleReconnect` unless logged out, already reconnecting or not started.
-- `*events.HistorySync`: `processHistorySync` in a goroutine; `storeHistorySync` stores conversations and messages and refreshes the open chat.
+- `*events.DeleteForMe`: `handleDeleteForMe` (`delete_for_me.go`) deletes the stored row (chat matched in either JID form), moves the chat preview to the newest remaining message and redraws the open chat.
+- `*events.HistorySync`: `processHistorySync` in a goroutine; `storeHistorySync` stores conversations and messages and redraws the open chat only when a row changed (`AddMessage` returns a `StoreResult`), then merges known `@lid` chats (`lid_merge.go`).
 
-**Message commands.** The highlighted message ID is the only parameter. `runDownload` validates synchronously (message exists, has media metadata, connected, image for `show`), then downloads in a goroutine through `downloadMedia`, then `deliverDownload` either prints the path (`download`), renders (`show`, via `UiMessageHandler.PrintFile` and `ResolveFileWithin`) or passes an allowlisted file to the system opener (`open`).
+**Chat list.** `loadRecentChats` imports the contact list (`importContacts`): a mapped `@lid` contact names its phone-number chat, an unmapped one stays `@lid`, only groups create new chats, then known `@lid` chats are merged.
+
+**Chat view.** The open chat shows every stored message at or after `viewAnchor` (`chat_view.go`). Opening a chat sets the anchor to the oldest of its newest 200 messages; `/more` moves it back by 200 and says when all stored messages are shown; older messages stored by backlog or history sync lower the anchor so they appear.
+
+**Message commands.** The highlighted message ID is the only parameter. `runDownload` validates synchronously (message exists, has media metadata, connected, image for `show`), then downloads in a goroutine through `downloadMedia` under the root context; a file recorded in `local_path` is reused when it is still a regular file directly in the target folder, otherwise the new path is recorded. `deliverDownload` then either prints the path (`download`), renders (`show`, via `UiMessageHandler.PrintFile`: `renderImage` checks the path with `ResolveFileWithin` and runs `show_command` off the UI goroutine with a 15 s timeout) or passes an allowlisted file to the system opener (`open`, `ui_opener.go`, started without a shell and reaped in the background).
+
+**Info.** `/info` (key `i`) prints contact info for a one-to-one chat; for a group it calls `GetGroupInfo` in a goroutine with a 15 s timeout from the root context.
 
 **Backlog.** `cmdBacklog` anchors on the oldest stored message of the chat, builds `BuildHistorySyncRequest` and sends it with `SendPeerMessage` in a goroutine, polls the stored count for up to 5 s, and refreshes the chat. The phone's answer arrives later as a `HistorySync` event.
 
 ## 3. Concurrency model
 
-- Goroutines: the TUI (tview), `runManager`, whatsmeow's event goroutines, short-lived goroutines for network work (downloads, revoke send, backlog, group admin lookup, reconnect, history sync).
-- `sm.mu` (RWMutex) guards the priority queue, `convByJID`, `currentReceiver`, `client`, and the flags `started`, `reconnecting`, `loggedOut`. It is never held across SQLite writes or network calls.
+- Goroutines: the TUI (tview), `runManager`, whatsmeow's event goroutines, short-lived goroutines for network work (downloads, revoke send, backlog, group admin lookup, `/info` group lookup, reconnect, history sync), the image viewer run by `show`, and the background `Wait` of each system opener.
+- `sm.mu` (RWMutex) guards the priority queue, `convByJID`, `currentReceiver`, `viewAnchor`, `client`, and the flags `started`, `reconnecting`, `loggedOut`. It is never held across SQLite writes or network calls.
+- Root context: `sm.rootContext()` (created once, cancelled first in `Shutdown`) parents downloads, backlog and its poll, own revokes, the incoming-revoke admin check and the `/info` group lookup, so quitting stops them.
 - `snapshotPQ()` gives the UI a deep copy of the queue.
-- Rules and rationale: AGENTS.md section 6. Known ordering weakness: UI updates are queued from separate goroutines (ROADMAP row 10).
+- Rules and rationale: AGENTS.md section 6. UI updates are queued from separate goroutines, so their order is not guaranteed; status that must follow a redraw goes through `NewScreenWithStatus` (one queued update).
 - Test seams, nil in production: `lidMapperOverride`, `groupInfoOverride` (SessionManager), `mediaDownloader` interface, `webMessageParser`.
 
 ## 4. Storage
@@ -110,7 +118,7 @@ WhatsApp can address one person as `<number>@s.whatsapp.net` (PN) or `<id>@lid`.
 
 ## 6. Security-relevant paths
 
-Incoming revoke: `handleIncomingRevoke` loads the target, `decideRevoke` checks chat and sender, group admins are confirmed with `GetGroupInfo` in a goroutine, `applyRevoke` writes with `WHERE id = ? AND chat_id = ?`. Download: `sanitizeFileName`, `safeJoin`, temp file, rename. Open: `safeToOpen`. Show: `ResolveFileWithin`. Details and threat notes: [SECURITY.md](SECURITY.md).
+Incoming revoke: `handleIncomingRevoke` loads the target, `decideRevoke` checks chat and sender, group admins are confirmed with `GetGroupInfo` in a goroutine, `applyRevoke` writes with `WHERE id = ? AND chat_id = ?`. Download: `sanitizeFileName`, `safeJoin`, temp file, rename; `local_path` reuse only through `ResolveFileWithin`. Startup sweep: only regular `.whatscli-<digits>.part` files directly in the download and preview folders. Open: `safeToOpen`, then `ui_opener.go` without a shell. Show: `ResolveFileWithin`. Details and threat notes: [SECURITY.md](SECURITY.md).
 
 ## 7. External dependencies
 
@@ -133,7 +141,7 @@ Toolchain: Go directive 1.26.0, `toolchain go1.27.3`, CGO required.
 
 ## 8. Scaling and limits
 
-Single user, single account, local data. The chat list shows `ChatLimit` chats (starts at 50, grows by `batchSize` 50 when the selection nears the end); message reads can be paginated from SQLite (`GetMessagesPaginated`). There is no server component. Reconnect is capped at 5 attempts.
+Single user, single account, local data. The chat list shows `ChatLimit` chats (starts at 50, grows by `batchSize` 50 when the selection nears the end); an open chat shows its newest 200 stored messages and `/more` adds 200 older ones at a time (`chat_view.go`, `NthTimestampBefore`, `GetMessagesSince`). There is no server component. Reconnect is capped at 5 attempts.
 
 ## 9. Glossary
 
@@ -147,4 +155,6 @@ Single user, single account, local data. The chat list shows `ChatLimit` chats (
 | History sync | Bulk or ON_DEMAND delivery of old messages from the phone |
 | Backlog | `/backlog`: request older messages for the open chat |
 | Revoke | Delete for everyone |
-| Anchor | Oldest stored message, the reference point for a backlog request |
+| Backlog anchor | Oldest stored message, the reference point for a backlog request |
+| View anchor | `viewAnchor`: oldest timestamp shown in the open chat; `/more` lowers it |
+| Delete for me | Removal on your own devices only, synced as app state (`events.DeleteForMe`), not a revoke |

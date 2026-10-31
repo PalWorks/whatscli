@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T15:39:00+00:00 (v1.6.0 live run recorded in Table T3)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: CI facts, test counts, steps 22 to 26 for the v1.6.0 checks)_
 
 ## 1. Commands
 
@@ -16,15 +16,15 @@ go test -race -run TestIncomingRevoke ./messages    # one group
 
 Requires CGO and a C compiler (`apt install gcc` on Linux). Go directive 1.26.0 with toolchain go1.27.3; an older system Go downloads the toolchain automatically.
 
-Last verified when this file was written: build, vet and `go test -race -count=1 ./...` pass for the root package, `config`, `messages` and `qrcode`.
+Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race -count=1 ./...` pass for the root package, `config`, `messages` and `qrcode`.
 
 ## 2. CI
 
-`.github/workflows/ci.yml` runs on push and pull request to `master`: matrix Go 1.26 and 1.27 on `ubuntu-latest`, then `go mod download`, `go mod verify`, `go vet ./...`, `go build -v ./...`, `go test -v -race -count=1 ./...`. [Inference] The 1.26 leg may run 1.27.3 through the `toolchain` line (ROADMAP row 12). Releases are a separate workflow (`release.yml`) and do not run tests.
+`.github/workflows/ci.yml` runs on push and pull request to `master`: matrix Go 1.26 and 1.27 on `ubuntu-latest` with `GOTOOLCHAIN=local`, so each leg runs the Go it names (a `go version` step fails the leg otherwise). Steps: install gcc, SPDX header check (`.github/scripts/check-spdx.sh`), `go mod download`, `go mod verify`, `go vet ./...`, `go build -v ./...`, `go test -v -race -count=1 ./...`. Every action is pinned to a commit SHA; Dependabot proposes updates weekly. Releases are a separate workflow (`release.yml`) and do not run tests.
 
 ## 3. Test layout
 
-**Table T1: Test files (104 top-level tests when this file was written)**
+**Table T1: Test files (164 top-level tests at v1.6.0)**
 
 | File | Tests | Covers |
 |---|---|---|
@@ -33,14 +33,26 @@ Last verified when this file was written: build, vet and `go test -race -count=1
 | `messages/msg_handler_test.go` | 20 | Message content extraction and handling |
 | `messages/media_test.go` | 13 | Schema migration on an old DB, media metadata round trip, sanitisation, `safeJoin`, download traversal, collision, temp cleanup, `firstURL` |
 | `messages/media_safety_test.go` | 5 | Windows-safe names, `safeToOpen` allow and deny lists, open gate, `ResolveFileWithin` |
-| `messages/cmd_message_test.go` | 8 | Registry, revoke, download validation, `/url`, backlog anchor and guards |
+| `messages/cmd_message_test.go` | 10 | Registry, revoke, download validation, `/url`, backlog anchor and guards, backlog wait, opener errors reported |
 | `messages/revoke_incoming_test.go` | 5 | Spoof from another chat, 12 authorisation cases, LID chat, group admin, `chat_id` scoping |
 | `messages/jid_norm_test.go` | 6 | Canonical chat JID, `sameUser`, history sync with `@lid`, live and history agreement, backlog target |
+| `messages/lid_merge_test.go` | 5 | Merge of `@lid` chats into the phone-number chat, open chat moves, unknown mapping unchanged |
+| `messages/empty_chats_test.go` | 2 | Empty contact chats skipped and removed |
+| `messages/contact_import_test.go` | 3 | `@lid` contact import, no new chat for a mapped LID, bare LID never renames |
+| `messages/delete_for_me_test.go` | 6 | Delete for me: row removed, preview and redraw, other chat, last message, LID chat, wrong chat ignored |
+| `messages/chat_view_test.go` | 7 | Newest page on open, `/more` paging and "all shown", new and history-synced messages visible |
+| `messages/store_upsert_test.go` | 6 | `StoreResult`, media fill only when empty, revoked row untouched, redraw only on change, redelivered live message |
+| `messages/local_path_test.go` | 4 | `local_path` migration, scoping and clearing on revoke, repeat download reuse and fallback |
+| `messages/partfiles_test.go` | 8 | Part-file name match, sweep, blank or missing folder, same folder once, `Shutdown` cancels download and backlog wait |
+| `messages/status_order_test.go` | 7 | Status printed with the redraw (`NewScreenWithStatus`) for revoke, backlog and history sync |
 | `messages/session_manager_test.go` | 5 | Session lifecycle |
 | `messages/cmd_media_test.go` | 3 | Send media commands |
 | `messages/priority_queue_test.go` | 1 | Chat ordering |
 | `qrcode/qrcode_test.go` | 1 | Full quiet zone in rendered output |
 | `ui_render_test.go` | 10 | UI rendering helpers |
+| `ui_image_test.go` | 5 | `renderImage`: output, timeout, child holding stdout, viewer failure, refusals |
+| `ui_opener_test.go` | 4 | `startOpener` start failure, no blocking and reaping, clean exit; target passed as one argument |
+| `ui_helpers_test.go` | 1 | `chatForID` |
 
 ## 4. Conventions
 
@@ -52,11 +64,11 @@ Last verified when this file was written: build, vet and `go test -race -count=1
 - All tests run with `-race`.
 - A bug fix includes a test that fails without the fix.
 
-Known gaps: no success-path test for the `runDownload` and `cmdRevoke` goroutines (needs a client seam), no test that sends to or receives from a real WhatsApp server, no test for the UI key handlers or `show` viewer execution. These are why the live checklist exists.
+Known gaps: no success-path test for the `cmdRevoke` goroutine (needs a client seam), no test that sends to or receives from a real WhatsApp server, no test for the UI key handlers. The download goroutine is covered through the `mediaDownloader` seam (`local_path_test.go`, `partfiles_test.go`); viewer and opener execution are covered by `ui_image_test.go` and `ui_opener_test.go`. These gaps are why the live checklist exists.
 
 ## 5. Live-account checklist (release gate)
 
-Run before every tagged release (ROADMAP row 15). No agent has run this; the first run is still due. It checks what unit tests with fakes cannot: real WhatsApp behaviour.
+Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Table T3; no run has yet covered every step. It checks what unit tests with fakes cannot: real WhatsApp behaviour.
 
 **Preconditions**
 
@@ -91,6 +103,11 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 | 19 | Open gate | Have a contact send `test.exe` as a document; `o` on it. Repeat on the Windows build if releasing it | Saved, path printed, "Saved but not opened" note; nothing runs |
 | 20 | Open allowlisted | `o` on a PDF and on an image | Opens in the system viewer as before |
 | 21 | Show with symlink | Make `download_path` (for example `~/Downloads`) a symlink and `s` on an image. Keep a file in `~/Downloads2` | The image renders. `~/Downloads2` is never shown (not reachable from the UI; unit-tested) |
+| 22 | Chat paging | Open a chat with more than 200 stored messages; run `/more` until it reports that all are shown | Opens with the newest 200; each `/more` adds 200 older ones and prints "Showing N of M stored messages", visible after the redraw; at the end "All M stored messages are shown. Use /backlog to request older ones from WhatsApp." |
+| 23 | Group info | In a large group run `/info` (or `i` with a message highlighted), and type a command while it waits | Group name, JID and participant count print; other commands keep working meanwhile; a slow server gives an error after 15 s, no freeze |
+| 24 | Delete for me | In "Message yourself", send a message from WhatsCLI or the phone, then "Delete for me" on the phone while WhatsCLI is running | The message disappears from WhatsCLI and the chat preview moves back to the newest remaining message |
+| 25 | Repeat download | `d` twice on the same named document, then `o` on it | One file in `download_path` (no `<stem>_<id>` copy); `open` reuses the saved file |
+| 26 | Part-file sweep | Quit during a large video download; then plant `.whatscli-123456.part`, `.whatscli-abc.part` and `keep.part` in `download_path` and start WhatsCLI | No `.part` left by the quit; at start only `.whatscli-123456.part` is removed, the other two stay |
 
 **Table T3: Run record (copy one row per run)**
 
@@ -106,4 +123,4 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 2. The live checklist above passed; the run is recorded in ROADMAP row 15.
 3. Secret scan of the repository and the built binary (SECURITY.md section 3).
 4. CHANGELOG `[Unreleased]` renamed to the version and dated; ROADMAP §2.1 updated.
-5. Release candidate tag run through `release.yml` first (ROADMAP row 17), then the real tag.
+5. Release candidate tag (for example `v1.7.0-rc1`, published as a pre-release) run through `release.yml` first, then the real tag.

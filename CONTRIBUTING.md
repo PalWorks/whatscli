@@ -2,7 +2,7 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T14:17:27+00:00 (SPDX header rule for new Go files)_
+_Last updated: 2026-10-31T15:51:30+00:00 (root context for long-running work; UTC doc timestamps)_
 
 ## Licensing of contributions
 
@@ -26,7 +26,7 @@ WhatsCLI is dual licensed under AGPL-3.0-only and a paid commercial license ([LI
 - Schema changes use `addColumnIfMissing` and keep old databases working.
 - Tests added; they fail without the change.
 - No secrets, keys, session files or chat screenshots in the diff.
-- README, CHANGELOG (`[Unreleased]`) and ROADMAP updated when the change is more than trivial. Each update carries a timestamp from `date --iso-8601=seconds`.
+- README, CHANGELOG (`[Unreleased]`) and ROADMAP updated when the change is more than trivial. Each update carries a UTC timestamp from `date -u --iso-8601=seconds`.
 
 ## Adding a slash command
 
@@ -62,7 +62,8 @@ func cmdExample(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
         return
     }
     // Validate here (synchronously). Do network work in a goroutine and call
-    // sm.getClient() again inside it; never block the event loop.
+    // sm.getClient() again inside it; never block the event loop. Derive its
+    // context from sm.rootContext() so quitting cancels it.
     sm.uiHandler.PrintText("Done")
 }
 ```
