@@ -96,9 +96,12 @@ func isBareNumberName(name string) bool {
 
 // mergeKnownLIDChats merges every stored @lid chat whose phone-number JID is
 // now known. It is safe to call repeatedly; chats without a mapping stay.
-func (sm *SessionManager) mergeKnownLIDChats() {
+// It returns the number of chats merged and, if the open chat was merged,
+// the chat it moved to. The caller redraws that chat together with its own
+// status (mergedStatus), so the redraw cannot wipe it (ROADMAP row 10).
+func (sm *SessionManager) mergeKnownLIDChats() (merged int, movedOpenChat string) {
 	if sm.lidMap() == nil {
-		return
+		return 0, ""
 	}
 	sm.mu.RLock()
 	var lids []string
@@ -109,32 +112,44 @@ func (sm *SessionManager) mergeKnownLIDChats() {
 	}
 	sm.mu.RUnlock()
 
-	merged := 0
 	for _, lidStr := range lids {
 		lid, _ := types.ParseJID(lidStr)
 		pn := sm.canonicalUserJID(lid) // LID store lookup; never under sm.mu
 		if pn.Server != types.DefaultUserServer {
 			continue
 		}
-		if sm.mergeLIDChat(lidStr, pn) {
+		ok, wasOpen := sm.mergeLIDChat(lidStr, pn)
+		if ok {
 			merged++
+		}
+		if wasOpen {
+			movedOpenChat = pn.String()
 		}
 	}
 	if merged == 0 {
-		return
+		return 0, ""
 	}
 	sm.mu.Lock()
 	safeList := sm.snapshotPQ()
 	sm.mu.Unlock()
 	sm.uiHandler.UpdateChatList(safeList)
-	sm.uiHandler.PrintText(fmt.Sprintf("Merged %d chat(s) stored under a LID into their phone-number chat.", merged))
+	return merged, movedOpenChat
+}
+
+// mergedStatus appends the result of mergeKnownLIDChats to status.
+func mergedStatus(status string, merged int) string {
+	if merged == 0 {
+		return status
+	}
+	return status + fmt.Sprintf("\nMerged %d chat(s) stored under a LID into their phone-number chat.", merged)
 }
 
 // mergeLIDChat merges the conversation lidStr into pn in SQLite and in the
-// chat list, and moves the open chat over if it was the merged one. The DB
+// chat list, and moves the open chat over if it was the merged one (wasOpen
+// reports that, so the caller can redraw it). The DB
 // write happens outside sm.mu; the in-memory state is merged afterwards from
 // its then-current values.
-func (sm *SessionManager) mergeLIDChat(lidStr string, pn types.JID) bool {
+func (sm *SessionManager) mergeLIDChat(lidStr string, pn types.JID) (merged, wasOpen bool) {
 	pnStr := pn.String()
 	sm.mu.RLock()
 	lidConv := sm.convByJID[lidStr]
@@ -144,19 +159,19 @@ func (sm *SessionManager) mergeLIDChat(lidStr string, pn types.JID) bool {
 	}
 	sm.mu.RUnlock()
 	if lidConv == nil {
-		return false
+		return false, false
 	}
 
 	if err := sm.db.MergeChat(lidStr, conv); err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("merge chat %s into %s: %w", lidStr, pnStr, err))
-		return false
+		return false, false
 	}
 
 	sm.mu.Lock()
 	lidConv = sm.convByJID[lidStr]
 	if lidConv == nil {
 		sm.mu.Unlock()
-		return false
+		return false, false
 	}
 	pnConv := sm.convByJID[pnStr]
 	final := mergedConversation(pn, lidConv, pnConv)
@@ -173,7 +188,7 @@ func (sm *SessionManager) mergeLIDChat(lidStr string, pn types.JID) bool {
 		pnConv.Index = idx
 		heap.Fix(&sm.priorityQueue, idx)
 	}
-	wasOpen := sm.currentReceiver == lidStr
+	wasOpen = sm.currentReceiver == lidStr
 	if wasOpen {
 		sm.currentReceiver = pnStr
 	}
@@ -186,8 +201,5 @@ func (sm *SessionManager) mergeLIDChat(lidStr string, pn types.JID) bool {
 			sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %w", err))
 		}
 	}
-	if wasOpen {
-		sm.uiHandler.NewScreen(sm.getMessages(pnStr))
-	}
-	return true
+	return true, wasOpen
 }

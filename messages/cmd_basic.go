@@ -164,8 +164,7 @@ func cmdMore(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 
 	// Combine: older messages + current messages → full screen refresh
 	combined := append(olderMsgs, currentMsgs...)
-	sm.uiHandler.NewScreen(combined)
-	sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d older messages", len(olderMsgs)))
+	sm.uiHandler.NewScreenWithStatus(combined, fmt.Sprintf("Loaded %d older messages", len(olderMsgs)))
 }
 
 // cmdHelp shows help text.

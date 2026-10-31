@@ -5,14 +5,16 @@ package messages
 // MockUiHandler implements UiMessageHandler for testing.
 // It captures all calls so tests can assert on them.
 type MockUiHandler struct {
-	Texts       []string
-	Errors      []error
-	Files       []string
-	QRCodes     []string
-	Statuses    []SessionStatus
-	ChatLists   [][]*Conversation
-	ChatSets    [][]Chat
-	Screens     [][]Message
+	Texts     []string
+	Errors    []error
+	Files     []string
+	QRCodes   []string
+	Statuses  []SessionStatus
+	ChatLists [][]*Conversation
+	ChatSets  [][]Chat
+	Screens   [][]Message
+	// ScreenTexts holds the status printed with each NewScreenWithStatus.
+	ScreenTexts []string
 	Messages    []Message
 	HelpCalled  int
 	ClearCalled int
@@ -51,4 +53,15 @@ func (m *MockUiHandler) Quit()                           { m.QuitCalled++ }
 func (m *MockUiHandler) OpenFile(path string) error {
 	m.Files = append(m.Files, path)
 	return m.OpenErr
+}
+
+// NewScreenWithStatus records the screen, its status and any non-nil errors.
+func (m *MockUiHandler) NewScreenWithStatus(msgs []Message, status string, errs ...error) {
+	m.Screens = append(m.Screens, msgs)
+	m.ScreenTexts = append(m.ScreenTexts, status)
+	for _, err := range errs {
+		if err != nil {
+			m.Errors = append(m.Errors, err)
+		}
+	}
 }

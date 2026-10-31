@@ -174,7 +174,7 @@ func TestWaitForNewMessages(t *testing.T) {
 func TestApplyRevoke_UnknownIDIsNoop(t *testing.T) {
 	sm, mock := newTestSessionManager(t)
 	sm.currentReceiver = "c@s.whatsapp.net"
-	sm.applyRevoke("c@s.whatsapp.net", "MISSING")
+	sm.applyRevoke("c@s.whatsapp.net", "MISSING", "")
 	if len(mock.Screens) != 0 || len(mock.Errors) != 0 {
 		t.Errorf("unexpected UI activity: screens=%d errors=%v", len(mock.Screens), mock.Errors)
 	}

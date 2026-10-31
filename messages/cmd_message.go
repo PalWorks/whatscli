@@ -318,8 +318,7 @@ func cmdRevoke(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 			sm.uiHandler.PrintError(fmt.Errorf("revoke message: %w", err))
 			return
 		}
-		sm.applyRevoke(msg.ChatId, msg.Id)
-		sm.uiHandler.PrintText("revoked: " + msg.Id)
+		sm.applyRevoke(msg.ChatId, msg.Id, "revoked: "+msg.Id)
 	}()
 }
 
@@ -327,19 +326,17 @@ func cmdRevoke(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 // its chat is currently displayed. Used for our own revokes and, after the
 // checks in handleIncomingRevoke, for revokes received from others or from our
 // other devices. chatID must be the chat the message is stored under.
-func (sm *SessionManager) applyRevoke(chatID, msgID string) {
+// status, if not empty, is printed after the refresh in the same UI update
+// (ROADMAP row 10).
+func (sm *SessionManager) applyRevoke(chatID, msgID, status string) {
 	updated, err := sm.db.MarkMessageRevoked(chatID, msgID)
 	if err != nil {
-		sm.uiHandler.PrintError(err)
+		sm.showStatus("", status, err)
 		return
 	}
-	if !updated {
-		return
+	refresh := ""
+	if updated {
+		refresh = sm.refreshTarget(chatID)
 	}
-	sm.mu.RLock()
-	isCurrent := sm.currentReceiver == chatID
-	sm.mu.RUnlock()
-	if isCurrent {
-		sm.uiHandler.NewScreen(sm.getMessages(chatID))
-	}
+	sm.showStatus(refresh, status)
 }

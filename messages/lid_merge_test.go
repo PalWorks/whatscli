@@ -4,6 +4,7 @@ package messages
 
 import (
 	"container/heap"
+	"strings"
 	"testing"
 
 	"go.mau.fi/whatsmeow/types"
@@ -110,13 +111,22 @@ func TestMergeKnownLIDChats_OpenChatMoves(t *testing.T) {
 	seedMsg(t, sm, "L1", "111@lid", 300)
 	sm.currentReceiver = "111@lid"
 
-	sm.mergeKnownLIDChats()
+	merged, moved := sm.mergeKnownLIDChats()
 
 	if sm.currentReceiver != "alice@s.whatsapp.net" {
 		t.Errorf("currentReceiver = %q", sm.currentReceiver)
 	}
-	if len(mock.Screens) == 0 || len(mock.Screens[len(mock.Screens)-1]) != 1 {
+	if merged != 1 || moved != "alice@s.whatsapp.net" {
+		t.Errorf("merged=%d moved=%q, want 1 and the phone-number chat", merged, moved)
+	}
+	// The caller redraws the moved chat with its status (ROADMAP row 10).
+	sm.showStatus(moved, mergedStatus("Chats loaded.", merged))
+	if len(mock.Screens) != 1 || len(mock.Screens[0]) != 1 {
 		t.Errorf("open chat not redrawn with its messages: %+v", mock.Screens)
+	}
+	if len(mock.Texts) != 0 || len(mock.ScreenTexts) != 1 ||
+		!strings.Contains(mock.ScreenTexts[0], "Merged 1 chat(s)") {
+		t.Errorf("status must be printed with the redraw: texts=%v screenTexts=%v", mock.Texts, mock.ScreenTexts)
 	}
 }
 

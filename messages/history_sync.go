@@ -50,8 +50,8 @@ func (sm *SessionManager) loadRecentChats() {
 		sm.mu.Unlock()
 		sm.uiHandler.UpdateChatList(safeList)
 
-		sm.uiHandler.PrintText("Chats loaded.")
-		sm.mergeKnownLIDChats()
+		merged, movedTo := sm.mergeKnownLIDChats()
+		sm.showStatus(movedTo, mergedStatus("Chats loaded.", merged))
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
 	}
@@ -357,30 +357,29 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 	sm.mu.Unlock()
 	sm.uiHandler.UpdateChatList(safeList)
 
+	var errs []error
 	if addMsgErrors > 0 {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to store %d history messages", addMsgErrors))
+		errs = append(errs, fmt.Errorf("failed to store %d history messages", addMsgErrors))
 	}
 	if mediaErrors > 0 {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to keep media metadata for %d history messages", mediaErrors))
+		errs = append(errs, fmt.Errorf("failed to keep media metadata for %d history messages", mediaErrors))
 	}
-
-	// ON_DEMAND responses (from /backlog) usually arrive after the backlog
-	// command stopped polling, so refresh the open chat here as well.
-	if currentChatChanged {
-		sm.mu.RLock()
-		stillCurrent := sm.currentReceiver == currentChat
-		sm.mu.RUnlock()
-		if stillCurrent {
-			sm.uiHandler.NewScreen(sm.getMessages(currentChat))
-		}
-	}
-
-	sm.uiHandler.PrintText(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
-		len(toUpsert), totalMessages))
 
 	// History sync also teaches whatsmeow LID mappings; merge chats that
 	// were stored under a LID before (ROADMAP row 13).
-	sm.mergeKnownLIDChats()
+	merged, movedTo := sm.mergeKnownLIDChats()
+
+	status := mergedStatus(fmt.Sprintf("History sync complete: %d conversations, %d messages stored.",
+		len(toUpsert), totalMessages), merged)
+
+	// ON_DEMAND responses (from /backlog) usually arrive after the backlog
+	// command stopped polling, so refresh the open chat here as well. The
+	// status is printed in the same UI update as the refresh (ROADMAP row 10).
+	refresh := movedTo
+	if refresh == "" && currentChatChanged {
+		refresh = sm.refreshTarget(currentChat)
+	}
+	sm.showStatus(refresh, status, errs...)
 }
 
 // isHistoryChatServer reports whether a history sync conversation on this JID

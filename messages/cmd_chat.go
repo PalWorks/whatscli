@@ -121,23 +121,18 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 		if ctx.Err() != nil {
 			return // shutting down
 		}
-		if err != nil {
-			sm.uiHandler.PrintError(err)
-		}
-		if after > before {
-			sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", after-before))
-		} else {
-			sm.uiHandler.PrintText("Requested older messages from WhatsApp; none arrived yet. They will appear if the phone answers later.")
-		}
-
-		// Only refresh if the user is still viewing the same chat.
-		sm.mu.RLock()
-		stillCurrent := sm.currentReceiver == receiver
-		sm.mu.RUnlock()
-		if stillCurrent {
-			sm.uiHandler.NewScreen(sm.getMessages(receiver))
-		}
+		// Only refresh if the user is still viewing the same chat; the
+		// status is printed in the same UI update (ROADMAP row 10).
+		sm.showStatus(sm.refreshTarget(receiver), backlogStatus(before, after), err)
 	}()
+}
+
+// backlogStatus is the message shown when the backlog wait ends.
+func backlogStatus(before, after int) string {
+	if after > before {
+		return fmt.Sprintf("Loaded %d additional messages", after-before)
+	}
+	return "Requested older messages from WhatsApp; none arrived yet. They will appear if the phone answers later."
 }
 
 // backlogTarget returns the canonical JID of chat and whether it differs from

@@ -24,18 +24,37 @@ func (u UiHandler) NewMessage(msg messages.Message) {
 
 func (u UiHandler) NewScreen(msgs []messages.Message) {
 	go ctx.App.QueueUpdateDraw(func() {
-		ctx.TextView.Clear()
-		screen := getMessagesString(msgs)
-		ctx.TextView.SetText(screen)
-		ctx.CurRegions = msgs
-		if screen == "" {
-			if ctx.CurrentReceiver.Id == "" {
-				PrintHelp()
-			} else {
-				PrintText("[::d] ~~~ no messages, press " + config.Config.Keymap.CommandBacklog + " to load backlog if available ~~~[::-]")
-			}
+		renderScreen(msgs)
+	})
+}
+
+// NewScreenWithStatus redraws the messages and prints errs and status after
+// them in one queued draw, so the order is fixed (ROADMAP row 10).
+func (u UiHandler) NewScreenWithStatus(msgs []messages.Message, status string, errs ...error) {
+	go ctx.App.QueueUpdateDraw(func() {
+		renderScreen(msgs)
+		for _, err := range errs {
+			PrintError(err)
+		}
+		if status != "" {
+			PrintText(status)
 		}
 	})
+}
+
+// renderScreen replaces the message pane with msgs. UI goroutine only.
+func renderScreen(msgs []messages.Message) {
+	ctx.TextView.Clear()
+	screen := getMessagesString(msgs)
+	ctx.TextView.SetText(screen)
+	ctx.CurRegions = msgs
+	if screen == "" {
+		if ctx.CurrentReceiver.Id == "" {
+			PrintHelp()
+		} else {
+			PrintText("[::d] ~~~ no messages, press " + config.Config.Keymap.CommandBacklog + " to load backlog if available ~~~[::-]")
+		}
+	}
 }
 
 // UpdateChatList updates the table with the PriorityQueue content

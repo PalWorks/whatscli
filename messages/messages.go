@@ -6,6 +6,10 @@ package messages
 type UiMessageHandler interface {
 	NewMessage(Message)
 	NewScreen([]Message)
+	// NewScreenWithStatus redraws the message pane like NewScreen and then
+	// prints errs and status in the same draw, so the redraw cannot wipe
+	// them (ROADMAP row 10).
+	NewScreenWithStatus(msgs []Message, status string, errs ...error)
 	SetChats([]Chat)
 	UpdateChatList([]*Conversation)
 	PrintError(error)
