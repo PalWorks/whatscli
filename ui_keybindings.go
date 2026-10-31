@@ -364,7 +364,9 @@ func LoadShortcuts() {
 	if err := keysMessages.Set(config.Config.Keymap.MessageUrl, handleMessageCommand("url")); err != nil {
 		PrintErrorMsg("message_url:", err)
 	}
-	if err := keysMessages.Set(config.Config.Keymap.MessageInfo, handleMessageCommand("info")); err != nil {
+	// The key shows chat or group info for the open chat; it is not a
+	// message command, so no message ID is sent (ROADMAP row 24).
+	if err := keysMessages.Set(config.Config.Keymap.MessageInfo, handleCommand("info")); err != nil {
 		PrintErrorMsg("message_info:", err)
 	}
 	if err := keysMessages.Set(config.Config.Keymap.MessageRevoke, handleMessageCommand("revoke")); err != nil {
