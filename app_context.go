@@ -27,7 +27,6 @@ type AppContext struct {
 	CurRegions      []messages.Message
 	MouseState      bool
 	AllChats        []*messages.Conversation
-	ChatLimit       int
 	RenderingList   bool // true while RenderChatTable is restoring selection
 
 	// Backend

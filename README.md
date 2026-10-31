@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T16:18:40+00:00 (command list, command echo, open at latest message, Status box, go install version)_
+_Last updated: 2026-10-31T16:39:26+00:00 (scroll bars, chat list columns)_
 
 ---
 
@@ -278,7 +278,8 @@ A QR code appears in the terminal. On your phone: WhatsApp, Settings, Linked Dev
 - Type `/` on the input line to see the commands with a short description; keep typing to narrow the list (`/lo` shows `/login` and `/logout`), move with `Up` and `Down`, pick with `Tab` or `Enter`. Every command you enter is echoed in the message pane with its time, for example `(31-10-26 21:28:40) > /logout` (a command that redraws the chat, such as `/select`, replaces the echo with the chat).
 - The Status box lists the WhatsApp Status updates (stories) of your contacts that arrived while WhatsCLI was linked, not your own status. History sync does not include them, so it stays empty until a contact posts one.
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
-- `Ctrl+p` toggles mouse support (off lets the terminal select text).
+- `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
+- In the chat lists, the right column shows the unread count, if any, and the time of the last message; long names are shortened to keep it visible.
 
 ### Working with attachments
 
@@ -444,7 +445,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-171 top-level unit tests across the packages (164 at v1.6.0), using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+175 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 

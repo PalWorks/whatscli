@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T16:18:40+00:00 (ui_complete.go, version.go, command hint rule)_
+> _Last updated: 2026-10-31T16:39:26+00:00 (ui_scrollbar.go)_
 
 ## 1. Project
 
@@ -67,7 +67,7 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
               ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
-              ui_complete.go (command drop-down and echo), version.go
+              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
