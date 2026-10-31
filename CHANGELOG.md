@@ -2,9 +2,14 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T17:01:57+00:00 (released v1.6.3)_
+_Last updated: 2026-10-31T17:21:02+00:00 (released v1.6.4)_
 
 ## [Unreleased]
+
+## [1.6.4] - 2026-10-31
+
+### Added
+- Find a chat by name: `Ctrl+f` (new key `find_chat`) or `/select ` opens a drop-down of matching chats and groups (name or number, newest first, up to 10); `Enter` or `Tab` opens the chosen one. `/select <name>` opens the newest match, or says that none matched. Works without a connection.
 
 ## [1.6.3] - 2026-10-31
 

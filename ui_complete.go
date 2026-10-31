@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -119,23 +121,134 @@ func commandEcho(cmd string, now time.Time) string {
 	return fmt.Sprintf("[::d](%s) > %s[::-]", now.Format("02-01-06 15:04:05"), tview.Escape(cmd))
 }
 
-// commandListOpen reports whether the input shows the command drop-down.
+// commandListOpen reports whether the input shows the command or chat
+// drop-down.
 func commandListOpen() bool {
-	return len(commandEntries(ctx.TextInput.GetText(), commandPrefix())) > 0
+	return len(inputEntries(ctx.TextInput.GetText())) > 0
+}
+
+// inputEntries is the drop-down for the input text: chats after
+// "<prefix>select ", else matching commands. It also records chatChoices.
+func inputEntries(text string) []string {
+	chatChoices = nil
+	if q, ok := chatQuery(text, commandPrefix()); ok {
+		chatChoices = matchChats(ctx.AllChats, q, chatSearchLimit)
+		entries := make([]string, len(chatChoices))
+		for i, c := range chatChoices {
+			entries[i] = chatEntry(c)
+		}
+		return entries
+	}
+	return commandEntries(text, commandPrefix())
 }
 
 // setupCommandCompletion attaches the drop-down to the input field.
 func setupCommandCompletion(input *tview.InputField) {
-	input.SetAutocompleteFunc(func(text string) []string {
-		return commandEntries(text, commandPrefix())
-	})
+	input.SetAutocompleteFunc(inputEntries)
 	input.SetAutocompletedFunc(func(text string, index, source int) bool {
 		if source == tview.AutocompletedNavigate {
 			return false // keep the list open while moving through it
 		}
+		if _, ok := chatQuery(input.GetText(), commandPrefix()); ok {
+			if index >= 0 && index < len(chatChoices) {
+				SetDisplayedChat(chatFromConversation(chatChoices[index]))
+			}
+			input.SetText("")
+			return true
+		}
 		input.SetText(completedText(text, commandPrefix()))
+		if _, ok := chatQuery(input.GetText(), commandPrefix()); ok {
+			// Offer chats right away. Queued: this callback runs while the
+			// input field holds its drop-down lock.
+			go ctx.App.QueueUpdateDraw(func() { input.Autocomplete() })
+		}
 		return true
 	})
 }
 
 func commandPrefix() string { return config.Config.General.CmdPrefix }
+
+// chatSearchLimit caps the chat drop-down.
+const chatSearchLimit = 10
+
+// chatChoices are the chats behind the current chat drop-down, in order.
+var chatChoices []*messages.Conversation
+
+// chatQuery returns the name typed after "<prefix>select " and whether the
+// input is in that form.
+func chatQuery(text, prefix string) (string, bool) {
+	head := prefix + "select "
+	if prefix == "" || len(text) < len(head) || !strings.EqualFold(text[:len(head)], head) {
+		return "", false
+	}
+	return strings.TrimSpace(text[len(head):]), true
+}
+
+// matchChats returns up to limit chats whose name or number contains query
+// (case-insensitive), in the order given (the chat list is newest first). An
+// empty query matches every chat. The status broadcast is never offered.
+func matchChats(chats []*messages.Conversation, query string, limit int) []*messages.Conversation {
+	q := strings.ToLower(query)
+	var out []*messages.Conversation
+	for _, c := range chats {
+		if c.JID == messages.STATUSSUFFIX {
+			continue
+		}
+		user, _, _ := strings.Cut(c.JID, "@")
+		if q == "" || strings.Contains(strings.ToLower(c.Name), q) || strings.Contains(user, q) {
+			out = append(out, c)
+			if len(out) == limit {
+				break
+			}
+		}
+	}
+	return out
+}
+
+// chatEntry is one line of the chat drop-down: name, a group marker, time.
+func chatEntry(c *messages.Conversation) string {
+	name := c.Name
+	if name == "" {
+		name = c.JID
+	}
+	if strings.HasSuffix(c.JID, messages.GROUPSUFFIX) {
+		name += " (group)"
+	}
+	if r := []rune(name); len(r) > 36 {
+		name = string(r[:35]) + "…"
+	}
+	return tview.Escape(fmt.Sprintf("%-36s %s", name, formatRelativeTime(c.LastMsgTime)))
+}
+
+// chatFromConversation is the UI chat for a chat list entry.
+func chatFromConversation(c *messages.Conversation) messages.Chat {
+	return messages.Chat{
+		Id:          c.JID,
+		Name:        c.Name,
+		Unread:      int(c.Unread),
+		LastMessage: c.LastMsgTime,
+		IsGroup:     strings.HasSuffix(c.JID, messages.GROUPSUFFIX),
+	}
+}
+
+// openChatByName opens the newest chat matching name, or says none matched.
+// It reports whether the input was a name (not a chat ID).
+func openChatByName(param string) bool {
+	if strings.Contains(param, "@") {
+		return false
+	}
+	if m := matchChats(ctx.AllChats, param, 1); len(m) == 1 {
+		SetDisplayedChat(chatFromConversation(m[0]))
+	} else {
+		PrintText("No chat matches \"" + tview.Escape(param) + "\"")
+	}
+	return true
+}
+
+// handleFindChat starts a chat search on the input line.
+func handleFindChat(ev *tcell.EventKey) *tcell.EventKey {
+	ctx.App.SetFocus(ctx.TextInput)
+	ctx.TextInput.SetText(commandPrefix() + "select ")
+	ctx.TextInput.Autocomplete()
+	return nil
+}

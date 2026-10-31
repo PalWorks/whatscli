@@ -320,6 +320,9 @@ func LoadShortcuts() {
 	if err := ctx.KeyBindings.Set(config.Config.Keymap.FocusChats, handleFocusContacts); err != nil {
 		PrintErrorMsg("focus_contacts:", err)
 	}
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.FindChat, handleFindChat); err != nil {
+		PrintErrorMsg("find_chat:", err)
+	}
 	if err := ctx.KeyBindings.Set(config.Config.Keymap.SwitchPanels, handleSwitchPanels); err != nil {
 		PrintErrorMsg("switch_panels:", err)
 	}
@@ -429,6 +432,10 @@ func EnterCommand(key tcell.Key) {
 			var params []string
 			if len(input) > 1 {
 				params = input[1:]
+			}
+			if cm == "select" && len(params) > 0 && openChatByName(strings.Join(params, " ")) {
+				ctx.TextInput.SetText("")
+				return
 			}
 			if cm == "select" && len(params) == 1 {
 				ctx.CurrentReceiver = chatForID(params[0])

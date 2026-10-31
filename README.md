@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T17:01:57+00:00 (sender names)_
+_Last updated: 2026-10-31T17:21:02+00:00 (find a chat: Ctrl+f and /select by name)_
 
 ---
 
@@ -217,6 +217,8 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `focus_messages` | `Ctrl+w` | Enter message selection |
 | `focus_input` | `Ctrl+Space` | Focus input |
 | `focus_chats` | `Ctrl+e` | Focus chat list |
+| `Ctrl+f` | Find a chat by name |
+| `find_chat` | `Ctrl+f` | Find a chat by name (`/select `) |
 | `command_backlog` | `Ctrl+b` | `/backlog` |
 | `command_read` | `Ctrl+n` | `/read` |
 | `command_connect` | `Ctrl+r` | `/connect` |
@@ -275,6 +277,7 @@ A QR code appears in the terminal. On your phone: WhatsApp, Settings, Linked Dev
 ### Moving around
 
 - `Tab` cycles panels; select a chat with the arrow keys and Enter; type and press Enter to send. A chat opens at its latest message; scrolling up stays where you put it until you open another chat.
+- Find a chat: press `Ctrl+f` (or type `/select `) and start typing part of a name or number. The drop-down lists up to 10 matching chats and groups, newest first; move with `Up`/`Down` and press `Enter` or `Tab` to open one. `/select <name>` followed by `Enter` opens the newest match directly.
 - Type `/` on the input line to see the commands with a short description; keep typing to narrow the list (`/lo` shows `/login` and `/logout`), move with `Up` and `Down`, pick with `Tab` or `Enter`. Every command you enter is echoed in the message pane with its time, for example `(31-10-26 21:28:40) > /logout` (a command that redraws the chat, such as `/select`, replaces the echo with the chat).
 - The Status box lists the WhatsApp Status updates (stories) of your contacts that arrived while WhatsCLI was linked, not your own status. History sync does not include them, so it stays empty until a contact posts one.
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
@@ -338,7 +341,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 
 | Command | Description |
 |---|---|
-| `/select <chat-id>` | Open a chat |
+| `/select <name or chat-id>` | Open a chat; with a name, the drop-down lists matching chats and groups, newest first |
 | `/send <chat-id> <text>` | Send text to a chat |
 | `/more` | Show 200 older messages from local storage |
 | `/backlog` | Request older messages from the phone |
@@ -446,7 +449,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-178 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+181 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 
