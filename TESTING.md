@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T06:55:05+00:00 (first live run recorded in Table T3; step 9 note on "Message yourself")_
+_Last updated: 2026-10-31T13:03:59+00:00 (v1.5.0 release candidate smoke run recorded in Table T3)_
 
 ## 1. Commands
 
@@ -97,6 +97,7 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 | Date (ISO 8601) | Build or tag | Tester | Steps passed | Steps failed or skipped | Notes |
 |---|---|---|---|---|---|
 | 2026-10-31 | `chore/catch-up` at `ddbb7f9` (v1.4.0 candidate) | Owner (QR scans, phone deletes) and Claude (headless driver) | 1, 2, 3, 6, 7, 8, 9, 10, 12, 14, 19, 20 | Skipped: 4, 5, 11, 13, 15, 16, 18, 21 (unit tests only). 17: no `@lid` chats in the synced store, so not exercised. 19 on Windows: not run | Run on the owner's own account with test messages only to "Message yourself" and two trusted contacts; system opener stubbed to a log, `show_command` set to `file` (jp2a not installed). Step 1 run offline on a copy of the old database. Found and fixed: media saved as `.jfif`/`.f4v` so `open` refused photos and videos; QR left on screen after login; `/select` did not set the typing target; message keys lost focus after one use; QR countdown ignored the 60 s first code. Step 14 seen on two real group deletes. Backlog answered in a phone-number chat (row 14 partly verified) |
+| 2026-10-31 | `v1.5.0-rc1` at `07f62c0` | Owner (QR scan) and Claude (headless driver) | Smoke run only: QR login, chat list, history sync, empty-chat skip, clean quit | Not run: 1 to 21 (full run above). 17: no `@lid` chats arrived, so no merge ran | Smoke run for v1.5.0 on a fresh test store, no messages sent. Login, chat list and full history sync worked (503 chats, 36,527 messages); no chat row without a time, unread count, pin or messages was stored; 141 one-to-one chats showing "New chat" all have a last-message time, so they are real chats whose messages were not synced. Store integrity check ok after quit |
 
 ## 6. Before tagging
 

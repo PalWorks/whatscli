@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T08:03:19+00:00 (v1.5.0: rows 13 and 33 released)._
+> _Last updated: 2026-10-31T13:03:59+00:00 (v1.5.0 released; row 15 smoke run on v1.5.0-rc1)._
 
 ## 0. North star: every open item, one row each
 
@@ -39,7 +39,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 20 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R5: the open allowlist judges only the extension; a PDF or image viewer exploit is still possible, as in any client. | Also check that media kind matches the extension. Small gain; accepted. |
 | 21 | §3.3 | P3 | **Deferred** | S | L | 2026-10-31 | Not done with row 13 (2026-10-31): `ContactId` is sent back to WhatsApp as the participant in read receipts (`markChatAsRead`) and backlog anchors (`backlogAnchor`), so rewriting stored LIDs to phone numbers could break those in LID-addressed groups. Normalise only at display time if names need it. R6: `ContactId` is stored in whatever form arrives (phone number or LID); only chat IDs are normalised. Names or search by contact may show an LID number until whatsmeow knows the contact. | Normalise `ContactId` together with the row 13 merge. |
 | 22 | §3.2 | P3 | **Deferred** | M | L | 2026-10-31 | A spoofed or mistaken revoke overwrites text and media data, which cannot be recovered (review option C). | Add a `revoked` flag column and keep the original data; needs another migration. Authorisation (D14) already closes the spoof. |
-| 15 | §3.6 | P1 | **Recurring** | M | H | 2026-10-31 | No automated test talks to WhatsApp, so media, revoke, backlog, `@lid`, show and QR behaviour is verified only by unit tests with fakes. Last run: 2026-10-31 on `ddbb7f9`, 12 steps passed, 5 bugs fixed, 8 skipped (TESTING Table T3). | Run the full live-account checklist in [TESTING.md](TESTING.md) on a non-production number before every tagged release. [§8.15](#815-live-account-checklist-as-a-release-gate) |
+| 15 | §3.6 | P1 | **Recurring** | M | H | 2026-10-31 | No automated test talks to WhatsApp, so media, revoke, backlog, `@lid`, show and QR behaviour is verified only by unit tests with fakes. Last full run: 2026-10-31 on `ddbb7f9`, 12 steps passed, 5 bugs fixed, 8 skipped; smoke run on `v1.5.0-rc1` 2026-10-31 passed (TESTING Table T3). | Run the full live-account checklist in [TESTING.md](TESTING.md) on a non-production number before every tagged release. [§8.15](#815-live-account-checklist-as-a-release-gate) |
 
 **Reading the narrow columns.** Bucket is the §3 area: 3.1 Release and CI, 3.2 Security hardening, 3.3 Chat and message behaviour, 3.4 UI, 3.5 Docs and repository hygiene, 3.6 Verification. Size: T trivial, S small, M medium, L large, ? unknown. Impact: H high, M medium, L low. A long-form note for a row is in §8, linked from the end of its solution cell.
 
@@ -109,10 +109,15 @@ Orientation only; detail is in CHANGELOG.md.
 
 ## 2. Next up
 
-### 2.1 Status: v1.4.0 released (updated 2026-10-31T07:03:48+00:00)
+### 2.1 Status: v1.5.0 released (updated 2026-10-31T13:03:59+00:00)
 
-- `chore/catch-up` merged to `master` (PR 2) and tagged `v1.4.0`; release assets and checksums verified; `v1.4.0-rc1` kept as a pre-release. `go install github.com/PalWorks/whatscli@v1.4.0` resolves.
-- Next: row 13 (approved), then the open P2 rows.
+- `v1.5.0` tagged on `master` at `07f62c0` (rows 13 and 33); release assets and checksums verified; `v1.5.0-rc1` kept as a pre-release after a live smoke run (TESTING Table T3).
+- Next: the open P2 rows.
+
+Earlier status, kept for the record:
+
+- v1.4.0 (2026-10-31T07:03:48+00:00): `chore/catch-up` merged to `master` (PR 2) and tagged `v1.4.0`; release assets and checksums verified; `v1.4.0-rc1` kept as a pre-release. `go install github.com/PalWorks/whatscli@v1.4.0` resolves.
+- v1.4.0 next step at the time: row 13 (approved), then the open P2 rows.
 
 Earlier status, kept for the record:
 
@@ -151,7 +156,7 @@ Earlier status, kept for the record:
 | 20 | R5 extension versus media kind | §3.2 | **Deferred** | S | L |
 | 21 | R6 `ContactId` normalisation | §3.3 | **Deferred**: display-time only (see §0) | S | L |
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
-| 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last run 2026-10-31 (`ddbb7f9`) | M | H |
+| 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last full run 2026-10-31 (`ddbb7f9`); smoke run on `v1.5.0-rc1` | M | H |
 | 32 | "Delete for me" from the phone not mirrored | §3.3 | **Open** | S | L |
 | 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (v1.5.0) | S | L |
 | 1 | Incoming revoke authorisation (finding 1) | §3.2 | **Done** 2026-10-31, Was Medium | M | H |
