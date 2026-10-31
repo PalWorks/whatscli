@@ -86,10 +86,22 @@ func (u UiHandler) PrintQR(qr string) {
 	})
 }
 
+// PrintFile renders an image with show_command. The viewer runs in its own
+// goroutine under a timeout; only writing its output is queued on the UI
+// goroutine, so a slow viewer never freezes input or redraws (ROADMAP row 6).
 func (u UiHandler) PrintFile(path string) {
-	go ctx.App.QueueUpdateDraw(func() {
-		PrintImage(path)
-	})
+	general := config.Config.General
+	go func() {
+		out, err := renderImage(general.ShowCommand, path, imageViewerTimeout,
+			general.DownloadPath, general.PreviewPath)
+		ctx.App.QueueUpdateDraw(func() {
+			if err != nil {
+				PrintError(err)
+				return
+			}
+			_, _ = tview.ANSIWriter(ctx.TextView).Write(out)
+		})
+	}()
 }
 
 // OpenFile starts the system opener for path (a file or URL) without
