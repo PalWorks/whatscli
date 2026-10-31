@@ -56,6 +56,11 @@ func (sm *SessionManager) Init(handler UiMessageHandler) error {
 	heap.Init(&sm.priorityQueue)
 	sm.convByJID = make(map[string]*Conversation)
 
+	// Drop contact entries stored as empty chats by older versions.
+	if _, err := sm.db.DeleteEmptyConversations(); err != nil {
+		return fmt.Errorf("database cleanup failed: %w", err)
+	}
+
 	// Load conversations from SQLite into PriorityQueue
 	convs, err := sm.db.GetConversations()
 	if err == nil {

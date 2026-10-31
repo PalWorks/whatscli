@@ -228,6 +228,26 @@ func (md *MessageDatabase) UpsertConversation(c Conversation) error {
 	return err
 }
 
+// DeleteEmptyConversations removes 1:1 chat rows that have no stored message,
+// no time, no unread count and no pin: contact entries that older versions
+// stored as "New chat" (ROADMAP row 33). Groups are kept. Idempotent.
+func (md *MessageDatabase) DeleteEmptyConversations() (int64, error) {
+	if md.db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`
+	DELETE FROM conversations
+	WHERE jid NOT LIKE '%@g.us'
+	  AND COALESCE(last_msg_time, 0) = 0
+	  AND COALESCE(unread, 0) = 0
+	  AND NOT COALESCE(is_pinned, 0)
+	  AND NOT EXISTS (SELECT 1 FROM messages m WHERE m.chat_id = conversations.jid)`)
+	if err != nil {
+		return 0, fmt.Errorf("delete empty conversations: %w", err)
+	}
+	return res.RowsAffected()
+}
+
 // GetConversations retrieves all conversations from the DB
 func (md *MessageDatabase) GetConversations() ([]Conversation, error) {
 	rows, err := md.db.Query("SELECT jid, name, last_msg_time, preview, unread, is_pinned, is_archived FROM conversations")
