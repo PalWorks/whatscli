@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -124,6 +125,7 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 				sm.uiHandler.PrintError(fmt.Errorf("failed to send media: %v", err))
 			} else {
 				sm.uiHandler.PrintText("Media sent: " + resp.ID)
+				sm.storeSentMedia(client, receiver, resp.ID, resp.Timestamp, msg)
 			}
 		}
 	} else {
@@ -146,4 +148,40 @@ func detectMIME(path string, data []byte) string {
 		return http.DetectContentType(data)
 	}
 	return "application/octet-stream"
+}
+
+// storeSentMedia persists an outgoing media message (including download
+// metadata) and shows it in the open chat, mirroring sendText.
+func (sm *SessionManager) storeSentMedia(client *whatsmeow.Client, chatID string, id types.MessageID, ts time.Time, waMsg *waProto.Message) {
+	text, _ := extractMessageContent(waMsg)
+	if ts.IsZero() {
+		ts = time.Now()
+	}
+	contactID := ""
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		contactID = client.Store.ID.String()
+	}
+	newMsg := Message{
+		Id:           id,
+		ChatId:       chatID,
+		FromMe:       true,
+		Timestamp:    uint64(ts.Unix()),
+		Text:         text,
+		ContactId:    contactID,
+		ContactName:  "Me",
+		ContactShort: "Me",
+	}
+	if err := attachMediaInfo(&newMsg, waMsg); err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("sent media %s: %w", id, err))
+	}
+	if err := sm.db.AddMessage(newMsg); err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to save sent media: %w", err))
+		return
+	}
+	sm.mu.RLock()
+	isCurrent := sm.currentReceiver == chatID
+	sm.mu.RUnlock()
+	if isCurrent {
+		sm.uiHandler.NewMessage(newMsg)
+	}
 }

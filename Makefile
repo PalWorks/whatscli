@@ -1,7 +1,10 @@
 # Simple Makefile for go
 
+VERSION ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
+LDFLAGS := -X main.VERSION=$(VERSION)
+
 build:
-	go build
+	go build -ldflags "$(LDFLAGS)" -o whatscli .
 
 clean:
 	go clean
@@ -10,7 +13,7 @@ run:
 	go run .
 
 install:
-	go install .
+	go install -ldflags "$(LDFLAGS)" .
 
 get:
 	go get
@@ -24,5 +27,8 @@ test:
 vet:
 	go vet ./...
 
+lint: vet
+
 release:
-	./release.sh
+	@echo "Releases are built by .github/workflows/release.yml."
+	@echo "Tag and push: git tag vX.Y.Z && git push origin vX.Y.Z"

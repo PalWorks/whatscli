@@ -6,13 +6,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
 	"github.com/gdamore/tcell/v2"
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/messages"
 	"github.com/rivo/tview"
 )
 
@@ -227,31 +226,17 @@ func RenderChatTable() {
 
 // prints an image attachment to the TextView (by message id)
 func PrintImage(path string) {
-	// Sanitize path to prevent command injection / path traversal
-	cleanPath := filepath.Clean(path)
-	absPath, err := filepath.Abs(cleanPath)
-	if err != nil {
-		PrintError(fmt.Errorf("invalid file path: %v", err))
-		return
-	}
-
-	// Verify the file exists
-	if _, err := os.Stat(absPath); err != nil {
+	// Only files strictly inside the configured download or preview directory
+	// are shown. Both sides are symlink-resolved and containment is checked
+	// with filepath.Rel (audit S-2, REVIEW-3 finding 4).
+	if _, err := os.Stat(path); err != nil {
 		PrintError(fmt.Errorf("file not found: %v", err))
 		return
 	}
-
-	// Verify the path is under the configured download or preview directory.
-	// Resolve symlinks to prevent symlink-based directory escape (audit S-2).
-	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	resolvedPath, err := messages.ResolveFileWithin(path,
+		config.Config.General.DownloadPath, config.Config.General.PreviewPath)
 	if err != nil {
-		PrintError(fmt.Errorf("could not resolve path: %v", err))
-		return
-	}
-	downloadDir := filepath.Clean(config.Config.General.DownloadPath)
-	previewDir := filepath.Clean(config.Config.General.PreviewPath)
-	if !strings.HasPrefix(resolvedPath, downloadDir) && !strings.HasPrefix(resolvedPath, previewDir) {
-		PrintError(fmt.Errorf("file path outside allowed directories"))
+		PrintError(err)
 		return
 	}
 

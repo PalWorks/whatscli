@@ -42,7 +42,7 @@ func init() {
 		"add":         cmdAdd,
 		"remove":      cmdRemove,
 		"admin":       cmdAdmin,
-		"promote":     cmdAdmin,       // alias
+		"promote":     cmdAdmin, // alias
 		"removeadmin": cmdRemoveAdmin,
 		"demote":      cmdRemoveAdmin, // alias
 
@@ -51,6 +51,13 @@ func init() {
 		"sendimage": cmdMedia,
 		"sendvideo": cmdMedia,
 		"sendaudio": cmdMedia,
+
+		// Message commands (cmd_message.go); param is the message ID
+		"download": cmdDownload,
+		"open":     cmdOpen,
+		"show":     cmdShow,
+		"url":      cmdURL,
+		"revoke":   cmdRevoke,
 
 		// Search commands (cmd_search.go)
 		"search":         cmdSearch,

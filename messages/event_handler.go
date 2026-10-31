@@ -183,7 +183,10 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		return // nothing to process
 	}
 
-	chatJID := evt.Info.Chat.String()
+	// Store @lid chats under the phone-number JID when known (jid_norm.go),
+	// matching history sync so one person is one chat.
+	chat := eh.sm.canonicalChatForSource(evt.Info.MessageSource)
+	chatJID := chat.String()
 	timestamp := uint64(evt.Info.Timestamp.Unix())
 
 	msg := Message{
@@ -196,6 +199,10 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		ContactName:  eh.getContactName(evt.Info.Sender),
 		ContactShort: eh.getContactShort(evt.Info.Sender),
 	}
+	if err := attachMediaInfo(&msg, evt.Message); err != nil {
+		// Keep the text message; only the download metadata is lost.
+		eh.sm.uiHandler.PrintError(fmt.Errorf("message %s: %w", msg.Id, err))
+	}
 
 	// Persist message
 	if err := eh.sm.db.AddMessage(msg); err != nil {
@@ -205,7 +212,7 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 	// Resolve chat name BEFORE acquiring the write lock. getChatName()
 	// internally calls getClient() which acquires mu.RLock — calling it
 	// under mu.Lock would deadlock.
-	chatName := eh.sm.getChatName(evt.Info.Chat)
+	chatName := eh.sm.getChatName(chat)
 
 	// Update priority queue and conversation
 	eh.sm.mu.Lock()
@@ -269,6 +276,13 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 
 // Handle incoming messages — dispatches to extractMessageContent then processIncomingMessage.
 func (eh *eventHandler) handleMessage(evt *events.Message) {
+	// Delete-for-everyone from a contact or from one of our other devices.
+	if pm := evt.Message.GetProtocolMessage(); pm != nil &&
+		pm.GetType() == waE2E.ProtocolMessage_REVOKE && pm.GetKey().GetID() != "" {
+		// Only applied when chat and revoker check out (revoke_incoming.go).
+		eh.sm.handleIncomingRevoke(evt.Info.MessageSource, pm.GetKey().GetID())
+		return
+	}
 	text, preview := extractMessageContent(evt.Message)
 	eh.processIncomingMessage(evt, text, preview)
 }

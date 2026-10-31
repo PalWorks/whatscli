@@ -14,6 +14,8 @@ type UiMessageHandler interface {
 	OpenFile(string)
 	ShowColorList()
 	Clear()
+	// ReplaceText clears the message pane and prints text in a single draw.
+	ReplaceText(string)
 	UpdateQR(qr string, attempt int, timeout int)
 	PrintCommands()
 	PrintHelp()
@@ -59,14 +61,21 @@ type Message struct {
 	FromMe       bool
 	Forwarded    bool
 	Text         string
+	// Media metadata (empty for text messages). MediaProto holds a serialized
+	// waE2E.Message containing only the media sub-message, which carries the
+	// DirectPath/MediaKey/hashes needed to download it later.
+	MediaKind  string
+	MimeType   string
+	FileName   string
+	MediaProto []byte
 }
 
 // internal contact representation to abstract from message lib
 type Chat struct {
-	Id      string
-	IsGroup bool
-	Name    string
-	Unread  int
+	Id          string
+	IsGroup     bool
+	Name        string
+	Unread      int
 	LastMessage int64
 }
 

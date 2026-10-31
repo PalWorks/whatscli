@@ -1,12 +1,16 @@
-# SKILLS.md — Development Patterns & Technical Reference
+# SKILLS.md: Development Patterns & Technical Reference
 
-> This document describes the key development patterns, conventions, and technical skills required to effectively contribute to WhatsCLI. It serves as a deep-dive companion to `CONTRIBUTING.md`.
+> This document describes the key development patterns, conventions, and technical skills required to effectively contribute to WhatsCLI. It serves as a deep-dive companion to `CONTRIBUTING.md`. Rules live in [AGENTS.md](AGENTS.md); design in [ARCHITECTURE.md](ARCHITECTURE.md).
+>
+> _Last updated: 2026-10-31T01:11:59+05:30 (Go version, interface size, schema and untrusted-input patterns corrected after the chore/catch-up branch)_
 
 ## Required Skills
 
+**Table SK1: Required skills**
+
 | Skill | Relevance |
 |-------|-----------|
-| **Go 1.22+** | Primary language; generics, error wrapping, context propagation |
+| **Go 1.26+** (toolchain 1.27.3, CGO) | Primary language; generics, error wrapping, context propagation |
 | **Concurrent Go** | Goroutines, channels, `sync.RWMutex`, select statements |
 | **SQLite** | Persistence layer (WAL mode, indexes, UPSERT, migrations) |
 | **Terminal UI (tview/tcell)** | TUI framework for layout, input handling, rendering |
@@ -55,7 +59,7 @@ type commandHandler func(sm *SessionManager, client *whatsmeow.Client, cmdName s
 ```
 
 **Rules:**
-- `client` may be `nil` — always check before using
+- `client` may be `nil`: always check before using
 - Use `checkParam(params, n)` to validate parameter count
 - Report errors via `sm.uiHandler.PrintError(err)`, never `panic()`
 - Use `cmdName` in error messages (supports aliases)
@@ -79,7 +83,7 @@ case command := <-sm.CommandChannel:
 
 ### Backend → UI (Updates)
 
-The `UiMessageHandler` interface (17 methods) allows the backend to update the UI without importing tview:
+The `UiMessageHandler` interface (16 methods) allows the backend to update the UI without importing tview:
 
 ```go
 type UiMessageHandler interface {
@@ -102,7 +106,7 @@ type UiMessageHandler interface {
 }
 ```
 
-**Why this matters:** It enables testing the entire backend with `MockUiHandler` — no TUI required.
+**Why this matters:** It enables testing the entire backend with `MockUiHandler`: no TUI required.
 
 ---
 
@@ -113,21 +117,21 @@ The `whatsmeow.Client` is a shared resource accessed by multiple goroutines.
 ### Rules
 
 ```go
-// ✅ CORRECT — use getClient() (acquires RLock)
+// CORRECT: use getClient() (acquires RLock)
 func (sm *SessionManager) getClient() *whatsmeow.Client {
     sm.mu.RLock()
     defer sm.mu.RUnlock()
     return sm.client
 }
 
-// ❌ WRONG — direct field access without lock
+// WRONG: direct field access without lock
 client := sm.client  // DATA RACE
 ```
 
 ### Lock Discipline
 
 ```go
-// ✅ CORRECT pattern: lock for PQ, unlock before DB write
+// CORRECT pattern: lock for PQ, unlock before DB write
 sm.mu.Lock()
 heap.Push(&sm.priorityQueue, conv)
 sm.convByJID[conv.JID] = conv
@@ -135,7 +139,7 @@ sm.mu.Unlock()
 // NOW safe to write to SQLite
 sm.db.UpsertConversation(*conv)
 
-// ❌ WRONG — holding lock during DB write causes potential deadlock
+// WRONG: holding lock during DB write causes potential deadlock
 sm.mu.Lock()
 sm.db.UpsertConversation(*conv)  // DEADLOCK RISK
 sm.mu.Unlock()
@@ -199,7 +203,10 @@ CREATE TABLE conversations (
 CREATE TABLE messages (
     id TEXT PRIMARY KEY,
     chat_id TEXT, contact_id TEXT, contact_name TEXT, contact_short TEXT,
-    timestamp INTEGER, from_me BOOLEAN, forwarded BOOLEAN, text TEXT
+    timestamp INTEGER, from_me BOOLEAN, forwarded BOOLEAN, text TEXT,
+    -- added by addColumnIfMissing (idempotent ALTER TABLE):
+    media_kind TEXT NOT NULL DEFAULT '', mime_type TEXT NOT NULL DEFAULT '',
+    file_name TEXT NOT NULL DEFAULT '', media_proto BLOB
 );
 CREATE INDEX idx_messages_chat_id ON messages(chat_id);
 CREATE INDEX idx_messages_chat_ts ON messages(chat_id, timestamp);
@@ -207,10 +214,14 @@ CREATE INDEX idx_messages_chat_ts ON messages(chat_id, timestamp);
 
 ### Key Operations
 
+**Table SK2: MessageDatabase operations**
+
 | Method | Purpose |
 |--------|---------|
-| `AddMessage(msg)` | INSERT OR IGNORE — idempotent message storage |
-| `UpsertConversation(c)` | INSERT ON CONFLICT UPDATE — create or update chat metadata |
+| `AddMessage(msg)` | INSERT OR IGNORE: idempotent message storage |
+| `UpsertConversation(c)` | INSERT ON CONFLICT UPDATE: create or update chat metadata |
+| `GetMessage(id)` / `GetOldestMessage(chat)` / `CountMessages(chat)` | Single message, backlog anchor, count for the backlog wait |
+| `MarkMessageRevoked(chatID, id)` | Sets `[message revoked]`, clears media; scoped by chat |
 | `GetMessages(chatId)` | All messages for a chat, ordered by timestamp ASC |
 | `GetMessagesPaginated(chatId, before, limit)` | Older messages before timestamp, DESC (caller reverses) |
 | `SearchMessages(chatId, keyword, limit)` | LIKE search with proper escaping, newest first |
@@ -280,7 +291,7 @@ type MockUiHandler struct {
 }
 
 func (m *MockUiHandler) PrintText(s string) { m.messages = append(m.messages, s) }
-// ... implements all 17 UiMessageHandler methods
+// ... implements all 16 UiMessageHandler methods
 ```
 
 ### Race Detection
@@ -289,3 +300,43 @@ All tests run with `-race`. The CI enforces this:
 ```bash
 go test -v -race -count=1 ./...
 ```
+
+---
+
+## Pattern 8: Untrusted input from senders
+
+Anything a sender controls (file name, mime type, text, protocol messages) is hostile until checked. Full threat table in [SECURITY.md](SECURITY.md).
+
+```go
+// File name: reduce to one inert path element, then confine to the directory.
+name, ok := sanitizeFileName(msg.FileName)   // messages/media.go
+full, err := safeJoin(dir, name)
+
+// Opening: only an allowlist reaches the system opener.
+if !safeToOpen(path) { /* save, print path, do not open */ }
+
+// Incoming revoke: same chat and authorised revoker, else ignore.
+switch sm.decideRevoke(src, target) { /* revokeApply, revokeCheckAdmin, revokeIgnore */ }
+```
+
+## Pattern 9: One chat per person (phone number versus LID)
+
+```go
+chat := sm.canonicalChatJID(jid)            // @lid -> phone-number JID when mapped
+same := sm.sameUser(a, b)                    // device-insensitive, LID aware
+```
+
+Never compare JIDs as strings to decide whether two addresses are the same person. Test with the `lidMapperOverride` seam (`messages/jid_norm_test.go`).
+
+## Pattern 10: Network work off the event loop
+
+```go
+// Validate on the event loop, then:
+go func() {
+    client := sm.getClient()          // re-fetch, the captured client may be stale
+    if client == nil { return }
+    // download, send, poll ...
+}()
+```
+
+Seams for tests: `mediaDownloader`, `lidMapperOverride`, `groupInfoOverride`, `webMessageParser`.

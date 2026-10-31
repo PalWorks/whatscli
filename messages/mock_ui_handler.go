@@ -35,7 +35,11 @@ func (m *MockUiHandler) SetStatus(s SessionStatus)        { m.Statuses = append(
 func (m *MockUiHandler) OpenFile(path string)             { m.Files = append(m.Files, path) }
 func (m *MockUiHandler) ShowColorList()                   { m.ColorCalled++ }
 func (m *MockUiHandler) Clear()                           { m.ClearCalled++ }
-func (m *MockUiHandler) UpdateQR(_ string, _ int, _ int)  {}
-func (m *MockUiHandler) PrintCommands()                   { m.CmdsCalled++ }
-func (m *MockUiHandler) PrintHelp()                       { m.HelpCalled++ }
-func (m *MockUiHandler) Quit()                            { m.QuitCalled++ }
+func (m *MockUiHandler) ReplaceText(text string) {
+	m.ClearCalled++
+	m.Texts = append(m.Texts, text)
+}
+func (m *MockUiHandler) UpdateQR(_ string, _ int, _ int) {}
+func (m *MockUiHandler) PrintCommands()                  { m.CmdsCalled++ }
+func (m *MockUiHandler) PrintHelp()                      { m.HelpCalled++ }
+func (m *MockUiHandler) Quit()                           { m.QuitCalled++ }

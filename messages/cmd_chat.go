@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/PalWorks/whatscli/config"
 	"go.mau.fi/whatsmeow"
 	"go.mau.fi/whatsmeow/types"
 )
@@ -31,6 +32,24 @@ func cmdSelect(sm *SessionManager, client *whatsmeow.Client, cmdName string, par
 	}
 }
 
+// backlogWait and backlogPoll bound how long cmdBacklog's background
+// goroutine polls SQLite for ON_DEMAND history sync results. Variables so
+// tests can shorten them.
+var (
+	backlogWait = 5 * time.Second
+	backlogPoll = 250 * time.Millisecond
+)
+
+// defaultBacklogCount is used when BacklogMsgQuantity is not positive.
+// whatsmeow recommends 50 per request.
+const defaultBacklogCount = 50
+
+// cmdBacklog asks the primary phone for older messages of the current chat
+// (upstream 1715a36 approach): anchor on the oldest stored message, build an
+// ON_DEMAND history sync request and send it as a peer message. The response
+// arrives as events.HistorySync and is stored by processHistorySync, which
+// also refreshes the open chat. The 5s wait runs in a goroutine so the
+// runManager event loop is never blocked.
 func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
 	sm.mu.RLock()
 	receiver := sm.currentReceiver
@@ -42,95 +61,133 @@ func cmdBacklog(sm *SessionManager, client *whatsmeow.Client, cmdName string, pa
 	}
 
 	if client == nil || !client.IsConnected() {
-		sm.uiHandler.PrintError(errors.New("not connected"))
+		sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 		return
 	}
 
-	jid, err := types.ParseJID(receiver)
+	// Replies are stored under the canonical chat JID (jid_norm.go). An @lid
+	// chat stored before its phone-number mapping was known would never see
+	// them, so point the user at the chat where they will land.
+	if canonical, moved := sm.backlogTarget(receiver); moved {
+		sm.uiHandler.PrintText("This chat is stored under its LID form; new and older messages now go to " +
+			canonical + ". Open that chat and run " + config.Config.General.CmdPrefix + "backlog there.")
+		return
+	}
+
+	anchor, ok, err := sm.backlogAnchor(receiver)
 	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
+		sm.uiHandler.PrintError(err)
 		return
 	}
-	_ = jid // used for anchor construction
+	if !ok {
+		sm.uiHandler.PrintText("No local message anchor found yet. Open the chat after WhatsApp sync delivers some history, then try " +
+			config.Config.General.CmdPrefix + "backlog again.")
+		return
+	}
 
-	sm.uiHandler.PrintText("Requesting message history from WhatsApp servers...")
-
-	// Build anchor from oldest known message (if any)
-	var anchor *types.MessageInfo
-	msgs, err := sm.db.GetMessages(receiver)
+	before, err := sm.db.CountMessages(receiver)
 	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
-		return
-	}
-	existingCount := len(msgs)
-
-	if existingCount > 0 {
-		oldest := msgs[0]
-		chatJID, err := types.ParseJID(oldest.ChatId)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("invalid chat JID %q: %v", oldest.ChatId, err))
-			return
-		}
-		senderJID, err := types.ParseJID(oldest.ContactId)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("invalid sender JID %q: %v", oldest.ContactId, err))
-			return
-		}
-
-		anchor = &types.MessageInfo{
-			ID: oldest.Id,
-			MessageSource: types.MessageSource{
-				Chat:     chatJID,
-				Sender:   senderJID,
-				IsFromMe: oldest.FromMe,
-			},
-			Timestamp: time.Unix(int64(oldest.Timestamp), 0),
-		}
-		sm.uiHandler.PrintText(fmt.Sprintf("Requesting 50 messages before: %s (%s)",
-			oldest.Id, time.Unix(int64(oldest.Timestamp), 0).Format(time.RFC822)))
-	} else {
-		sm.uiHandler.PrintText("Requesting latest 50 messages...")
-	}
-
-	req := client.BuildHistorySyncRequest(anchor, 50)
-
-	// Send to primary device (self)
-	target := *client.Store.ID
-	target.Device = 0
-
-	resp, err := client.SendMessage(context.Background(), target, req)
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to send history sync request: %v", err))
+		sm.uiHandler.PrintError(err)
 		return
 	}
 
-	sm.uiHandler.PrintText("History sync request sent (ID: " + resp.ID + "). Waiting for response...")
+	count := config.Config.General.BacklogMsgQuantity
+	if count <= 0 {
+		count = defaultBacklogCount
+	}
+	sm.uiHandler.PrintText(fmt.Sprintf("Requesting %d messages before %s (%s)...",
+		count, anchor.ID, anchor.Timestamp.Format(time.RFC822)))
 
-	// History sync arrives asynchronously; check in background so the
-	// command loop is not blocked (audit finding P-1).
+	req := client.BuildHistorySyncRequest(anchor, count)
 	go func() {
-		time.Sleep(5 * time.Second)
-
-		// Re-read currentReceiver — user may have switched chats during wait.
-		sm.mu.RLock()
-		curReceiver := sm.currentReceiver
-		sm.mu.RUnlock()
-
-		finalMessages, err := sm.db.GetMessages(receiver)
-		if err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("failed to reload messages: %v", err))
-		} else if len(finalMessages) > existingCount {
-			sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", len(finalMessages)-existingCount))
-		} else {
-			sm.uiHandler.PrintText("No immediate history received. Messages may arrive in the background.")
+		// Network send and polling both run off the event loop.
+		client := sm.getClient()
+		if client == nil {
+			sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
+			return
+		}
+		if _, err := client.SendPeerMessage(context.Background(), req); err != nil {
+			sm.uiHandler.PrintError(fmt.Errorf("failed to request message history: %w", err))
+			return
 		}
 
-		// Only refresh screen if user is still viewing the same chat.
-		if curReceiver == receiver {
-			screen := sm.getMessages(receiver)
-			sm.uiHandler.NewScreen(screen)
+		after, err := sm.waitForNewMessages(receiver, before, backlogWait, backlogPoll)
+		if err != nil {
+			sm.uiHandler.PrintError(err)
+		}
+		if after > before {
+			sm.uiHandler.PrintText(fmt.Sprintf("Loaded %d additional messages", after-before))
+		} else {
+			sm.uiHandler.PrintText("Requested older messages from WhatsApp; none arrived yet. They will appear if the phone answers later.")
+		}
+
+		// Only refresh if the user is still viewing the same chat.
+		sm.mu.RLock()
+		stillCurrent := sm.currentReceiver == receiver
+		sm.mu.RUnlock()
+		if stillCurrent {
+			sm.uiHandler.NewScreen(sm.getMessages(receiver))
 		}
 	}()
+}
+
+// backlogTarget returns the canonical JID of chat and whether it differs from
+// chat, i.e. whether history for chat would be stored under another chat.
+func (sm *SessionManager) backlogTarget(chat string) (string, bool) {
+	jid, err := types.ParseJID(chat)
+	if err != nil {
+		return chat, false
+	}
+	canonical := sm.canonicalChatJID(jid).String()
+	return canonical, canonical != chat
+}
+
+// backlogAnchor builds the MessageInfo of the oldest stored message in chat,
+// using the chat and sender JIDs exactly as stored (they may be @lid).
+func (sm *SessionManager) backlogAnchor(chat string) (*types.MessageInfo, bool, error) {
+	oldest, found, err := sm.db.GetOldestMessage(chat)
+	if err != nil {
+		return nil, false, err
+	}
+	if !found {
+		return nil, false, nil
+	}
+	chatJID, err := types.ParseJID(oldest.ChatId)
+	if err != nil {
+		return nil, false, fmt.Errorf("invalid chat JID %q: %w", oldest.ChatId, err)
+	}
+	senderJID := types.EmptyJID
+	if oldest.ContactId != "" {
+		if parsed, perr := types.ParseJID(oldest.ContactId); perr == nil {
+			senderJID = parsed
+		}
+	}
+	return &types.MessageInfo{
+		ID: oldest.Id,
+		MessageSource: types.MessageSource{
+			Chat:     chatJID,
+			Sender:   senderJID,
+			IsFromMe: oldest.FromMe,
+			IsGroup:  chatJID.Server == types.GroupServer,
+		},
+		Timestamp: time.Unix(int64(oldest.Timestamp), 0),
+	}, true, nil
+}
+
+// waitForNewMessages polls the message count of chat until it exceeds before
+// or timeout elapses, and returns the last count seen.
+func (sm *SessionManager) waitForNewMessages(chat string, before int, timeout, interval time.Duration) (int, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		n, err := sm.db.CountMessages(chat)
+		if err != nil {
+			return before, err
+		}
+		if n > before || !time.Now().Before(deadline) {
+			return n, nil
+		}
+		time.Sleep(interval)
+	}
 }
 
 func cmdSyncGroups(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {

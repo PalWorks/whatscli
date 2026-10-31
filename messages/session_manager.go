@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/PalWorks/whatscli/config"
 	"github.com/gen2brain/beeep"
 	_ "github.com/mattn/go-sqlite3" // SQLite driver
-	"github.com/normen/whatscli/config"
 
 	"go.mau.fi/whatsmeow"
 	waProto "go.mau.fi/whatsmeow/binary/proto"
@@ -38,6 +38,10 @@ type SessionManager struct {
 	priorityQueue   PriorityQueue
 	convByJID       map[string]*Conversation
 	debug           bool // T-2: enable verbose WhatsApp protocol logging
+
+	// Test seams; nil in production. Set before use, never mutated afterwards.
+	lidMapperOverride lidMapper        // replaces client.Store.LIDs
+	groupInfoOverride groupInfoFetcher // replaces client.GetGroupInfo
 }
 
 // initialize the SessionManager

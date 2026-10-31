@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
 	"github.com/gdamore/tcell/v2"
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/messages"
 	"github.com/rivo/tview"
 	"github.com/skratchdot/open-golang/open"
 )
@@ -113,6 +113,16 @@ func (u UiHandler) Clear() {
 	go ctx.App.QueueUpdateDraw(func() {
 		ctx.TextView.Clear()
 		PrintHelp()
+	})
+}
+
+// ReplaceText clears the pane (for example a QR code after login) and
+// prints the help and txt in one queued draw, so the order is fixed.
+func (u UiHandler) ReplaceText(txt string) {
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.TextView.Clear()
+		PrintHelp()
+		PrintText(txt)
 	})
 }
 

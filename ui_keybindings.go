@@ -1,13 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 
-	"code.rocketnine.space/tslocum/cbind"
+	"codeberg.org/tslocum/cbind"
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
 	"github.com/atotto/clipboard"
 	"github.com/gdamore/tcell/v2"
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/messages"
 )
 
 func handleFocusMessage(ev *tcell.EventKey) *tcell.EventKey {
@@ -70,9 +71,8 @@ func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
 	if hls := ctx.TextView.GetHighlights(); len(hls) > 0 {
 		for _, val := range ctx.CurRegions {
 			if val.Id == hls[0] {
-				err := clipboard.WriteAll(val.ContactId)
-				if err != nil {
-					PrintText("failed to copy: " + err.Error())
+				if err := safeWriteClipboard(val.ContactId); err != nil {
+					PrintError(err)
 				} else {
 					PrintText("copied id of " + val.ContactName + " to clipboard")
 				}
@@ -80,9 +80,8 @@ func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
 		}
 		ResetMsgSelection()
 	} else if ctx.CurrentReceiver.Id != "" {
-		err := clipboard.WriteAll(ctx.CurrentReceiver.Id)
-		if err != nil {
-			PrintText("failed to copy: " + err.Error())
+		if err := safeWriteClipboard(ctx.CurrentReceiver.Id); err != nil {
+			PrintError(err)
 		} else {
 			PrintText("copied id of " + ctx.CurrentReceiver.Name + " to clipboard")
 		}
@@ -91,12 +90,41 @@ func handleCopyUser(ev *tcell.EventKey) *tcell.EventKey {
 }
 
 func handlePasteUser(ev *tcell.EventKey) *tcell.EventKey {
-	text, err := clipboard.ReadAll()
+	text, err := safeReadClipboard()
 	if err != nil {
-		PrintText("failed to paste: " + err.Error())
+		PrintError(err)
 		return nil
 	}
 	ctx.TextInput.SetText(ctx.TextInput.GetText() + " " + text)
+	return nil
+}
+
+// safeReadClipboard wraps clipboard.ReadAll so a missing clipboard backend
+// (no xclip/xsel/wl-clipboard, headless session) is reported instead of
+// crashing the TUI (upstream 02b3fbb).
+func safeReadClipboard() (text string, err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("clipboard paste is unavailable: %v", rec)
+		}
+	}()
+	text, err = clipboard.ReadAll()
+	if err != nil {
+		return "", fmt.Errorf("failed to paste: %w", err)
+	}
+	return text, nil
+}
+
+// safeWriteClipboard is the copy counterpart of safeReadClipboard.
+func safeWriteClipboard(text string) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("clipboard copy is unavailable: %v", rec)
+		}
+	}()
+	if err = clipboard.WriteAll(text); err != nil {
+		return fmt.Errorf("failed to copy: %w", err)
+	}
 	return nil
 }
 
@@ -128,9 +156,9 @@ func handleMessageCommand(command string) func(ev *tcell.EventKey) *tcell.EventK
 	return func(ev *tcell.EventKey) *tcell.EventKey {
 		hls := ctx.TextView.GetHighlights()
 		if len(hls) > 0 {
+			// Keep the selection and focus so several keys can be used on
+			// the same message; Esc returns to the input field.
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: command, Params: []string{hls[0]}}
-			ResetMsgSelection()
-			ctx.App.SetFocus(ctx.TextInput)
 		}
 		return nil
 	}
@@ -391,6 +419,10 @@ func EnterCommand(key tcell.Key) {
 			var params []string
 			if len(input) > 1 {
 				params = input[1:]
+			}
+			if cm == "select" && len(params) == 1 {
+				ctx.CurrentReceiver = chatForID(params[0])
+				ctx.TextView.SetTitle(ctx.CurrentReceiver.Name)
 			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
 		} else {

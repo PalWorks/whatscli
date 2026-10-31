@@ -1,8 +1,8 @@
 package main
 
 import (
-	"code.rocketnine.space/tslocum/cbind"
-	"github.com/normen/whatscli/messages"
+	"codeberg.org/tslocum/cbind"
+	"github.com/PalWorks/whatscli/messages"
 	"github.com/rivo/tview"
 )
 

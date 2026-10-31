@@ -144,14 +144,11 @@ func (v *qrcodeTerminal) renderSmall(data [][]bool) (result *QRCodeString) {
 	}
 	cols := len(data[0])
 
-	// Skip margin (Quiet Zone) - standard is 4 modules.
-	// User requested a "Small Border" (2 modules).
-	margin := 2
-
-	// Safety check: if data provided is smaller than 2*margin, don't strip
-	if rows <= 2*margin || cols <= 2*margin {
-		margin = 0
-	}
+	// Keep the full quiet zone. go-qrcode's Bitmap() already includes the
+	// ISO/IEC 18004 4-module border; stripping part of it (previously 2
+	// modules) can stop WhatsApp's in-app scanner detecting the code
+	// (upstream issue #138).
+	margin := 0
 
 	for r := margin; r < rows-margin; r += 2 {
 		for c := margin; c < cols-margin; c++ {

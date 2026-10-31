@@ -2,9 +2,10 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
-	"github.com/normen/whatscli/config"
-	"github.com/normen/whatscli/messages"
+	"github.com/PalWorks/whatscli/config"
+	"github.com/PalWorks/whatscli/messages"
 )
 
 // prints text to the TextView
@@ -50,12 +51,12 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"backlog / "+config.Config.Keymap.CommandBacklog, "Load Backlog"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"read / "+config.Config.Keymap.CommandRead, "Mark Read"))
 	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", "Up/Down", "Select Message"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageDownload, "Download"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageOpen, "Download & Open"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageShow, "Show Image ("+config.Config.General.ShowCommand+")"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageUrl, "Open URL"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageRevoke, "Revoke"))
-	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", config.Config.Keymap.MessageInfo, "Info"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"download <msg-id> / "+config.Config.Keymap.MessageDownload, "Download Media"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"open <msg-id> / "+config.Config.Keymap.MessageOpen, "Download & Open"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"show <msg-id> / "+config.Config.Keymap.MessageShow, "Show Image ("+config.Config.General.ShowCommand+")"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"url <msg-id> / "+config.Config.Keymap.MessageUrl, "Open URL"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"revoke <msg-id> / "+config.Config.Keymap.MessageRevoke, "Delete For Everyone (own only)"))
+	fmt.Fprintln(ctx.TextView, fmt.Sprintf("[::b] %-30s [::-]= %s", cmdPrefix+"info / "+config.Config.Keymap.MessageInfo, "Chat Info"))
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "[::b]Media[::-]")
@@ -114,6 +115,17 @@ func UpdateStatusBar(statusInfo messages.SessionStatus) {
 	out += ")[::-] "
 	out += statusInfo.LastSeen
 	ctx.TopBar.SetText(out)
+}
+
+// chatForID returns the chat for id from the chat list, or a chat named by
+// its id when the list does not have it (used by /select).
+func chatForID(id string) messages.Chat {
+	for _, c := range ctx.AllChats {
+		if c != nil && c.JID == id {
+			return messages.Chat{Id: id, Name: c.Name, IsGroup: strings.HasSuffix(id, "@g.us")}
+		}
+	}
+	return messages.Chat{Id: id, Name: id, IsGroup: strings.HasSuffix(id, "@g.us")}
 }
 
 // sets the current chat, loads text from storage to TextView
