@@ -179,13 +179,14 @@ func (sm *SessionManager) loginWithQRCode(client *whatsmeow.Client) error {
 				qrStr := terminal.Get(evt.Code)
 
 				currentQR = string(*qrStr)
-				qrTimeout = 20 // Reset countdown to 20s as requested
+				// whatsmeow shows the first code for 60s and later ones for 20s.
+				qrTimeout = int(evt.Timeout.Seconds())
 
 				// Atomic Update
 				sm.uiHandler.UpdateQR(currentQR, qrCount, qrTimeout)
 
 			} else if evt.Event == "success" {
-				sm.uiHandler.PrintText("Successfully logged in!")
+				sm.uiHandler.ReplaceText("Successfully logged in!")
 				sm.StatusChannel <- StatusMsg{true, nil}
 
 				// Load existing chats after successful login

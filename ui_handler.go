@@ -116,6 +116,16 @@ func (u UiHandler) Clear() {
 	})
 }
 
+// ReplaceText clears the pane (for example a QR code after login) and
+// prints the help and txt in one queued draw, so the order is fixed.
+func (u UiHandler) ReplaceText(txt string) {
+	go ctx.App.QueueUpdateDraw(func() {
+		ctx.TextView.Clear()
+		PrintHelp()
+		PrintText(txt)
+	})
+}
+
 func (u UiHandler) PrintHelp() {
 	go ctx.App.QueueUpdateDraw(func() {
 		PrintHelp()

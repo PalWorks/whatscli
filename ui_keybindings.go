@@ -156,9 +156,9 @@ func handleMessageCommand(command string) func(ev *tcell.EventKey) *tcell.EventK
 	return func(ev *tcell.EventKey) *tcell.EventKey {
 		hls := ctx.TextView.GetHighlights()
 		if len(hls) > 0 {
+			// Keep the selection and focus so several keys can be used on
+			// the same message; Esc returns to the input field.
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: command, Params: []string{hls[0]}}
-			ResetMsgSelection()
-			ctx.App.SetFocus(ctx.TextInput)
 		}
 		return nil
 	}
@@ -419,6 +419,10 @@ func EnterCommand(key tcell.Key) {
 			var params []string
 			if len(input) > 1 {
 				params = input[1:]
+			}
+			if cm == "select" && len(params) == 1 {
+				ctx.CurrentReceiver = chatForID(params[0])
+				ctx.TextView.SetTitle(ctx.CurrentReceiver.Name)
 			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
 		} else {

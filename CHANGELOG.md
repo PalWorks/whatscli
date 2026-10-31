@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T06:13:16+00:00 (media file extension fix found in live testing)_
+_Last updated: 2026-10-31T06:18:49+00:00 (fixes from live testing)_
 
 ## [Unreleased]
 
@@ -37,6 +37,10 @@ Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged
 - `BuildHistorySyncRequest` is never called with a nil anchor (it would panic); a chat with no stored message reports that instead.
 - `@lid` DMs were dropped by history sync, so `/backlog` could never fill them.
 - Media without a file name was saved with the first extension Go's mime table lists alphabetically (`.jfif` for photos, `.f4v` for videos, `.f4a` for audio), so `open` refused photos and videos. Common WhatsApp mimetypes now map to `.jpg`, `.mp4`, `.ogg`, `.m4a` and similar.
+- The QR code stayed on screen after a successful login; the pane is now cleared.
+- `/select <chat>` opened the chat but typed text still said "no receiver"; it now also sets the chat you type into.
+- Message keys (`d o s u r i`) moved focus back to the input after one use, so a second key was typed as text; focus and selection now stay on the message until Esc.
+- The QR countdown always showed 20 s; the first code is valid for 60 s and the countdown now uses the real timeout.
 
 ### Security
 - Incoming revokes are authorised: the stored message must be in the same chat, and the revoker must be one of your own devices, the original sender, or (groups) a current admin. Previously any contact could blank any stored message by ID. `MarkMessageRevoked` is also scoped by `chat_id`.

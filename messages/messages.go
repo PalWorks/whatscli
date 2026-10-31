@@ -14,6 +14,8 @@ type UiMessageHandler interface {
 	OpenFile(string)
 	ShowColorList()
 	Clear()
+	// ReplaceText clears the message pane and prints text in a single draw.
+	ReplaceText(string)
 	UpdateQR(qr string, attempt int, timeout int)
 	PrintCommands()
 	PrintHelp()

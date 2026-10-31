@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
@@ -114,6 +115,17 @@ func UpdateStatusBar(statusInfo messages.SessionStatus) {
 	out += ")[::-] "
 	out += statusInfo.LastSeen
 	ctx.TopBar.SetText(out)
+}
+
+// chatForID returns the chat for id from the chat list, or a chat named by
+// its id when the list does not have it (used by /select).
+func chatForID(id string) messages.Chat {
+	for _, c := range ctx.AllChats {
+		if c != nil && c.JID == id {
+			return messages.Chat{Id: id, Name: c.Name, IsGroup: strings.HasSuffix(id, "@g.us")}
+		}
+	}
+	return messages.Chat{Id: id, Name: id, IsGroup: strings.HasSuffix(id, "@g.us")}
 }
 
 // sets the current chat, loads text from storage to TextView
