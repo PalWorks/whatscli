@@ -2,7 +2,7 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T15:51:30+00:00 (root context for long-running work; UTC doc timestamps)_
+_Last updated: 2026-10-31T17:32:09+00:00 (new commands go in commandHints)_
 
 ## Licensing of contributions
 
@@ -80,7 +80,7 @@ Add the name to the map in `init()` in `messages/cmd_registry.go` (aliases are e
 
 ### Step 4: help, keys, docs
 
-- Add a line to `PrintHelp()` in `ui_helpers.go`.
+- Add it to `commandHints` in `ui_complete.go`; the command drop-down and the `F1` help window are built from it.
 - For a key binding: add a field to `Keymap` and its default in `config/settings.go`, and bind it in `ui_keybindings.go`.
 - Update the README command tables, CHANGELOG, and AGENTS.md if the file map changes.
 

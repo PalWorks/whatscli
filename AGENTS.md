@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T17:01:57+00:00 (display_names.go)_
+> _Last updated: 2026-10-31T17:32:04+00:00 (ui_overlay.go; commands listed once in commandHints)_
 
 ## 1. Project
 
@@ -67,7 +67,7 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
               ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
-              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), version.go
+              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
@@ -132,7 +132,7 @@ To add a command:
 
 1. Write the handler in the right `messages/cmd_*.go` file; one function per command; use `checkParam()` and `sm.printCommandUsage()`.
 2. Register it in the map in `cmd_registry.go` `init()`.
-3. Add it to `PrintHelp()` in `ui_helpers.go` and to `commandHints` in `ui_complete.go` (`TestCommandHintsCoverRegistry` fails otherwise).
+3. Add it to `commandHints` in `ui_complete.go`; the drop-down and the help window (`ui_overlay.go`) are built from it (`TestCommandHintsCoverRegistry` fails otherwise).
 4. If it needs a key, add a `[keymap]` field in `config/settings.go` and bind it in `ui_keybindings.go`.
 5. Add tests, update README command table, CHANGELOG and this file.
 

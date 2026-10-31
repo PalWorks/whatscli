@@ -141,7 +141,7 @@ func handleQuit(ev *tcell.EventKey) *tcell.EventKey {
 }
 
 func handleHelp(ev *tcell.EventKey) *tcell.EventKey {
-	PrintHelp()
+	showOverlay("help")
 	return nil
 }
 
@@ -350,7 +350,7 @@ func LoadShortcuts() {
 	// Toggle mouse binding (Hardcoded for now as it's a new feature)
 	ctx.KeyBindings.SetRune(tcell.ModCtrl, 'p', handleToggleMouse)
 
-	ctx.App.SetInputCapture(ctx.KeyBindings.Capture)
+	ctx.App.SetInputCapture(globalKeys)
 	// bindings for chat message text view
 	keysMessages := cbind.NewConfiguration()
 	if err := keysMessages.Set(config.Config.Keymap.MessageDownload, handleMessageCommand("download")); err != nil {

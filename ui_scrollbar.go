@@ -92,6 +92,9 @@ func scrollPanels() []scrollPanel {
 
 // drawScrollBars draws every thumb after the rest of the screen.
 func drawScrollBars(screen tcell.Screen) {
+	if overlayOpen() {
+		return // the panels are covered
+	}
 	style := tcell.StyleDefault.Foreground(tcell.ColorNames[config.Config.Colors.Borders]).Bold(true)
 	for _, p := range scrollPanels() {
 		start, length, ok := p.thumb()
@@ -113,6 +116,9 @@ var (
 
 // scrollBarMouse handles clicks and drags on the bars; other events pass on.
 func scrollBarMouse(event *tcell.EventMouse, action tview.MouseAction) (*tcell.EventMouse, tview.MouseAction) {
+	if overlayOpen() {
+		return event, action
+	}
 	x, y := event.Position()
 	switch action {
 	case tview.MouseLeftDown:

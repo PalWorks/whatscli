@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T17:21:02+00:00 (find a chat: Ctrl+f and /select by name)_
+_Last updated: 2026-10-31T17:32:04+00:00 (welcome screen, help window, top bar)_
 
 ---
 
@@ -223,7 +223,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `command_read` | `Ctrl+n` | `/read` |
 | `command_connect` | `Ctrl+r` | `/connect` |
 | `command_quit` | `Ctrl+q` | Quit |
-| `command_help` | `Ctrl+?` | Help |
+| `command_help` | `Ctrl+?` | Help window (also `F1` and `/help`) |
 | `copyuser` | `Ctrl+c` | Copy user ID |
 | `pasteuser` | `Ctrl+v` | Paste user ID |
 | `message_download` | `d` | Download |
@@ -273,6 +273,8 @@ whatscli
 ```
 
 A QR code appears in the terminal. On your phone: WhatsApp, Settings, Linked Devices, Link a Device, scan. If the QR does not fit, enlarge the window or shrink the font. After the first scan WhatsCLI reconnects by itself.
+
+While no chat is open, the message pane shows a short welcome with the five things to know. The top bar shows the version and whether you are online on the left, and the main keys on the right: `F1` Help, `Ctrl+f` Find chat, `/` Commands, `Ctrl+q` Quit. `F1` opens a window listing every key and command. Some terminals (GNOME and MATE Terminal, for example) use `F1` for their own help; `/help` and `Ctrl+?` open the same window.
 
 ### Moving around
 
@@ -395,7 +397,7 @@ Configurable under `[keymap]`.
 | `Ctrl+n` | Mark read |
 | `Ctrl+r` | Reconnect |
 | `Ctrl+q` | Quit |
-| `Ctrl+?` | Help |
+| `F1` or `Ctrl+?` | Help window: every key and command (`Esc`, `Enter` or `q` closes) |
 | `Ctrl+p` | Toggle mouse |
 | `Ctrl+c` / `Ctrl+v` | Copy and paste user ID |
 
@@ -449,7 +451,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-181 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+184 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 

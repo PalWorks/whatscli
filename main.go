@@ -55,8 +55,12 @@ func main() {
 	ctx.TopBar = tview.NewTextView()
 	ctx.TopBar.SetDynamicColors(true)
 	ctx.TopBar.SetScrollable(false)
-	ctx.TopBar.SetText("[::b] WhatsCLI " + appVersion() + "  [-::d]Type " + cmdPrefix + "help or press " + config.Config.Keymap.CommandHelp + " for help")
+	ctx.TopBar.SetText(statusText(false))
 	ctx.TopBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	hintBar := tview.NewTextView().SetDynamicColors(true).SetScrollable(false).SetTextAlign(tview.AlignRight)
+	hintBar.SetText(hintText(config.Config.Keymap, cmdPrefix))
+	hintBar.SetBackgroundColor(tcell.ColorNames[config.Config.Colors.Background])
+	topBar := tview.NewFlex().AddItem(ctx.TopBar, 0, 1, false).AddItem(hintBar, 0, 1, false)
 
 	ctx.TextView = tview.NewTextView().
 		SetDynamicColors(true).
@@ -120,13 +124,14 @@ func main() {
 		return event
 	})
 
-	gridLayout.AddItem(ctx.TopBar, 0, 0, 1, 4, 0, 0, false)
+	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
 	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
 
 	gridLayout.AddItem(ctx.TextView, 1, 1, 1, 3, 0, 0, false)
 	gridLayout.AddItem(ctx.TextInput, 2, 1, 1, 3, 0, 0, false)
 
-	ctx.App.SetRoot(gridLayout, true)
+	pages = tview.NewPages().AddPage("main", gridLayout, true, true)
+	ctx.App.SetRoot(pages, true)
 	ctx.App.EnableMouse(true)
 	ctx.App.SetAfterDrawFunc(drawScrollBars)
 	ctx.App.SetMouseCapture(scrollBarMouse)
