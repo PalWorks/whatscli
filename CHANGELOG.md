@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T14:38:01+00:00 (v1.6.0 changes under Unreleased)_
+_Last updated: 2026-10-31T15:01:08+00:00 (chat paging, row 34)_
 
 ## [Unreleased]
 
@@ -12,6 +12,7 @@ _Last updated: 2026-10-31T14:38:01+00:00 (v1.6.0 changes under Unreleased)_
 - "Delete for me" done on the phone removes the message here too and updates the chat preview.
 - A repeat download of the same media reuses the file saved before instead of saving a second copy (new nullable column `messages.local_path`).
 - Leftover `.whatscli-<digits>.part` files from an interrupted download are removed at startup.
+- A chat opens with its newest 200 messages instead of its whole history, and `/more` shows 200 older ones each time (before, `/more` could never load anything because everything was already shown). Older messages that arrive from `/backlog` or history sync become visible.
 
 ### Fixed
 - `show` no longer freezes the screen or leaves defunct processes: the viewer runs in the background with a 15 s timeout and its errors are shown.

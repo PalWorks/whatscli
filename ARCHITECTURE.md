@@ -2,7 +2,7 @@
 
 System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T14:38:07+00:00 (18-method interface, local_path column, open-golang removed)_
+_Last updated: 2026-10-31T15:01:08+00:00 (chat paging: chat_view.go)_
 
 ## 1. Components
 
@@ -28,7 +28,7 @@ _Last updated: 2026-10-31T14:38:07+00:00 (18-method interface, local_path column
 |---|---|---|
 | TUI | `main.go`, `app_context.go`, `ui_layout.go`, `ui_handler.go`, `ui_keybindings.go`, `ui_render.go`, `ui_helpers.go` | tview widgets, key bindings (cbind), rendering, help text. `UiHandler` implements `messages.UiMessageHandler` and queues every update with `go ctx.App.QueueUpdateDraw` |
 | Session | `messages/session_manager.go`, `connection.go` | `SessionManager`: event loop `runManager`, login and QR flow, reconnect with backoff, `getClient()` |
-| Events | `messages/event_handler.go`, `history_sync.go`, `chat_state.go` | Handle whatsmeow events (message, connected, disconnected, logged out, history sync), store messages, keep the chat priority queue |
+| Events | `messages/event_handler.go`, `history_sync.go`, `chat_state.go`, `chat_view.go`, `delete_for_me.go` | Handle whatsmeow events (message, connected, disconnected, logged out, history sync, delete for me), store messages, keep the chat priority queue; the open chat shows messages from a view anchor (newest 200, `/more` adds 200) |
 | Commands | `messages/cmd_*.go`, `cmd_registry.go` | One handler per slash command; registry filled in `init()` |
 | Media and safety | `messages/media.go`, `pathcheck.go`, `revoke_incoming.go`, `jid_norm.go`, `lid_merge.go` | Media metadata, file name sanitisation, open allowlist, containment, revoke authorisation, canonical JIDs, merge of old `@lid` chats |
 | Storage | `messages/storage.go` | `MessageDatabase`: `conversations` and `messages` tables |

@@ -130,10 +130,10 @@ func (sm *SessionManager) printGroupInfo(client *whatsmeow.Client, jid types.JID
 	sm.uiHandler.PrintText(strings.Join(lines, "\n"))
 }
 
-// cmdMore loads older messages for the current chat (pagination).
+// cmdMore shows older stored messages in the open chat (ROADMAP row 34).
 func cmdMore(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
 	sm.mu.RLock()
-	receiver := sm.currentReceiver
+	receiver, anchor := sm.currentReceiver, sm.viewAnchor
 	sm.mu.RUnlock()
 
 	if receiver == "" {
@@ -141,44 +141,31 @@ func cmdMore(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 		return
 	}
 
-	// Get current messages to find the oldest timestamp
-	currentMsgs, err := sm.db.GetMessages(receiver)
+	total, err := sm.db.CountMessages(receiver)
 	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
+		sm.uiHandler.PrintError(fmt.Errorf("failed to count messages: %v", err))
 		return
 	}
-	if len(currentMsgs) == 0 {
-		sm.uiHandler.PrintText("No messages in this chat")
+	if anchor == 0 {
+		sm.uiHandler.PrintText(fmt.Sprintf("All %d stored messages are shown. Use /backlog to request older ones from WhatsApp.", total))
 		return
 	}
 
-	// Find the oldest timestamp in the current view
-	oldestTimestamp := currentMsgs[0].Timestamp
-	for _, m := range currentMsgs {
-		if m.Timestamp < oldestTimestamp {
-			oldestTimestamp = m.Timestamp
-		}
-	}
-
-	// Load 50 older messages
-	olderMsgs, err := sm.db.GetMessagesPaginated(receiver, oldestTimestamp, 50)
+	newAnchor, err := sm.pageAnchor(receiver, anchor, morePageSize)
 	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to load older messages: %v", err))
+		sm.uiHandler.PrintError(err)
 		return
 	}
-	if len(olderMsgs) == 0 {
-		sm.uiHandler.PrintText("No older messages available locally. Try /backlog to request from server.")
-		return
+	sm.mu.Lock()
+	if sm.currentReceiver != receiver {
+		sm.mu.Unlock()
+		return // the user switched chats meanwhile
 	}
+	sm.viewAnchor = newAnchor
+	sm.mu.Unlock()
 
-	// Reverse to chronological order (DB returns newest-first)
-	for i, j := 0, len(olderMsgs)-1; i < j; i, j = i+1, j-1 {
-		olderMsgs[i], olderMsgs[j] = olderMsgs[j], olderMsgs[i]
-	}
-
-	// Combine: older messages + current messages → full screen refresh
-	combined := append(olderMsgs, currentMsgs...)
-	sm.uiHandler.NewScreenWithStatus(combined, fmt.Sprintf("Loaded %d older messages", len(olderMsgs)))
+	msgs := sm.getMessages(receiver)
+	sm.uiHandler.NewScreenWithStatus(msgs, fmt.Sprintf("Showing %d of %d stored messages", len(msgs), total))
 }
 
 // cmdHelp shows help text.

@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T14:37:42+00:00 (rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32 and new row 36 done for v1.6.0; rows 34 and 35 added)._
+> _Last updated: 2026-10-31T15:01:08+00:00 (row 34 done: chat paging)._
 
 ## 0. North star: every open item, one row each
 
@@ -33,7 +33,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 16 | §3.5 | P2 | **Done** | S | M | 2026-10-31 | Repository had no `LICENSE` file. | Dual licence added: AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). [§8.16](#816-licence) |
 | 32 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 (PR 9): `events.DeleteForMe` removes the stored message (matched to its chat in either JID form), moves the preview to the newest remaining message and redraws the open chat. Deletes made while WhatsCLI was unlinked are not applied (row 35). "Delete for me" on the phone (the only delete offered in "Message yourself") is synced to linked devices as app state, but WhatsCLI ignores it, so the message stays visible (live run 2026-10-31). | Handle whatsmeow's `events.DeleteForMe` by removing or marking the stored row, with a test. |
 | 33 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A in v1.5.0 (owner choice); copy of real data: 8,456 to 504 chat rows. History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
-| 34 | §3.4 | P3 | **Decision** | S | L | 2026-10-31 | `/more` can never load anything: the chat view already shows every stored message, so there is nothing older to page in. | Options: (A) open chats with the latest N messages and let `/more` page older ones in (faster for long chats); (B) remove `/more` and point to `/backlog`; (C) keep it and say "all stored messages are shown". Recommendation A. |
+| 34 | §3.4 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A (owner choice): `chat_view.go` keeps a view anchor; a chat opens with its newest 200 messages, `/more` adds 200 older ones and says when all are shown, and older messages stored by backlog or history sync lower the anchor so they appear. `/more` can never load anything: the chat view already shows every stored message, so there is nothing older to page in. | Options: (A) open chats with the latest N messages and let `/more` page older ones in (faster for long chats); (B) remove `/more` and point to `/backlog`; (C) keep it and say "all stored messages are shown". Recommendation A. |
 | 36 | §3.4 | P3 | **Done** | T | L | 2026-10-31 | Done 2026-10-31: `/info` in a group called `GetGroupInfo` on the command loop with no timeout, so a slow server blocked every command. It now runs in a goroutine with a 15 s timeout from the root context. | Same pattern as the incoming-revoke admin check. |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
@@ -112,10 +112,10 @@ Orientation only; detail is in CHANGELOG.md.
 
 ## 2. Next up
 
-### 2.1 Status: v1.6.0 in preparation (updated 2026-10-31T14:38:13+00:00)
+### 2.1 Status: v1.6.0 in preparation (updated 2026-10-31T15:01:08+00:00)
 
-- Merged to `master` after v1.5.0: rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32 and 36 (PRs 8 to 12 and this docs PR); SPDX headers on every Go file.
-- Next: live-account checklist (row 15) on a `v1.6.0-rc1` build, then the `v1.6.0` tag. Open decision: row 34.
+- Merged to `master` after v1.5.0: rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32, 34 and 36 (PRs 8 to 14); SPDX headers on every Go file.
+- Next: live-account checklist (row 15) on a `v1.6.0-rc1` build, then the `v1.6.0` tag.
 
 Earlier status, kept for the record:
 
@@ -159,7 +159,7 @@ Earlier status, kept for the record:
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
 | 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last full run 2026-10-31 (`ddbb7f9`); smoke run on `v1.5.0-rc1` | M | H |
 | 32 | "Delete for me" from the phone not mirrored | §3.3 | **Done** 2026-10-31 | S | L |
-| 34 | `/more` has nothing to page | §3.4 | **Decision** | S | L |
+| 34 | `/more` has nothing to page | §3.4 | **Done** 2026-10-31 | S | L |
 | 35 | Delete for me while unlinked not applied | §3.3 | **Deferred** | S | L |
 | 36 | `/info` blocks the command loop | §3.4 | **Done** 2026-10-31 | T | L |
 | 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (v1.5.0) | S | L |
@@ -191,7 +191,7 @@ Rows 7, 9, 11, 13, 21, 25, 32, 35 (open: 21, 35). Rows 13 (approved, D20) and 21
 
 ### 3.4 UI
 
-Rows 5, 6, 10, 24, 34, 36 (open: 34). Rows 5, 6 and 10 came from `UiHandler` queuing work with `go QueueUpdateDraw`; an ordered update channel would fix 10 everywhere (review option B, larger refactor).
+Rows 5, 6, 10, 24, 34, 36 (all done). Rows 5, 6 and 10 came from `UiHandler` queuing work with `go QueueUpdateDraw`; an ordered update channel would fix 10 everywhere (review option B, larger refactor).
 
 ### 3.5 Docs and repository hygiene
 

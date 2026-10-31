@@ -23,6 +23,7 @@ import (
 type SessionManager struct {
 	db              *MessageDatabase
 	currentReceiver string // currently selected chat for message handling
+	viewAnchor      uint64 // oldest timestamp shown in the open chat (chat_view.go)
 	uiHandler       UiMessageHandler
 	client          *whatsmeow.Client
 	container       *sqlstore.Container

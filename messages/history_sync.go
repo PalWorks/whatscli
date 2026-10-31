@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"go.mau.fi/whatsmeow/proto/waHistorySync"
 	"go.mau.fi/whatsmeow/proto/waWeb"
@@ -174,6 +175,7 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 	addMsgErrors := 0
 	mediaErrors := 0
 	currentChatChanged := false
+	var oldestInCurrent uint64 = math.MaxUint64 // oldest message stored in the open chat
 	sm.mu.RLock()
 	currentChat := sm.currentReceiver
 	sm.mu.RUnlock()
@@ -257,6 +259,9 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 				addMsgErrors++
 			} else if res.Changed() && jidStr == currentChat {
 				currentChatChanged = true
+				if res == StoreInserted && msg.Timestamp < oldestInCurrent {
+					oldestInCurrent = msg.Timestamp
+				}
 			}
 
 			// Track the most recent message for the conversation preview
@@ -375,6 +380,10 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 	// ON_DEMAND responses (from /backlog) usually arrive after the backlog
 	// command stopped polling, so refresh the open chat here as well. The
 	// status is printed in the same UI update as the refresh (ROADMAP row 10).
+	// Older messages that arrived (backlog answers) become visible.
+	if oldestInCurrent != math.MaxUint64 {
+		sm.lowerViewAnchor(currentChat, oldestInCurrent)
+	}
 	refresh := movedTo
 	if refresh == "" && currentChatChanged {
 		refresh = sm.refreshTarget(currentChat)
