@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T01:12:02+05:30 (initial; checklist merged from the Phase 2 and Phase 3 handovers; counts verified with grep and `go test`)_
+_Last updated: 2026-10-31T06:55:05+00:00 (first live run recorded in Table T3; step 9 note on "Message yourself")_
 
 ## 1. Commands
 
@@ -78,7 +78,7 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 | 6 | Send media | `/sendimage path`; then `d` on the sent message | It appears in the chat; `d` downloads it |
 | 7 | URL | Message containing a link; `u` | Browser opens the right URL |
 | 8 | Own revoke | `r` on your own message in a 1:1 chat, in a group, and in an `@lid` chat if you have one. Then `r` on someone else's message | Disappears on the phone, shows `[message revoked]` locally. Someone else's: "you can only revoke (delete for everyone) your own messages" |
-| 9 | Revoke from phone | Delete for everyone from the phone | Line updates to `[message revoked]` in WhatsCLI |
+| 9 | Revoke from phone | Delete for everyone from the phone, in a chat with another person. "Message yourself" only offers "Delete for me", which is not a revoke | Line updates to `[message revoked]` in WhatsCLI |
 | 10 | Backlog | Open a chat with history, press `Ctrl+b`; type during the wait; repeat in a group and in an `@lid` chat | Within about 5 s "Loaded N additional messages", or the "none arrived yet" note and a later refresh if the phone answers; the UI stays responsive |
 | 11 | Clipboard | In a session without xclip, xsel or wl-clipboard (for example plain SSH), press `Ctrl+c` and `Ctrl+v` | A red error line, no crash |
 | 12 | QR | `/logout`, `/connect`; scan the QR in a dark and a light terminal theme | Detected quickly in both |
@@ -96,7 +96,7 @@ Run before every tagged release (ROADMAP row 15). No agent has run this; the fir
 
 | Date (ISO 8601) | Build or tag | Tester | Steps passed | Steps failed or skipped | Notes |
 |---|---|---|---|---|---|
-| none recorded | | | | | |
+| 2026-10-31 | `chore/catch-up` at `ddbb7f9` (v1.4.0 candidate) | Owner (QR scans, phone deletes) and Claude (headless driver) | 1, 2, 3, 6, 7, 8, 9, 10, 12, 14, 19, 20 | Skipped: 4, 5, 11, 13, 15, 16, 18, 21 (unit tests only). 17: no `@lid` chats in the synced store, so not exercised. 19 on Windows: not run | Run on the owner's own account with test messages only to "Message yourself" and two trusted contacts; system opener stubbed to a log, `show_command` set to `file` (jp2a not installed). Step 1 run offline on a copy of the old database. Found and fixed: media saved as `.jfif`/`.f4v` so `open` refused photos and videos; QR left on screen after login; `/select` did not set the typing target; message keys lost focus after one use; QR countdown ignored the 60 s first code. Step 14 seen on two real group deletes. Backlog answered in a phone-number chat (row 14 partly verified) |
 
 ## 6. Before tagging
 

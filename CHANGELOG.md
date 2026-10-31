@@ -2,11 +2,11 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T06:18:49+00:00 (fixes from live testing)_
+_Last updated: 2026-10-31T06:55:05+00:00 (released v1.4.0)_
 
-## [Unreleased]
+## [1.4.0] - 2026-10-31
 
-Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged. Release gate: the live-account checklist in [TESTING.md](TESTING.md) (ROADMAP row 15).
+Branch `chore/catch-up` (`eee54c7` onward). Live-account checklist run 2026-10-31, recorded in [TESTING.md](TESTING.md) Table T3.
 
 ### Added
 - Dual licence: AGPL-3.0-only (`LICENSE`) plus paid commercial licence (`LICENSE-COMMERCIAL.md`, support@palworks.ai). GitHub private vulnerability reporting enabled.
