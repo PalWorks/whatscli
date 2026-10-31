@@ -50,6 +50,8 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		eh.sm.StatusChannel <- StatusMsg{false, nil}
 		reasonText := fmt.Sprintf("%v", v.Reason)
 		eh.sm.uiHandler.PrintText("Logged out: " + reasonText)
+	case *events.DeleteForMe:
+		eh.sm.handleDeleteForMe(v)
 	case *events.HistorySync:
 		go eh.sm.processHistorySync(v.Data)
 	}
