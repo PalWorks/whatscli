@@ -1,8 +1,8 @@
 # Architecture
 
-System design of WhatsCLI as it is in the code at `v1.6.0`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
+System design of WhatsCLI as it is in the code at `v1.6.2`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T16:39:45+00:00 (chat list shows all chats; scroll bars in ui_scrollbar.go)_
+_Last updated: 2026-10-31T16:55:57+00:00 (describes v1.6.2)_
 
 ## 1. Components
 
