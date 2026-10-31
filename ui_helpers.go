@@ -90,7 +90,7 @@ func PrintHelp() {
 	fmt.Fprintln(ctx.TextView, "")
 
 	fmt.Fprintln(ctx.TextView, "Config: ", config.GetConfigFilePath())
-	fmt.Fprintln(ctx.TextView, "Verify: ", VERSION)
+	fmt.Fprintln(ctx.TextView, "Verify: ", appVersion())
 }
 
 // updates the status bar

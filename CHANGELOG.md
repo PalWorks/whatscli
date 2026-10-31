@@ -2,12 +2,22 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T15:59:33+00:00 (Unreleased section; licence date in UTC)_
+_Last updated: 2026-10-31T16:19:21+00:00 (released v1.6.1)_
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-31
+
+Usability release requested after the first daily use of v1.6.0.
+
 ### Added
+- Typing `/` on the input line opens a list of matching commands with their arguments and a short description; `Up`/`Down` move, `Tab` or `Enter` picks.
+- Every command entered is echoed in the message pane with its time, for example `(31-10-26 21:28:40) > /logout`.
 - `/more` is listed in `/help`.
+
+### Fixed
+- Opening a chat always shows its latest message, even after scrolling up in the previous chat.
+- A binary built with `go install` shows its module version instead of `v1.3.0`.
 
 ## [1.6.0] - 2026-10-31
 
