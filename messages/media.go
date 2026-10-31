@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package messages
 
 // media.go — media metadata extraction, safe download file naming and URL

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package messages
 
 // revoke_incoming.go: authorisation of incoming REVOKE protocol messages

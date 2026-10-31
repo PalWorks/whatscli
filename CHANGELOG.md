@@ -2,7 +2,12 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T08:03:19+00:00 (released v1.5.0)_
+_Last updated: 2026-10-31T14:17:22+00:00 (SPDX licence headers)_
+
+## [Unreleased]
+
+### Added
+- Every Go source file starts with an SPDX licence line (`AGPL-3.0-only`; `BSD-3-Clause` for the third-party `qrcode/qrcode.go`), and CI fails when one is missing (`.github/scripts/check-spdx.sh`).
 
 ## [1.5.0] - 2026-10-31
 

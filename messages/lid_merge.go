@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package messages
 
 // lid_merge.go: R1 (ROADMAP row 13). A chat stored under its @lid JID before

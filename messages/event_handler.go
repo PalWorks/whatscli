@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package messages
 
 // event_handler.go — extracted from session_manager.go (audit A2-A3).

@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T07:38:43+00:00 (added lid_merge.go)_
+> _Last updated: 2026-10-31T14:17:27+00:00 (SPDX headers and CI check)_
 
 ## 1. Project
 
@@ -12,7 +12,7 @@
 - Go directive `1.26.0`, `toolchain go1.27.3` (whatsmeow requires 1.26.0). An older system Go auto-downloads the toolchain.
 - CGO is required (SQLite via `go-sqlite3`). Linux: `apt install gcc`.
 - Version string: `VERSION` in `main.go` (`v1.3.0`); `make build` and the release workflow override it with `-X main.VERSION=...`.
-- Licence: dual, AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`).
+- Licence: dual, AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). Every Go file starts with an SPDX line (`qrcode/qrcode.go` stays BSD-3-Clause); `.github/scripts/check-spdx.sh` enforces it in CI.
 
 ## 2. Where to read what
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+
 package messages
 
 // jid_norm.go: one canonical chat JID per person. WhatsApp addresses the same
