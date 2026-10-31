@@ -218,6 +218,16 @@ func openRefusalReason(filePath string) string {
 	return ext + " files can run code or macros; " + allowed
 }
 
+// preferredExtensions fixes the extension for common WhatsApp mimetypes.
+// mime.ExtensionsByType sorts alphabetically, so on Linux image/jpeg gives
+// ".jfif" and video/mp4 gives ".f4v", which the open allowlist refuses.
+var preferredExtensions = map[string]string{
+	"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif",
+	"video/mp4": ".mp4", "video/3gpp": ".3gp", "video/quicktime": ".mov",
+	"audio/ogg": ".ogg", "audio/mpeg": ".mp3", "audio/mp4": ".m4a", "audio/aac": ".aac", "audio/amr": ".amr",
+	"application/pdf": ".pdf", "text/plain": ".txt",
+}
+
 // downloadFileName chooses the on-disk name for a message's media: the
 // sanitized original name if present, otherwise the message ID plus an
 // extension derived from the mimetype.
@@ -231,7 +241,9 @@ func downloadFileName(msg Message) string {
 		if i := strings.Index(mt, ";"); i >= 0 {
 			mt = strings.TrimSpace(mt[:i])
 		}
-		if exts, err := mime.ExtensionsByType(mt); err == nil && len(exts) > 0 {
+		if pref, ok := preferredExtensions[strings.ToLower(mt)]; ok {
+			ext = pref
+		} else if exts, err := mime.ExtensionsByType(mt); err == nil && len(exts) > 0 {
 			ext = exts[0]
 		}
 	}

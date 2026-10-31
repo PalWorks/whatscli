@@ -202,6 +202,10 @@ func TestDownloadFileName(t *testing.T) {
 		{"no ext for unknown mime", Message{Id: "ABC", MimeType: "x-unknown/zzz"}, "ABC"},
 		{"mime params ignored", Message{Id: "ABC", MimeType: "image/png; foo=bar"}, "ABC.png"},
 		{"hostile id", Message{Id: "../../evil", MimeType: ""}, "evil"},
+		{"jpeg is .jpg", Message{Id: "ABC", MimeType: "image/jpeg"}, "ABC.jpg"},
+		{"mp4 is .mp4", Message{Id: "ABC", MimeType: "video/mp4"}, "ABC.mp4"},
+		{"voice note is .ogg", Message{Id: "ABC", MimeType: "audio/ogg; codecs=opus"}, "ABC.ogg"},
+		{"audio mp4 is .m4a", Message{Id: "ABC", MimeType: "audio/mp4"}, "ABC.m4a"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

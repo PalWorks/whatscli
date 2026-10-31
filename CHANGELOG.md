@@ -2,7 +2,7 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T01:11:55+05:30 (added [Unreleased] for the chore/catch-up branch, fixed the mislabelled 2025 entry, added v1.3.0 to v1.1.0 summaries from git history)_
+_Last updated: 2026-10-31T06:13:16+00:00 (media file extension fix found in live testing)_
 
 ## [Unreleased]
 
@@ -36,6 +36,7 @@ Branch `chore/catch-up` (`eee54c7` onward, 2026-10-31). Not yet merged or tagged
 - Pre-existing schema migration ignored all `ALTER TABLE` errors; now only "duplicate column name" is tolerated.
 - `BuildHistorySyncRequest` is never called with a nil anchor (it would panic); a chat with no stored message reports that instead.
 - `@lid` DMs were dropped by history sync, so `/backlog` could never fill them.
+- Media without a file name was saved with the first extension Go's mime table lists alphabetically (`.jfif` for photos, `.f4v` for videos, `.f4a` for audio), so `open` refused photos and videos. Common WhatsApp mimetypes now map to `.jpg`, `.mp4`, `.ogg`, `.m4a` and similar.
 
 ### Security
 - Incoming revokes are authorised: the stored message must be in the same chat, and the revoker must be one of your own devices, the original sender, or (groups) a current admin. Previously any contact could blank any stored message by ID. `MarkMessageRevoked` is also scoped by `chat_id`.
