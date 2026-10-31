@@ -84,6 +84,13 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		}
 	}
 
+	// Backward-compatible migration: where the media of a message was last
+	// saved, so a repeat download reuses the file (ROADMAP row 9). NULL until
+	// the first download; older binaries ignore it.
+	if err := md.addColumnIfMissing("messages", "local_path", "TEXT"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -101,7 +108,8 @@ func (md *MessageDatabase) addColumnIfMissing(table, column, definition string) 
 // messageColumns is the column list shared by every message SELECT so that
 // collectMessages can scan rows uniformly.
 const messageColumns = `id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
-	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto`
+	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto,
+	COALESCE(local_path, '')`
 
 // escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
 // treated as literal characters in a LIKE ? ESCAPE '\' clause.
@@ -249,14 +257,15 @@ func (md *MessageDatabase) CountMessages(chatId string) (int, error) {
 // RevokedText replaces the text of a message deleted for everyone.
 const RevokedText = "[message revoked]"
 
-// MarkMessageRevoked replaces a message's text and clears its media metadata.
+// MarkMessageRevoked replaces a message's text and clears its media metadata
+// and saved download path (the file itself is left on disk).
 // The row must match both the message ID and the chat, so a revoke can never
 // reach a message in another chat. Returns true when a row was updated.
 func (md *MessageDatabase) MarkMessageRevoked(chatID, id string) (bool, error) {
 	if md.db == nil {
 		return false, fmt.Errorf("database not initialized")
 	}
-	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL WHERE id = ? AND chat_id = ?`, RevokedText, id, chatID)
+	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL, local_path = NULL WHERE id = ? AND chat_id = ?`, RevokedText, id, chatID)
 	if err != nil {
 		return false, fmt.Errorf("failed to mark message revoked: %w", err)
 	}
@@ -280,6 +289,25 @@ func (md *MessageDatabase) DeleteMessage(chatID, id string) (bool, error) {
 	n, err := res.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("failed to read delete result: %w", err)
+	}
+	return n > 0, nil
+}
+
+// SetLocalPath records where a message's media was saved, so a later download
+// can reuse the file. Scoped by chat like MarkMessageRevoked, and a revoked
+// message is never given a path. Returns true when a row was updated.
+func (md *MessageDatabase) SetLocalPath(chatID, id, localPath string) (bool, error) {
+	if md.db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`UPDATE messages SET local_path = ? WHERE id = ? AND chat_id = ? AND COALESCE(text, '') <> ?`,
+		localPath, id, chatID, RevokedText)
+	if err != nil {
+		return false, fmt.Errorf("failed to record download path: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read download path result: %w", err)
 	}
 	return n > 0, nil
 }
@@ -432,7 +460,7 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 	for rows.Next() {
 		var msg Message
 		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto); err != nil {
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto, &msg.LocalPath); err != nil {
 			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)

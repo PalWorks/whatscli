@@ -96,7 +96,7 @@ func runDownload(sm *SessionManager, client *whatsmeow.Client, cmdName string, p
 			sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
 			return
 		}
-		path, err := downloadMedia(context.Background(), client, msg, dir)
+		path, err := sm.fetchMedia(context.Background(), client, msg, dir)
 		if err != nil {
 			sm.uiHandler.PrintError(err)
 			return
@@ -126,11 +126,33 @@ func (sm *SessionManager) deliverDownload(mode downloadMode, path string) {
 	}
 }
 
+// fetchMedia returns a local copy of msg's media in dir, downloading it only
+// when the recorded path cannot be reused, and records the path in SQLite.
+func (sm *SessionManager) fetchMedia(ctx context.Context, dl mediaDownloader, msg Message, dir string) (string, error) {
+	path, err := downloadMedia(ctx, dl, msg, dir)
+	if err != nil {
+		return "", err
+	}
+	if path != msg.LocalPath {
+		if _, err := sm.db.SetLocalPath(msg.ChatId, msg.Id, path); err != nil {
+			// The file is saved; only reuse next time is lost.
+			sm.uiHandler.PrintError(err)
+		}
+	}
+	return path, nil
+}
+
 // downloadMedia saves msg's media into dir and returns the final path.
-// The file name is sanitized and confined to dir. If a different file already
-// uses the name, "<stem>_<message-id><ext>" is used instead; an existing file
-// under that ID-specific name is reused without downloading again. Data is
-// written to a temporary file first and renamed into place on success.
+//
+// If msg.LocalPath (recorded by an earlier download) still names a regular
+// file directly inside dir, it is returned without downloading again
+// (reusableLocalPath). Otherwise the file name is sanitized and confined to
+// dir. If a file already uses that name, "<stem>_<message-id><ext>" is used
+// instead, and an existing regular file under the ID-specific name is reused
+// (a copy saved before paths were recorded, or by an earlier collision).
+// Messages without a usable sender file name are saved under their message
+// ID, so an existing file of that name is reused directly. Data is written to
+// a temporary file first and renamed into place on success.
 func downloadMedia(ctx context.Context, dl mediaDownloader, msg Message, dir string) (string, error) {
 	d, err := downloadableFromMessage(msg)
 	if err != nil {
@@ -138,6 +160,9 @@ func downloadMedia(ctx context.Context, dl mediaDownloader, msg Message, dir str
 	}
 	if dir == "" {
 		return "", errors.New("download directory is not configured")
+	}
+	if p, ok := reusableLocalPath(msg.LocalPath, dir); ok {
+		return p, nil
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create download directory: %w", err)
@@ -190,6 +215,29 @@ func downloadMedia(ctx context.Context, dl mediaDownloader, msg Message, dir str
 		return "", fmt.Errorf("move downloaded file into place: %w", err)
 	}
 	return full, nil
+}
+
+// reusableLocalPath reports whether stored, a path recorded by an earlier
+// download, may be handed out again for dir: it must be absolute, be a regular
+// file and not a symlink, and resolve (ResolveFileWithin) to a file directly
+// inside dir, where downloads are written. Returns the resolved path.
+func reusableLocalPath(stored, dir string) (string, bool) {
+	if stored == "" || !filepath.IsAbs(stored) {
+		return "", false
+	}
+	fi, err := os.Lstat(stored)
+	if err != nil || !fi.Mode().IsRegular() {
+		return "", false
+	}
+	resolved, err := ResolveFileWithin(stored, dir)
+	if err != nil {
+		return "", false
+	}
+	resolvedDir, err := resolveDir(dir)
+	if err != nil || filepath.Dir(resolved) != resolvedDir {
+		return "", false
+	}
+	return resolved, true
 }
 
 // hasUsableFileName reports whether downloadFileName will use the sender's name.

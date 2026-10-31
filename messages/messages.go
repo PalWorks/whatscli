@@ -70,6 +70,9 @@ type Message struct {
 	MimeType   string
 	FileName   string
 	MediaProto []byte
+	// LocalPath is where the media was last saved by a download, or "".
+	// It is reused only after the checks in reusableLocalPath.
+	LocalPath string
 }
 
 // internal contact representation to abstract from message lib

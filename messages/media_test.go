@@ -70,7 +70,7 @@ func TestMigration_OldSchemaDB(t *testing.T) {
 	if err != nil || len(convs) != 1 || convs[0].IsArchived {
 		t.Errorf("conversations after migration: %+v err=%v", convs, err)
 	}
-	for _, col := range []string{"media_kind", "mime_type", "file_name", "media_proto"} {
+	for _, col := range []string{"media_kind", "mime_type", "file_name", "media_proto", "local_path"} {
 		if _, err := db.Exec("SELECT " + col + " FROM messages LIMIT 1"); err != nil {
 			t.Errorf("column %s missing: %v", col, err)
 		}
