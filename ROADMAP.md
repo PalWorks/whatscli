@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T07:55:47+00:00 (row 33 implemented on branch feat/skip-empty-chats)._
+> _Last updated: 2026-10-31T08:03:19+00:00 (v1.5.0: rows 13 and 33 released)._
 
 ## 0. North star: every open item, one row each
 
@@ -18,7 +18,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 |---|---|---|---|---|---|---|---|---|
 | 17 | §3.1 | P1 | **Done** | S | H | 2026-10-31 | Done 2026-10-31: `v1.4.0-rc1` then `v1.4.0` built all three archives; checksums verified. The release workflow has never run on a real tag. If `ubuntu-24.04-arm` or the Windows CGO build fails, the first release fails and blocks the `release` job. | Tag a release candidate on a throwaway tag, check the 3 archives and checksums, then the real tag. [§8.17](#817-first-release-run-unverified) |
 | 12 | §3.1 | P2 | **Open** | S | M | 2026-10-31 | CI and release hygiene: mutable action tags in a `contents: write` job, Go 1.26 matrix leg may run 1.27.3, AUR `pkgver` invalid for `-rc` tags, release notes pick the wrong previous tag. | One small CI change covering all four plus `go mod tidy`. [§8.12](#812-ci-and-release-hygiene) |
-| 13 | §3.3 | P2 | **Done** | M | M | 2026-10-31 | Done 2026-10-31 on branch `feat/lid-chat-merge` (`messages/lid_merge.go`, tests in `lid_merge_test.go`); dry run on a copy of real data merged 8 duplicates. R1: an `@lid` chat stored before its phone-number mapping was known stays a separate chat from the person's phone-number chat, so one person can appear twice. | Approved (owner, 2026-10-31, D20): merge the `@lid` rows into the phone-number chat once the mapping is known. Start after the live-account checklist (row 15, step 17) has measured how often it occurs. [§8.13](#813-r1-lid-duplicate-merge) |
+| 13 | §3.3 | P2 | **Done** | M | M | 2026-10-31 | Done 2026-10-31 in v1.5.0 (`messages/lid_merge.go`, tests in `lid_merge_test.go`); dry run on a copy of real data merged 8 duplicates. R1: an `@lid` chat stored before its phone-number mapping was known stays a separate chat from the person's phone-number chat, so one person can appear twice. | Approved (owner, 2026-10-31, D20): merge the `@lid` rows into the phone-number chat once the mapping is known. Start after the live-account checklist (row 15, step 17) has measured how often it occurs. [§8.13](#813-r1-lid-duplicate-merge) |
 | 14 | §3.6 | P2 | **Open** | S | M | 2026-10-31 | Partly verified 2026-10-31: the phone answered a backlog request in a phone-number chat; no `@lid` chat was available to test. [Unverified] The phone may not answer an ON_DEMAND backlog request when the anchor chat is a phone-number JID but its own record is LID. `/backlog` would silently do nothing there. | Verify with checklist step 17 on a live account; if no reply, send the anchor in LID form via `GetLIDForPN`. [§8.14](#814-r2-backlog-anchor-jid-form) |
 | 6 | §3.4 | P2 | **Open** | S | M | 2026-10-31 | `show` runs the viewer on the UI goroutine: a slow viewer freezes all input and redraws, and every use leaves a zombie process (`Wait` is never called). | Run the viewer off the UI goroutine with `cmd.Output()` under a timeout, then `QueueUpdateDraw` only to write the bytes (review option A). |
 | 10 | §3.4 | P2 | **Open** | S | M | 2026-10-31 | "Loaded N additional messages" and "revoked: id" can be wiped by the redraw that follows, because UI updates are queued from separate goroutines. The user cannot tell whether the action worked. | Print status after the redraw inside one queued update, or use the status bar (review option A). Ordered UI channel is a later refactor. |
@@ -32,7 +32,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 31 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | SECURITY.md points reporters to GitHub private vulnerability reporting, which may not be enabled on `PalWorks/whatscli`. A reporter would have no private channel. | Owner enables it in repository Settings, Code security; or names another contact in SECURITY.md. |
 | 16 | §3.5 | P2 | **Done** | S | M | 2026-10-31 | Repository had no `LICENSE` file. | Dual licence added: AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). [§8.16](#816-licence) |
 | 32 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | "Delete for me" on the phone (the only delete offered in "Message yourself") is synced to linked devices as app state, but WhatsCLI ignores it, so the message stays visible (live run 2026-10-31). | Handle whatsmeow's `events.DeleteForMe` by removing or marking the stored row, with a test. |
-| 33 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A on branch `feat/skip-empty-chats` (owner choice); copy of real data: 8,456 to 504 chat rows. History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
+| 33 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A in v1.5.0 (owner choice); copy of real data: 8,456 to 504 chat rows. History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
 | 19 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R4: a revoke that arrives before its target (offline queue order) is ignored, so the message stays visible. | Remember pending revokes briefly. Accepted for now. |
@@ -132,7 +132,7 @@ Earlier status, kept for the record:
 |---|---|---|---|---|---|
 | 17 | First release workflow run unverified | §3.1 | **Done** 2026-10-31 | S | H |
 | 12 | CI and release hygiene (review finding 12) | §3.1 | **Open** | S | M |
-| 13 | R1 `@lid` duplicate merge | §3.3 | **Done** 2026-10-31 (branch `feat/lid-chat-merge`) | M | M |
+| 13 | R1 `@lid` duplicate merge | §3.3 | **Done** 2026-10-31 (v1.5.0) | M | M |
 | 14 | R2 backlog anchor JID form | §3.6 | **Open**: verify live | S | M |
 | 6 | `show` freezes UI, leaks zombie (finding 6) | §3.4 | **Open** | S | M |
 | 10 | UI update ordering (finding 10) | §3.4 | **Open** | S | M |
@@ -153,7 +153,7 @@ Earlier status, kept for the record:
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
 | 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last run 2026-10-31 (`ddbb7f9`) | M | H |
 | 32 | "Delete for me" from the phone not mirrored | §3.3 | **Open** | S | L |
-| 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (branch `feat/skip-empty-chats`) | S | L |
+| 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (v1.5.0) | S | L |
 | 1 | Incoming revoke authorisation (finding 1) | §3.2 | **Done** 2026-10-31, Was Medium | M | H |
 | 2 | Open allowlist and Windows-safe names (finding 2) | §3.2 | **Done** 2026-10-31, Was Small | S | M |
 | 3 | `@lid` chats dropped by history sync (finding 3) | §3.3 | **Done** 2026-10-31, Was Medium | M | M |
