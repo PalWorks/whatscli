@@ -488,7 +488,7 @@ The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMA
 - Shipped in v1.6.2: scroll bars with click and drag, a chat list that no longer jumps when clicked and keeps times visible.
 - Open: row 14, whether the phone answers `/backlog` in a chat whose own record is LID (needs an `@lid` chat on a live account).
 - Release gate: the live-account checklist before every tag (row 15, recurring).
-- Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18 to 22, `
+- Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18, 19, 20 and 22.
 
 ---
 
