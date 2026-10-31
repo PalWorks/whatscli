@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T01:12:00+05:30 (rewritten from agents.md, GEMINI.md and CLAUDE.md after the chore/catch-up branch; stale facts corrected against the code)_
+> _Last updated: 2026-10-31T07:38:43+00:00 (added lid_merge.go)_
 
 ## 1. Project
 
@@ -90,6 +90,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `priority_queue.go` | Heap ordering of conversations |
 | `media.go` | Media metadata extraction and storage, file name sanitisation, open allowlist, `firstURL` |
 | `jid_norm.go` | One canonical chat JID per person (`@lid` to phone number) |
+| `lid_merge.go` | Merges chats stored under `@lid` into the phone-number chat once the mapping is known |
 | `revoke_incoming.go` | Authorisation of incoming revokes |
 | `pathcheck.go` | `ResolveFileWithin`: symlink-aware directory containment |
 | `cmd_registry.go` | Command name to handler map |
