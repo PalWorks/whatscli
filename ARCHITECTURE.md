@@ -2,7 +2,7 @@
 
 System design of WhatsCLI as it is in the code at `v1.6.0`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: opener, root context, part-file sweep, delete for me, chat view, show and /info off the loop)_
+_Last updated: 2026-10-31T16:39:45+00:00 (chat list shows all chats; scroll bars in ui_scrollbar.go)_
 
 ## 1. Components
 
@@ -141,7 +141,7 @@ Toolchain: Go directive 1.26.0, `toolchain go1.27.3`, CGO required.
 
 ## 8. Scaling and limits
 
-Single user, single account, local data. The chat list shows `ChatLimit` chats (starts at 50, grows by `batchSize` 50 when the selection nears the end); an open chat shows its newest 200 stored messages and `/more` adds 200 older ones at a time (`chat_view.go`, `NthTimestampBefore`, `GetMessagesSince`). There is no server component. Reconnect is capped at 5 attempts.
+Single user, single account, local data. The chat lists show every stored chat and keep their scroll position across updates; an open chat shows its newest 200 stored messages and `/more` adds 200 older ones at a time (`chat_view.go`, `NthTimestampBefore`, `GetMessagesSince`). There is no server component. Reconnect is capped at 5 attempts.
 
 ## 9. Glossary
 

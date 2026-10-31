@@ -112,6 +112,11 @@ func (sm *SessionManager) StartManager() error {
 	}
 	sm.started = true
 	sm.stop = make(chan struct{})
+	// Show the stored chats at once, before (or without) a connection.
+	sm.mu.Lock()
+	safeList := sm.snapshotPQ()
+	sm.mu.Unlock()
+	sm.uiHandler.UpdateChatList(safeList)
 	go sm.runManager()
 	return nil
 }

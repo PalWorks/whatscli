@@ -96,7 +96,7 @@ func TestFormatRelativeTime_DifferentYear(t *testing.T) {
 	target := time.Now().AddDate(-1, 0, 0)
 	ts := target.Unix()
 	got := formatRelativeTime(ts)
-	expected := target.Format("Jan 02, 06")
+	expected := target.Format("Jan '06")
 	if got != expected {
 		t.Errorf("expected %q, got %q", expected, got)
 	}

@@ -98,11 +98,6 @@ func SetupLeftPane() *tview.Flex {
 				}
 			}
 		}
-		// Infinite scroll trigger
-		if row >= ctx.ChatTable.GetRowCount()-5 && ctx.ChatLimit < len(ctx.AllChats) {
-			ctx.ChatLimit += batchSize
-			RenderChatTable()
-		}
 	}
 
 	openFromGroup := func(row, column int) {

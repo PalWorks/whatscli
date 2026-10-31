@@ -2,9 +2,21 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T16:19:21+00:00 (released v1.6.1)_
+_Last updated: 2026-10-31T16:39:26+00:00 (released v1.6.2)_
 
 ## [Unreleased]
+
+## [1.6.2] - 2026-10-31
+
+### Added
+- Scroll bars on the right border of the message pane and the Status, Chats and Groups lists whenever the content is longer than the panel. With the mouse on (`Ctrl+p`), click the bar to jump there or drag the thumb.
+- Stored chats are listed at start, before a connection (or without one).
+
+### Fixed
+- Clicking one of the last rows of the chat list opened the chat but also made the list jump, because it loaded the next 50 chats and rebuilt the list. All chats are now listed at once and the list keeps its scroll position.
+- At start the chat list could open scrolled to its oldest chats.
+- Long chat names pushed the time column out of view; names are now shortened instead, and the unread count sits next to the time.
+- Dates from an earlier year are shown as `Oct '25` instead of `Oct 07, 25`.
 
 ## [1.6.1] - 2026-10-31
 

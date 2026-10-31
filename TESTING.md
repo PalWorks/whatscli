@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T16:18:49+00:00 (steps 27 to 29: command list, echo, open at latest)_
+_Last updated: 2026-10-31T16:39:26+00:00 (steps 30 and 31, ui_scrollbar_test.go)_
 
 ## 1. Commands
 
@@ -24,7 +24,7 @@ Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race 
 
 ## 3. Test layout
 
-**Table T1: Test files (171 top-level tests after v1.6.0)**
+**Table T1: Test files (175 top-level tests after v1.6.1)**
 
 | File | Tests | Covers |
 |---|---|---|
@@ -54,6 +54,7 @@ Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race 
 | `ui_opener_test.go` | 4 | `startOpener` start failure, no blocking and reaping, clean exit; target passed as one argument |
 | `ui_complete_test.go` | 6 | Command list matches the registry; drop-down entries, completed text, echo line and tag escaping |
 | `version_test.go` | 1 | Version shown: injected tag, `go install` module version, `dev` |
+| `ui_scrollbar_test.go` | 4 | Scroll thumb size and position, click-to-offset mapping, bar hit test, chat list time cell with unread count |
 | `ui_helpers_test.go` | 1 | `chatForID` |
 
 ## 4. Conventions
@@ -113,6 +114,8 @@ Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Ta
 | 27 | Command list | On the input line type `/lo`, press `Down`, then `Tab`; type `/sendi` and `Tab` | The list shows `/login` and `/logout` with descriptions; the input becomes `/logout`, then `/sendimage ` |
 | 28 | Command echo | Enter `/info` in a chat | `(<date> <time>) > /info` appears before its output |
 | 29 | Open at latest | Scroll up in a long chat with `PgUp`, then open another chat | The new chat shows its latest message at the bottom |
+| 30 | Scroll bars | With the mouse on, open a long chat; drag the thumb on the message pane's right border up; click the middle of the Chats bar | The thumb shows near the bottom first; dragging scrolls to older messages; the click moves the chat list to its middle without opening a chat |
+| 31 | Click near the list end | Click each of the last three visible rows of the Chats list | Each click opens that chat; the list does not move |
 
 **Table T3: Run record (copy one row per run)**
 

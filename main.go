@@ -17,8 +17,6 @@ import (
 // version that go install records.
 var VERSION string
 
-const batchSize = 50
-
 func main() {
 	// T-2: Parse --debug flag before anything else.
 	debugMode := flag.Bool("debug", false, "Enable verbose WhatsApp protocol logging")
@@ -33,7 +31,6 @@ func main() {
 	// Initialize the application context (replaces package-level globals)
 	ctx = &AppContext{
 		MouseState: true,
-		ChatLimit:  50,
 	}
 
 	ctx.UiHandler = UiHandler{}
@@ -131,6 +128,8 @@ func main() {
 
 	ctx.App.SetRoot(gridLayout, true)
 	ctx.App.EnableMouse(true)
+	ctx.App.SetAfterDrawFunc(drawScrollBars)
+	ctx.App.SetMouseCapture(scrollBarMouse)
 	ctx.App.SetFocus(ctx.TextInput)
 	if err := ctx.SessionManager.StartManager(); err != nil {
 		PrintError(err)

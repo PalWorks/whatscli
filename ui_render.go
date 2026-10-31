@@ -86,15 +86,30 @@ func formatRelativeTime(timestamp int64) string {
 	case diff < 7*24*time.Hour:
 		return t.Weekday().String()[:3] // "Mon", "Tue", etc.
 	default:
-		// Same year → "Jan 02"; different year → "Jan 02, 06"
+		// Same year → "Jan 02"; an earlier year → "Jan '06" (short, so
+		// chat names keep more room in the list)
 		if t.Year() == now.Year() {
 			return t.Format("Jan 02")
 		}
-		return t.Format("Jan 02, 06")
+		return t.Format("Jan '06")
 	}
 }
 
-// RenderChatTable renders the table based on ctx.AllChats and ctx.ChatLimit
+// chatTimeText is the right-hand cell of a chat list row: the unread count,
+// if any, then the time of the last message.
+func chatTimeText(conv *messages.Conversation) string {
+	ts := formatRelativeTime(conv.LastMsgTime)
+	if conv.Unread == 0 {
+		return ts
+	}
+	unread := "([" + config.Config.Colors.UnreadCount + "]" + fmt.Sprint(conv.Unread) + "[-])"
+	if ts == "" {
+		return unread
+	}
+	return unread + " " + ts
+}
+
+// RenderChatTable renders the status, chat and group tables from ctx.AllChats
 func RenderChatTable() {
 	// Snapshot current selection by JID
 	var selectedStatusJID string
@@ -124,9 +139,32 @@ func RenderChatTable() {
 	}
 
 	displayList := ctx.AllChats
-	if len(displayList) > ctx.ChatLimit {
-		displayList = displayList[:ctx.ChatLimit]
+
+	// The time column (with the unread count) must stay visible, so names
+	// are cut to the width left over by the widest time cell.
+	tsWidth := 0
+	for _, conv := range displayList {
+		if w := tview.TaggedStringWidth(chatTimeText(conv)); w > tsWidth {
+			tsWidth = w
+		}
 	}
+	// Sidebar width minus the grid and table borders, the time and a space.
+	nameWidth := config.Config.Ui.ChatSidebarWidth - 4 - tsWidth - 1
+	if nameWidth < 8 {
+		nameWidth = 8
+	}
+
+	// Keep each list where the user scrolled it. Setting the offset also
+	// stops tview from following the end of a table that was empty when it
+	// was first drawn, which showed the oldest chats at startup.
+	offS, _ := ctx.StatusTable.GetOffset()
+	offC, _ := ctx.ChatTable.GetOffset()
+	offG, _ := ctx.GroupTable.GetOffset()
+	defer func() {
+		ctx.StatusTable.SetOffset(offS, 0)
+		ctx.ChatTable.SetOffset(offC, 0)
+		ctx.GroupTable.SetOffset(offG, 0)
+	}()
 
 	ctx.StatusTable.Clear()
 	ctx.ChatTable.Clear()
@@ -153,11 +191,6 @@ func RenderChatTable() {
 			name = conv.JID // Fallback
 		}
 
-		// Unread status
-		if conv.Unread > 0 {
-			name += " ([" + config.Config.Colors.UnreadCount + "]" + fmt.Sprint(conv.Unread) + "[-])"
-		}
-
 		// Pinned indicator
 		if conv.IsPinned {
 			name = "📌 " + name
@@ -166,11 +199,11 @@ func RenderChatTable() {
 		cell := tview.NewTableCell(name).
 			SetReference(conv).
 			SetExpansion(1).
+			SetMaxWidth(nameWidth).
 			SetSelectable(true)
 
-		// Timestamp cell (right-aligned, dim)
-		tsText := formatRelativeTime(conv.LastMsgTime)
-		tsCell := tview.NewTableCell(tsText).
+		// Time cell (right-aligned, dim) with the unread count in front
+		tsCell := tview.NewTableCell(chatTimeText(conv)).
 			SetAlign(tview.AlignRight).
 			SetSelectable(true).
 			SetExpansion(0)
