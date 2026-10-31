@@ -103,3 +103,66 @@ func TestCommandEcho(t *testing.T) {
 		t.Errorf("tview tags in the command must be escaped: %q", got)
 	}
 }
+
+func TestChatQuery(t *testing.T) {
+	tests := []struct {
+		text, want string
+		ok         bool
+	}{
+		{"/select ali", "ali", true},
+		{"/SELECT Ali ", "Ali", true},
+		{"/select ", "", true},
+		{"/select", "", false},
+		{"/send ali", "", false},
+		{"select ali", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := chatQuery(tt.text, "/")
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("chatQuery(%q) = %q,%v; want %q,%v", tt.text, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestMatchChats(t *testing.T) {
+	chats := []*messages.Conversation{
+		{JID: "status@broadcast", Name: "status"},
+		{JID: "919000000001@s.whatsapp.net", Name: "Alagu"},
+		{JID: "120363@g.us", Name: "Alagu Family"},
+		{JID: "919000000002@s.whatsapp.net", Name: "Bob"},
+		{JID: "919000000003@s.whatsapp.net", Name: ""},
+	}
+	names := func(cs []*messages.Conversation) string {
+		var out []string
+		for _, c := range cs {
+			out = append(out, c.JID)
+		}
+		return strings.Join(out, " ")
+	}
+	if got := names(matchChats(chats, "ALA", 10)); got != "919000000001@s.whatsapp.net 120363@g.us" {
+		t.Errorf("name match: %s", got)
+	}
+	if got := names(matchChats(chats, "0003", 10)); got != "919000000003@s.whatsapp.net" {
+		t.Errorf("number match: %s", got)
+	}
+	if got := len(matchChats(chats, "", 10)); got != 4 {
+		t.Errorf("empty query: %d chats, want 4 (no status)", got)
+	}
+	if got := len(matchChats(chats, "", 2)); got != 2 {
+		t.Errorf("limit: %d", got)
+	}
+	if got := matchChats(chats, "zzz", 10); len(got) != 0 {
+		t.Errorf("no match: %v", got)
+	}
+}
+
+func TestChatEntry(t *testing.T) {
+	e := chatEntry(&messages.Conversation{JID: "1@g.us", Name: "Family [x]"})
+	if !strings.Contains(e, "(group)") || strings.Contains(e, "[x]") {
+		t.Errorf("entry %q", e)
+	}
+	long := chatEntry(&messages.Conversation{JID: "1@s.whatsapp.net", Name: strings.Repeat("n", 50)})
+	if !strings.Contains(long, "…") {
+		t.Errorf("long name not shortened: %q", long)
+	}
+}
