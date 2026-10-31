@@ -183,6 +183,7 @@ func (sm *SessionManager) getMessages(wid string) []Message {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to load messages: %v", err))
 		return []Message{}
 	}
+	sm.labelSenders(msgs) // saved name, else phone number (display_names.go)
 	return msgs
 }
 

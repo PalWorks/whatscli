@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T16:39:26+00:00 (v1.6.2: scroll bars, chat list fixes)._
+> _Last updated: 2026-10-31T17:01:57+00:00 (v1.6.3: row 21 done at display time)._
 
 ## 0. North star: every open item, one row each
 
@@ -21,7 +21,6 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
 | 19 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R4: a revoke that arrives before its target (offline queue order) is ignored, so the message stays visible. | Remember pending revokes briefly. Accepted for now. |
 | 20 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R5: the open allowlist judges only the extension; a PDF or image viewer exploit is still possible, as in any client. | Also check that media kind matches the extension. Small gain; accepted. |
-| 21 | §3.3 | P3 | **Deferred** | S | L | 2026-10-31 | Not done with row 13 (2026-10-31): `ContactId` is sent back to WhatsApp as the participant in read receipts (`markChatAsRead`) and backlog anchors (`backlogAnchor`), so rewriting stored LIDs to phone numbers could break those in LID-addressed groups. Normalise only at display time if names need it. R6: `ContactId` is stored in whatever form arrives (phone number or LID); only chat IDs are normalised. Names or search by contact may show an LID number until whatsmeow knows the contact. | Normalise at display time only, if names need it; keep the stored form. |
 | 22 | §3.2 | P3 | **Deferred** | M | L | 2026-10-31 | A spoofed or mistaken revoke overwrites text and media data, which cannot be recovered (review option C). | Add a `revoked` flag column and keep the original data; needs another migration. Authorisation (D14) already closes the spoof. |
 | 35 | §3.3 | P3 | **Deferred** | S | L | 2026-10-31 | A "Delete for me" made on the phone while WhatsCLI was unlinked is not applied after relinking, because whatsmeow suppresses app-state events during a full sync. | Set `EmitAppStateEventsOnFullSync` and handle the replayed mark-read, pin and archive events too; only if users report ghost messages. |
 | 15 | §3.6 | P1 | **Recurring** | M | H | 2026-10-31 | No automated test talks to WhatsApp, so media, revoke, backlog, `@lid`, show and QR behaviour is verified only by unit tests with fakes. Last full run: 2026-10-31 on `ddbb7f9`, 12 steps passed, 5 bugs fixed, 8 skipped; smoke run on `v1.5.0-rc1` 2026-10-31 passed; live run on the `v1.6.0-rc1` candidate 2026-10-31 passed for the steps it covered (1, 2 and the v1.6.0 checks, now steps 22 to 26; TESTING Table T3). | Run the full live-account checklist in [TESTING.md](TESTING.md) on a non-production number before every tagged release. [§8.15](#815-live-account-checklist-as-a-release-gate) |
@@ -99,16 +98,18 @@ Orientation only; detail is in CHANGELOG.md.
 | CI: SHA-pinned actions with Dependabot, `GOTOOLCHAIN=local`, SPDX header check; release candidates published as pre-releases | v1.6.0 (2026-10-31) |
 | Command drop-down on the input line, timestamped command echo, chats open at their latest message, `go install` builds show their version | v1.6.1 (2026-10-31) |
 | Scroll bars with click and drag; stable chat list (no jump on click, starts at the newest chat, names shortened so times stay visible) | v1.6.2 (2026-10-31) |
+| Senders shown by saved contact name, else phone number, resolved at display time (row 21) | v1.6.3 (2026-10-31) |
 
 ## 2. Next up
 
-### 2.1 Status: v1.6.2 released (updated 2026-10-31T16:39:26+00:00)
+### 2.1 Status: v1.6.3 released (updated 2026-10-31T17:01:57+00:00)
 
-- `v1.6.2` adds scroll bars and fixes the chat list jumping when a row near its end was clicked; checked with unit tests and an offline run of the real UI with mouse clicks and drags. `v1.6.2-rc1` kept as a pre-release.
-- Next: rows 14 (needs an `@lid` chat on a live account), 21, 35 and the deferred security rows.
+- `v1.6.3` shows senders by saved contact name, else phone number (row 21, display time only). On a real account, 6,015 of 6,017 LID senders had a known phone number. `v1.6.3-rc1` kept as a pre-release.
+- Next: rows 14 (needs an `@lid` chat on a live account), 35 and the deferred security rows.
 
 Earlier status, kept for the record:
 
+- v1.6.2: adds scroll bars and fixes the chat list jumping when a row near its end was clicked; checked with unit tests and an offline run of the real UI with mouse clicks and drags. `v1.6.2-rc1` kept as a pre-release.
 - v1.6.1: adds the owner's usability requests (command drop-down, command echo, open at latest message) and the `go install` version fix; checked with unit tests and an offline run of the real UI on a copy of local data (no WhatsApp connection). `v1.6.1-rc1` kept as a pre-release.
 - v1.6.0: `v1.6.0` tagged on `master` after a live run on the `v1.6.0-rc1` candidate (TESTING Table T3); rows 5, 6, 7, 9, 10, 11, 12, 24, 25, 32, 34 and 36 shipped. `v1.6.0-rc1` kept as a pre-release.
 - v1.5.0: `v1.5.0` tagged on `master` at `07f62c0` (rows 13 and 33); release assets and checksums verified; `v1.5.0-rc1` kept as a pre-release after a live smoke run (TESTING Table T3).
@@ -129,7 +130,7 @@ Earlier status, kept for the record:
 | 18 | R3 admin revoke lookup cost | §3.2 | **Deferred** | S | L |
 | 19 | R4 revoke before target | §3.2 | **Deferred** | S | L |
 | 20 | R5 extension versus media kind | §3.2 | **Deferred** | S | L |
-| 21 | R6 `ContactId` normalisation | §3.3 | **Deferred**: display-time only (see §0) | S | L |
+| 21 | R6 `ContactId` normalisation | §3.3 | **Done** 2026-10-31 (v1.6.3), display time only (`display_names.go`); stored IDs unchanged | S | L |
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
 | 35 | Delete for me while unlinked not applied | §3.3 | **Deferred** | S | L |
 | 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last full run 2026-10-31 (`ddbb7f9`); partial live run on `v1.6.0-rc1` | M | H |
@@ -224,7 +225,7 @@ Rows 14, 15. No test talks to WhatsApp; this area exists to keep that gap visibl
 
 | Document | Covers |
 |---|---|
-| TESTING.md | Test commands, conventions, the live-account checklist (steps 1 to 31) |
+| TESTING.md | Test commands, conventions, the live-account checklist (steps 1 to 32) |
 | SECURITY.md | Threat notes, controls, how to report |
 | ARCHITECTURE.md | Components, data flow, storage, JID handling |
 | docs/archive/ | Four historic reports from February 2026, kept unchanged; open findings from them are tracked here |
@@ -256,4 +257,4 @@ The anchor uses the chat and sender JIDs as stored. After D16 that is usually th
 
 ### 8.15 Live-account checklist as a release gate
 
-Everything WhatsApp-facing is covered only by fakes. The procedure (31 steps, covering migration, media, revoke both ways, backlog, `@lid`, opener gate, show with symlinks, clipboard, QR, chat paging, group info, Delete for me, repeat download and the part-file sweep) is in TESTING.md. Use a non-production number and a copy of `session_meta.db`. Record each run in TESTING.md Table T3 and summarise it in row 15. Options: (A) run it manually before each tag (current); (B) build a client seam to cover the `cmdRevoke` success path in unit tests (the download goroutine is already covered through the `mediaDownloader` seam) while keeping the live run for protocol behaviour. Recommendation: A now (current practice); B is not started.
+Everything WhatsApp-facing is covered only by fakes. The procedure (32 steps, covering migration, media, revoke both ways, backlog, `@lid`, opener gate, show with symlinks, clipboard, QR, chat paging, group info, Delete for me, repeat download and the part-file sweep) is in TESTING.md. Use a non-production number and a copy of `session_meta.db`. Record each run in TESTING.md Table T3 and summarise it in row 15. Options: (A) run it manually before each tag (current); (B) build a client seam to cover the `cmdRevoke` success path in unit tests (the download goroutine is already covered through the `mediaDownloader` seam) while keeping the live run for protocol behaviour. Recommendation: A now (current practice); B is not started.

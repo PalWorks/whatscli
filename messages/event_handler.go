@@ -278,10 +278,12 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 	eh.sm.mu.RUnlock()
 
 	if isCurrent {
-		eh.sm.uiHandler.NewMessage(msg)
+		shown := []Message{msg}
+		eh.sm.labelSenders(shown)
+		eh.sm.uiHandler.NewMessage(shown[0])
 	} else if !evt.Info.IsFromMe {
 		if timestamp > uint64(time.Now().Unix()-30) {
-			senderName := eh.getContactShort(evt.Info.Sender)
+			senderName := eh.sm.senderLabel(evt.Info.Sender.String(), eh.getContactShort(evt.Info.Sender))
 			if senderName == "" {
 				senderName = "New Message"
 			}

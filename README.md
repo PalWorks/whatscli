@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T16:55:57+00:00 (install section and roadmap headlines at v1.6.2)_
+_Last updated: 2026-10-31T17:01:57+00:00 (sender names)_
 
 ---
 
@@ -279,6 +279,7 @@ A QR code appears in the terminal. On your phone: WhatsApp, Settings, Linked Dev
 - The Status box lists the WhatsApp Status updates (stories) of your contacts that arrived while WhatsCLI was linked, not your own status. History sync does not include them, so it stays empty until a contact posts one.
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
+- Message senders show the name saved in your phone's contacts, else their phone number (`+91...`). A sender whose phone number WhatsApp keeps private shows their WhatsApp name as `~Name`.
 - In the chat lists, the right column shows the unread count, if any, and the time of the last message; long names are shortened to keep it visible.
 
 ### Working with attachments
@@ -445,7 +446,7 @@ make test    # go test -race ./...
 make vet     # go vet ./...
 ```
 
-175 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
+178 top-level unit tests across the packages, using in-memory SQLite, a mock UI and fakes for downloads, LID mapping and group metadata. CI checks SPDX headers, then runs vet, build and `go test -race` on Go 1.26 and 1.27. Because nothing tests against real WhatsApp, a 26-step live-account checklist gates each release. Details: [TESTING.md](TESTING.md).
 
 ---
 
@@ -487,7 +488,7 @@ The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMA
 - Shipped in v1.6.2: scroll bars with click and drag, a chat list that no longer jumps when clicked and keeps times visible.
 - Open: row 14, whether the phone answers `/backlog` in a chat whose own record is LID (needs an `@lid` chat on a live account).
 - Release gate: the live-account checklist before every tag (row 15, recurring).
-- Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18 to 22, `ContactId` normalisation (row 21).
+- Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18 to 22, `
 
 ---
 

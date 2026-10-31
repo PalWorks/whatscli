@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T16:39:26+00:00 (ui_scrollbar.go)_
+> _Last updated: 2026-10-31T17:01:57+00:00 (display_names.go)_
 
 ## 1. Project
 
@@ -92,6 +92,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `media.go` | Media metadata extraction and storage, file name sanitisation, open allowlist, `firstURL` |
 | `jid_norm.go` | One canonical chat JID per person (`@lid` to phone number) |
 | `lid_merge.go` | Merges chats stored under `@lid` into the phone-number chat once the mapping is known |
+| `display_names.go` | Sender name at display time: saved contact name, else `+<phone>`, else `~PushName`, else the LID; never changes `ContactId` |
 | `chat_view.go` | Paging of the open chat: `viewAnchor` (under `sm.mu`), page sizes, anchor lowered when older messages arrive |
 | `delete_for_me.go` | "Delete for me" from your other devices (`events.DeleteForMe`): removes the stored row and moves the chat preview |
 | `partfiles.go` | Startup sweep of leftover `.whatscli-<digits>.part` download temp files |
