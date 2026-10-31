@@ -2,7 +2,7 @@
 
 System design of WhatsCLI as it is in the code on branch `chore/catch-up`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-10-31T07:38:43+00:00 (added lid_merge.go)_
+_Last updated: 2026-10-31T14:38:07+00:00 (18-method interface, local_path column, open-golang removed)_
 
 ## 1. Components
 
@@ -39,7 +39,7 @@ _Last updated: 2026-10-31T07:38:43+00:00 (added lid_merge.go)_
 
 **UI to backend.** A key or typed command becomes `messages.Command{Name, Params}` on `CommandChannel` (buffered, 10). `runManager` receives it and `execCommand` looks it up in `commandRegistry` and calls the handler with the client fetched once by `getClient()` (may be nil). The unknown-command case prints a red message.
 
-**Backend to UI.** The backend calls the 16 methods of `UiMessageHandler`. The backend never imports tview.
+**Backend to UI.** The backend calls the 18 methods of `UiMessageHandler`. The backend never imports tview.
 
 **Whatsmeow to backend.** `eventHandler.Handle` switches on the event type:
 
@@ -85,7 +85,7 @@ SQLite via go-sqlite3 (CGO), WAL mode, 5 s busy timeout. No in-memory caches; ev
 
 | Column | Type | Note |
 |---|---|---|
-| `id` | TEXT, primary key | `INSERT OR IGNORE`: first write wins |
+| `id` | TEXT, primary key | `INSERT OR IGNORE`: first write wins; later copies only fill empty media columns (not on revoked rows) |
 | `chat_id`, `contact_id`, `contact_name`, `contact_short` | TEXT | `contact_id` is stored as received (phone number or LID) |
 | `timestamp` | INTEGER | |
 | `from_me`, `forwarded` | BOOLEAN | |
@@ -93,6 +93,7 @@ SQLite via go-sqlite3 (CGO), WAL mode, 5 s busy timeout. No in-memory caches; ev
 | `media_kind` | TEXT NOT NULL DEFAULT '' | image, video, audio, document, sticker, or empty |
 | `mime_type`, `file_name` | TEXT NOT NULL DEFAULT '' | sender-declared, raw and unsanitised |
 | `media_proto` | BLOB, nullable | serialised `waE2E.Message` holding only the media sub-message, thumbnails stripped |
+| `local_path` | TEXT, nullable | where the media was last saved; reused only if still a regular file directly in the target folder; cleared on revoke |
 
 Indexes: `idx_messages_chat_id (chat_id)`, `idx_messages_chat_ts (chat_id, timestamp)`.
 
@@ -126,7 +127,6 @@ Incoming revoke: `handleIncomingRevoke` loads the target, `decideRevoke` checks 
 | `gopkg.in/ini.v1` | v1.67.3 | Config |
 | `github.com/gen2brain/beeep` | v0.11.3 | Desktop notifications |
 | `github.com/atotto/clipboard` | v0.1.4 | Clipboard |
-| `github.com/skratchdot/open-golang` | v0.0.0-20200116055534-eef842397966 | System opener for files and URLs |
 | `github.com/skip2/go-qrcode` | v0.0.0-20200617195104-da1b6568686e | QR generation |
 
 Toolchain: Go directive 1.26.0, `toolchain go1.27.3`, CGO required.

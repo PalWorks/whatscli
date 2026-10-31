@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T01:11:53+05:30 (rewritten after the chore/catch-up branch; every command, key, platform and path checked against the code)_
+_Last updated: 2026-10-31T14:38:07+00:00 (chat info key, open-golang removed)_
 
 ---
 
@@ -89,7 +89,7 @@ Two packages with a clean boundary: the TUI in the root package and everything W
 
 ```
  main package (tview)  --Command on CommandChannel-->  messages: SessionManager.runManager()
-   AppContext, UiHandler  <--UiMessageHandler (16 methods)--   eventHandler, history_sync, commandRegistry,
+   AppContext, UiHandler  <--UiMessageHandler (18 methods)--   eventHandler, history_sync, commandRegistry,
                                                               MessageDatabase (SQLite)  -->  whatsmeow  -->  WhatsApp
 ```
 
@@ -112,7 +112,6 @@ All persistence goes through `MessageDatabase`; the WhatsApp session is kept sep
 | Notifications | [beeep](https://github.com/gen2brain/beeep) |
 | Clipboard | [clipboard](https://github.com/atotto/clipboard) |
 | Key bindings | [cbind](https://codeberg.org/tslocum/cbind) |
-| Opening files and links | [open-golang](https://github.com/skratchdot/open-golang) |
 | CI and release | GitHub Actions (Go 1.26 and 1.27 test matrix; tag-driven release) |
 
 ---
@@ -513,6 +512,6 @@ WhatsCLI is dual licensed (updated 2026-10-31T01:20:43+05:30):
 
 - [whatsmeow](https://github.com/tulir/whatsmeow), the WhatsApp multi-device library.
 - [tview](https://github.com/rivo/tview) and [tcell](https://github.com/gdamore/tcell), the terminal UI.
-- [go-sqlite3](https://github.com/mattn/go-sqlite3), [beeep](https://github.com/gen2brain/beeep), [go-qrcode](https://github.com/skip2/go-qrcode), [cbind](https://codeberg.org/tslocum/cbind), [open-golang](https://github.com/skratchdot/open-golang).
+- [go-sqlite3](https://github.com/mattn/go-sqlite3), [beeep](https://github.com/gen2brain/beeep), [go-qrcode](https://github.com/skip2/go-qrcode), [cbind](https://codeberg.org/tslocum/cbind).
 - [normen/whatscli](https://github.com/normen/whatscli), the original project this fork started from.
 - Similar project with more features: [nchat](https://github.com/d99kris/nchat) (WhatsApp, Telegram and more).

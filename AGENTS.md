@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T14:17:27+00:00 (SPDX headers and CI check)_
+> _Last updated: 2026-10-31T14:38:01+00:00 (storage, UI ordering and info key updated for v1.6.0)_
 
 ## 1. Project
 
@@ -72,7 +72,7 @@ config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
 ```
 
-**Data flow:** UI sends `messages.Command` on `CommandChannel`; `SessionManager.runManager()` dispatches through `commandRegistry`. The backend calls back through the `UiMessageHandler` interface (16 methods, implemented by `UiHandler` in `ui_handler.go` and by `MockUiHandler` in `messages/mock_ui_handler.go`).
+**Data flow:** UI sends `messages.Command` on `CommandChannel`; `SessionManager.runManager()` dispatches through `commandRegistry`. The backend calls back through the `UiMessageHandler` interface (18 methods, implemented by `UiHandler` in `ui_handler.go` and by `MockUiHandler` in `messages/mock_ui_handler.go`).
 
 **Files in `messages/`:**
 
@@ -111,7 +111,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 4. All channels are buffered (size 10): `BatteryChannel`, `StatusChannel`, `CommandChannel`, `ChatChannel`, `TextChannel`. Do not change sizes without understanding back-pressure.
 5. Never block `runManager`. Validation runs on the event loop; network and waits (downloads, revoke send, backlog 5 s poll, group admin lookup) run in goroutines.
 6. Auto-reconnect uses exponential backoff (2 s to 30 s, 5 attempts) and respects `sm.loggedOut`, `sm.started` and `sm.reconnecting`.
-7. `UiHandler` methods queue work with `go ctx.App.QueueUpdateDraw`, so ordering between two calls is not guaranteed (ROADMAP row 10).
+7. `UiHandler` methods queue work with `go ctx.App.QueueUpdateDraw`, so ordering between two calls is not guaranteed. Print status that follows a redraw with `NewScreenWithStatus` (one queued update).
 
 ## 7. Commands
 
@@ -129,14 +129,14 @@ To add a command:
 4. If it needs a key, add a `[keymap]` field in `config/settings.go` and bind it in `ui_keybindings.go`.
 5. Add tests, update README command table, CHANGELOG and this file.
 
-Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID as the only parameter; the UI sends the highlighted message ID. The `info` key sends `info` with the ID, but `cmdInfo` ignores it and prints chat or group info.
+Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID as the only parameter; the UI sends the highlighted message ID. The `info` key sends `info` without an ID and prints chat or group info.
 
 ## 8. Storage
 
 - SQLite only, all through `MessageDatabase` in `storage.go`. WAL mode, 5 s busy timeout. No in-memory caches; reads query SQLite.
 - App DB: `<XDG_CONFIG>/whatscli/session_meta.db` (tables `conversations`, `messages`). WhatsApp session: `session.db` (whatsmeow's own store). Never hardcode paths; use `config.GetSessionFilePath()`.
 - Schema changes use `addColumnIfMissing` (idempotent `ALTER TABLE ADD COLUMN`). Never drop or rewrite columns that older binaries read.
-- `AddMessage` is `INSERT OR IGNORE`: a message already stored is never updated by a later sync (ROADMAP row 7).
+- `AddMessage` inserts with `INSERT OR IGNORE` (first write wins for text, sender and time), then fills empty media columns of a known row in the same chat unless it is revoked, and returns a `StoreResult` so callers redraw only on change. `messages.local_path` records where media was saved.
 - Tests use `:memory:` through `InitWithDB()`; `Init()` touches the real config path.
 
 ## 9. Security-sensitive code (read SECURITY.md before changing)
@@ -160,7 +160,7 @@ Message commands (`download`, `open`, `show`, `url`, `revoke`) take a message ID
 1. Reading `sm.client` without the lock.
 2. DB writes while holding `sm.mu`.
 3. Using `storage.Init()` in tests (it opens the real config path).
-4. `UiMessageHandler` has 16 methods; any new mock must implement all of them.
+4. `UiMessageHandler` has 18 methods; any new mock must implement all of them.
 5. A chat can arrive as `@lid` or `@s.whatsapp.net`. Store under the canonical JID (`canonicalChatJID`), compare people with `sameUser`, never with string equality.
 6. whatsmeow `BuildHistorySyncRequest` dereferences its anchor; never pass nil.
 7. `go test` without `-race` hides data races; CI uses `-race`.

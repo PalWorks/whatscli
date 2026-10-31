@@ -2,7 +2,7 @@
 
 > This document describes the key development patterns, conventions, and technical skills required to effectively contribute to WhatsCLI. It serves as a deep-dive companion to `CONTRIBUTING.md`. Rules live in [AGENTS.md](AGENTS.md); design in [ARCHITECTURE.md](ARCHITECTURE.md).
 >
-> _Last updated: 2026-10-31T01:11:59+05:30 (Go version, interface size, schema and untrusted-input patterns corrected after the chore/catch-up branch)_
+> _Last updated: 2026-10-31T14:38:13+00:00 (interface now 18 methods)_
 
 ## Required Skills
 
@@ -83,7 +83,7 @@ case command := <-sm.CommandChannel:
 
 ### Backend → UI (Updates)
 
-The `UiMessageHandler` interface (16 methods) allows the backend to update the UI without importing tview:
+The `UiMessageHandler` interface (18 methods) allows the backend to update the UI without importing tview:
 
 ```go
 type UiMessageHandler interface {
