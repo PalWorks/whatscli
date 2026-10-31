@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T06:55:05+00:00 (first live checklist run recorded; row 32 added; release v1.4.0 in progress)._
+> _Last updated: 2026-10-31T07:03:48+00:00 (v1.4.0 released; row 17 done)._
 
 ## 0. North star: every open item, one row each
 
@@ -16,7 +16,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 
 | # | Bucket | Priority | State | Size | Impact | Raised | Problem | Solution or next step |
 |---|---|---|---|---|---|---|---|---|
-| 17 | §3.1 | P1 | **Open** | S | H | 2026-10-31 | The release workflow has never run on a real tag. If `ubuntu-24.04-arm` or the Windows CGO build fails, the first release fails and blocks the `release` job. | Tag a release candidate on a throwaway tag, check the 3 archives and checksums, then the real tag. [§8.17](#817-first-release-run-unverified) |
+| 17 | §3.1 | P1 | **Done** | S | H | 2026-10-31 | Done 2026-10-31: `v1.4.0-rc1` then `v1.4.0` built all three archives; checksums verified. The release workflow has never run on a real tag. If `ubuntu-24.04-arm` or the Windows CGO build fails, the first release fails and blocks the `release` job. | Tag a release candidate on a throwaway tag, check the 3 archives and checksums, then the real tag. [§8.17](#817-first-release-run-unverified) |
 | 12 | §3.1 | P2 | **Open** | S | M | 2026-10-31 | CI and release hygiene: mutable action tags in a `contents: write` job, Go 1.26 matrix leg may run 1.27.3, AUR `pkgver` invalid for `-rc` tags, release notes pick the wrong previous tag. | One small CI change covering all four plus `go mod tidy`. [§8.12](#812-ci-and-release-hygiene) |
 | 13 | §3.3 | P2 | **Open** | M | M | 2026-10-31 | R1: an `@lid` chat stored before its phone-number mapping was known stays a separate chat from the person's phone-number chat, so one person can appear twice. | Approved (owner, 2026-10-31, D20): merge the `@lid` rows into the phone-number chat once the mapping is known. Start after the live-account checklist (row 15, step 17) has measured how often it occurs. [§8.13](#813-r1-lid-duplicate-merge) |
 | 14 | §3.6 | P2 | **Open** | S | M | 2026-10-31 | Partly verified 2026-10-31: the phone answered a backlog request in a phone-number chat; no `@lid` chat was available to test. [Unverified] The phone may not answer an ON_DEMAND backlog request when the anchor chat is a phone-number JID but its own record is LID. `/backlog` would silently do nothing there. | Verify with checklist step 17 on a live account; if no reply, send the anchor in LID form via `GetLIDForPN`. [§8.14](#814-r2-backlog-anchor-jid-form) |
@@ -101,14 +101,19 @@ Orientation only; detail is in CHANGELOG.md.
 | Capability | Since |
 |---|---|
 | Text, image, video, audio, document and sticker messages; groups; search; SQLite persistence; auto-reconnect; QR login | v1.3.0 (2026-02-21) and earlier |
-| Download, open, show, URL and revoke of messages; media metadata storage | branch chore/catch-up, not yet tagged |
-| Incoming revoke with authorisation; open allowlist; filename sanitisation; `show` path containment | branch chore/catch-up, not yet tagged |
-| `@lid` chat normalisation; ON_DEMAND backlog | branch chore/catch-up, not yet tagged |
-| Tag-driven release for linux/amd64, linux/arm64, windows/amd64 | branch chore/catch-up, not yet run on a tag |
+| Download, open, show, URL and revoke of messages; media metadata storage | v1.4.0 (2026-10-31) |
+| Incoming revoke with authorisation; open allowlist; filename sanitisation; `show` path containment | v1.4.0 (2026-10-31) |
+| `@lid` chat normalisation; ON_DEMAND backlog | v1.4.0 (2026-10-31) |
+| Tag-driven release for linux/amd64, linux/arm64, windows/amd64 | v1.4.0 (2026-10-31) |
 
 ## 2. Next up
 
-### 2.1 Status: chore/catch-up ready for owner review, release gated (updated 2026-10-31T01:11:54+05:30)
+### 2.1 Status: v1.4.0 released (updated 2026-10-31T07:03:48+00:00)
+
+- `chore/catch-up` merged to `master` (PR 2) and tagged `v1.4.0`; release assets and checksums verified; `v1.4.0-rc1` kept as a pre-release. `go install github.com/PalWorks/whatscli@v1.4.0` resolves.
+- Next: row 13 (approved), then the open P2 rows.
+
+Earlier status, kept for the record:
 
 - Code: 6 commits ahead of `master`; build, vet and `go test -race -count=1 ./...` pass (verified when this file was written). Not merged, not tagged.
 - Gates before tagging: row 15 (live-account checklist, TESTING.md) and row 17 (first workflow run on a release candidate tag).
@@ -124,7 +129,7 @@ Orientation only; detail is in CHANGELOG.md.
 
 | # | Item | Section | State | Size | Impact |
 |---|---|---|---|---|---|
-| 17 | First release workflow run unverified | §3.1 | **Open** | S | H |
+| 17 | First release workflow run unverified | §3.1 | **Done** 2026-10-31 | S | H |
 | 12 | CI and release hygiene (review finding 12) | §3.1 | **Open** | S | M |
 | 13 | R1 `@lid` duplicate merge | §3.3 | **Open**: approved 2026-10-31 (owner), after checklist step 17 | M | M |
 | 14 | R2 backlog anchor JID form | §3.6 | **Open**: verify live | S | M |
