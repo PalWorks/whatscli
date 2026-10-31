@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T07:38:31+00:00 (row 13 implemented on branch feat/lid-chat-merge; row 21 reasoning; row 33 added)._
+> _Last updated: 2026-10-31T07:55:47+00:00 (row 33 implemented on branch feat/skip-empty-chats)._
 
 ## 0. North star: every open item, one row each
 
@@ -32,7 +32,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | 31 | §3.5 | P3 | **Done** | T | L | 2026-10-31 | SECURITY.md points reporters to GitHub private vulnerability reporting, which may not be enabled on `PalWorks/whatscli`. A reporter would have no private channel. | Owner enables it in repository Settings, Code security; or names another contact in SECURITY.md. |
 | 16 | §3.5 | P2 | **Done** | S | M | 2026-10-31 | Repository had no `LICENSE` file. | Dual licence added: AGPL-3.0-only (`LICENSE`) plus paid commercial (`LICENSE-COMMERCIAL.md`). [§8.16](#816-licence) |
 | 32 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | "Delete for me" on the phone (the only delete offered in "Message yourself") is synced to linked devices as app state, but WhatsCLI ignores it, so the message stays visible (live run 2026-10-31). | Handle whatsmeow's `events.DeleteForMe` by removing or marking the stored row, with a test. |
-| 33 | §3.3 | P3 | **Open** | S | L | 2026-10-31 | History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
+| 33 | §3.3 | P3 | **Done** | S | L | 2026-10-31 | Done 2026-10-31 with option A on branch `feat/skip-empty-chats` (owner choice); copy of real data: 8,456 to 504 chat rows. History sync stores every contact WhatsApp lists as an empty chat ("New chat", no messages, no time): on a real account 8,173 of 8,456 chat rows, 1,410 of them under a LID with no known phone number. They sit at the bottom of the chat list and bloat it. | Options: (A) skip conversations with no messages and no timestamp in `storeHistorySync`, and delete existing empty "New chat" rows once; (B) keep them but hide empty chats in the list; (C) leave as is. Recommendation A. |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
 | 19 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R4: a revoke that arrives before its target (offline queue order) is ignored, so the message stays visible. | Remember pending revokes briefly. Accepted for now. |
@@ -153,7 +153,7 @@ Earlier status, kept for the record:
 | 22 | Keep original data on revoke (flag) | §3.2 | **Deferred** | M | L |
 | 15 | Live-account checklist as release gate | §3.6 | **Recurring**: last run 2026-10-31 (`ddbb7f9`) | M | H |
 | 32 | "Delete for me" from the phone not mirrored | §3.3 | **Open** | S | L |
-| 33 | Empty "New chat" rows from history sync | §3.3 | **Open** | S | L |
+| 33 | Empty "New chat" rows from history sync | §3.3 | **Done** 2026-10-31 (branch `feat/skip-empty-chats`) | S | L |
 | 1 | Incoming revoke authorisation (finding 1) | §3.2 | **Done** 2026-10-31, Was Medium | M | H |
 | 2 | Open allowlist and Windows-safe names (finding 2) | §3.2 | **Done** 2026-10-31, Was Small | S | M |
 | 3 | `@lid` chats dropped by history sync (finding 3) | §3.3 | **Done** 2026-10-31, Was Medium | M | M |

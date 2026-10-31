@@ -83,7 +83,7 @@ func (sm *SessionManager) loadRecentChats() {
 					c := *existingConv
 					toUpsert = &c
 				}
-			} else {
+			} else if isGroup {
 				newConv := &Conversation{
 					JID:         jidStr,
 					Name:        name,
@@ -295,6 +295,9 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 				c := *existingConv
 				toUpsert = append(toUpsert, c)
 			}
+		} else if isEmptyChat(storeJID, lastMsgTimestamp, unreadCount, isPinned) {
+			// A contact WhatsApp lists without any message or activity: not a
+			// chat yet (ROADMAP row 33). /search-contact still finds it.
 		} else {
 			// New conversation — use history name or fall back to JID user
 			if name == "" {
@@ -359,6 +362,13 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 // server is a chat we store: phone-number DMs, LID DMs and groups.
 func isHistoryChatServer(server string) bool {
 	return server == types.DefaultUserServer || server == types.HiddenUserServer || server == types.GroupServer
+}
+
+// isEmptyChat reports whether a conversation is a 1:1 chat with no message,
+// time, unread count or pin: a contact entry rather than a chat. Groups are
+// always kept, because membership is meaningful without messages.
+func isEmptyChat(jid types.JID, lastMsgTime int64, unread uint16, pinned bool) bool {
+	return jid.Server != types.GroupServer && lastMsgTime == 0 && unread == 0 && !pinned
 }
 
 // historyChatJID returns the JID a history sync conversation is stored under.

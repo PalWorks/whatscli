@@ -2,12 +2,15 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T07:38:31+00:00 (added [Unreleased]: LID chat merge)_
+_Last updated: 2026-10-31T07:55:47+00:00 (empty chat rows)_
 
 ## [Unreleased]
 
 ### Added
 - Chats stored under a LID (`@lid`) before WhatsApp revealed the phone number are merged into the phone-number chat once the mapping is known (after chat load and after each history sync): messages move over, the two chat list entries become one (name, newest preview, summed unread, pinned if either, archived only if both), and an open chat follows. A copy of a real synced database had 8 such duplicates. Message sender IDs are left as sent, because read receipts and backlog requests send them back to WhatsApp.
+
+### Changed
+- Contacts with no messages, time, unread count or pin are no longer stored as empty "New chat" chats, from history sync or from the contact list at login. Existing rows of that kind are removed at startup; groups and every chat with a stored message are kept, and messages are never touched. `/search-contact` still finds the contacts. On a copy of a real synced database the chat list went from 8,456 to 504 rows (7,952 empty, 1,410 of them shown only by a LID number).
 
 ## [1.4.0] - 2026-10-31
 
