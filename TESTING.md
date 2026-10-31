@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T16:39:26+00:00 (steps 30 and 31, ui_scrollbar_test.go)_
+_Last updated: 2026-10-31T16:55:57+00:00 (verified at v1.6.2; owner use of v1.6.2 recorded in Table T3)_
 
 ## 1. Commands
 
@@ -16,7 +16,7 @@ go test -race -run TestIncomingRevoke ./messages    # one group
 
 Requires CGO and a C compiler (`apt install gcc` on Linux). Go directive 1.26.0 with toolchain go1.27.3; an older system Go downloads the toolchain automatically.
 
-Last verified 2026-10-31 at `v1.6.0` (`6da6a8f`): build, vet and `go test -race -count=1 ./...` pass for the root package, `config`, `messages` and `qrcode`.
+Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race -count=1 ./...` pass for the root package, `config`, `messages` and `qrcode`.
 
 ## 2. CI
 
@@ -124,6 +124,7 @@ Run before every tagged release (ROADMAP row 15). Runs so far are recorded in Ta
 | 2026-10-31 | `chore/catch-up` at `ddbb7f9` (v1.4.0 candidate) | Owner (QR scans, phone deletes) and Claude (headless driver) | 1, 2, 3, 6, 7, 8, 9, 10, 12, 14, 19, 20 | Skipped: 4, 5, 11, 13, 15, 16, 18, 21 (unit tests only). 17: no `@lid` chats in the synced store, so not exercised. 19 on Windows: not run | Run on the owner's own account with test messages only to "Message yourself" and two trusted contacts; system opener stubbed to a log, `show_command` set to `file` (jp2a not installed). Step 1 run offline on a copy of the old database. Found and fixed: media saved as `.jfif`/`.f4v` so `open` refused photos and videos; QR left on screen after login; `/select` did not set the typing target; message keys lost focus after one use; QR countdown ignored the 60 s first code. Step 14 seen on two real group deletes. Backlog answered in a phone-number chat (row 14 partly verified) |
 | 2026-10-31 | `v1.5.0-rc1` at `07f62c0` | Owner (QR scan) and Claude (headless driver) | Smoke run only: QR login, chat list, history sync, empty-chat skip, clean quit | Not run: 1 to 21 (full run above). 17: no `@lid` chats arrived, so no merge ran | Smoke run for v1.5.0 on a fresh test store, no messages sent. Login, chat list and full history sync worked (503 chats, 36,527 messages); no chat row without a time, unread count, pin or messages was stored; 141 one-to-one chats showing "New chat" all have a last-message time, so they are real chats whose messages were not synced. Store integrity check ok after quit |
 | 2026-10-31 | `v1.6.0-rc1` candidate at `d803e27` (local build) | Owner (QR scan, one phone delete) and Claude (headless driver) | 1; 2 (document download twice, `open`, `show`, `/url`); new checks: chat paging and `/more`, `/info` in a group, Delete for me, part-file sweep | Not run: 3 to 21 except the above. 17: no `@lid` chats arrived | Messages only to "Message yourself". Login and full sync (503 chats, 36,576 messages). A group with 2,067 messages opened with 200; three `/more` showed "Showing 800 of 2067 stored messages" and the status stayed visible. `/info` in a group answered (872 participants) without blocking. The same document downloaded twice gave one file, and `open` reused it. `show` rendered, `/url` reached the opener, no defunct processes. "Delete for me" on the phone removed the message and moved the chat preview back. Quitting during a video download left no `.part` file; a planted `.whatscli-123456.part` was removed at the next start while `.whatscli-abc.part` and `keep.part` stayed; reconnect needed no QR. Store integrity ok |
+| 2026-10-31 | `v1.6.2` release binary | Owner (daily use on own account) | Not a checklist run | Steps not tracked one by one | Owner used v1.6.2 after relinking, including the scroll bars and the chat list, and reported it works well. Recorded as feedback, not as a pass of steps 30 and 31 |
 
 ## 6. Before tagging
 

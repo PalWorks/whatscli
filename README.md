@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T16:39:26+00:00 (scroll bars, chat list columns)_
+_Last updated: 2026-10-31T16:55:57+00:00 (install section and roadmap headlines at v1.6.2)_
 
 ---
 
@@ -124,27 +124,27 @@ All persistence goes through `MessageDatabase`; the WhatsApp session is kept sep
 
 Each release on [GitHub Releases](https://github.com/PalWorks/whatscli/releases) has:
 
-**Table I1: Release assets (names from `.github/workflows/release.yml`, checked against the v1.6.0 release)**
+**Table I1: Release assets (names from `.github/workflows/release.yml`, checked against the v1.6.2 release)**
 
-| Platform | Asset (v1.6.0) | Contains |
+| Platform | Asset (v1.6.2) | Contains |
 |---|---|---|
-| Linux x86_64 | `whatscli-v1.6.0-linux-amd64.tar.gz` | `whatscli` |
-| Linux arm64 | `whatscli-v1.6.0-linux-arm64.tar.gz` | `whatscli` |
-| Windows x86_64 | `whatscli-v1.6.0-windows-amd64.zip` | `whatscli.exe` |
-| Checksums | `whatscli-v1.6.0-checksums.txt` | SHA256 of the three archives |
+| Linux x86_64 | `whatscli-v1.6.2-linux-amd64.tar.gz` | `whatscli` |
+| Linux arm64 | `whatscli-v1.6.2-linux-arm64.tar.gz` | `whatscli` |
+| Windows x86_64 | `whatscli-v1.6.2-windows-amd64.zip` | `whatscli.exe` |
+| Checksums | `whatscli-v1.6.2-checksums.txt` | SHA256 of the three archives |
 
-Other versions follow the same pattern with their tag. The latest release is v1.6.0; tags with a `-` (such as `v1.6.0-rc1`) are pre-releases and never marked Latest.
+Other versions follow the same pattern with their tag. The latest release is v1.6.2; tags with a `-` (such as `v1.6.2-rc1`) are pre-releases and never marked Latest.
 
 ```bash
 # with the GitHub CLI
-gh release download v1.6.0 --repo PalWorks/whatscli \
-  --pattern 'whatscli-v1.6.0-linux-amd64.tar.gz' --pattern 'whatscli-v1.6.0-checksums.txt'
+gh release download v1.6.2 --repo PalWorks/whatscli \
+  --pattern 'whatscli-v1.6.2-linux-amd64.tar.gz' --pattern 'whatscli-v1.6.2-checksums.txt'
 # or with curl
-curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.0/whatscli-v1.6.0-linux-amd64.tar.gz
-curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.0/whatscli-v1.6.0-checksums.txt
+curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.2/whatscli-v1.6.2-linux-amd64.tar.gz
+curl -LO https://github.com/PalWorks/whatscli/releases/download/v1.6.2/whatscli-v1.6.2-checksums.txt
 
-sha256sum -c --ignore-missing whatscli-v1.6.0-checksums.txt
-tar -xzf whatscli-v1.6.0-linux-amd64.tar.gz      # extracts ./whatscli
+sha256sum -c --ignore-missing whatscli-v1.6.2-checksums.txt
+tar -xzf whatscli-v1.6.2-linux-amd64.tar.gz      # extracts ./whatscli
 ./whatscli
 ```
 
@@ -156,7 +156,7 @@ macOS, Raspberry Pi (armv5) and Homebrew are not released for now (ROADMAP row 8
 go install github.com/PalWorks/whatscli@latest
 ```
 
-Needs a C compiler (SQLite is built through CGO). `@latest` resolves to `v1.6.0` (checked with `go list -m github.com/PalWorks/whatscli@latest` on 2026-10-31). From v1.6.1 a binary built this way shows the module version it was installed at (for example `v1.6.1`) in the top bar and `/help`; release binaries and `make install` show the tag they were built from.
+Needs a C compiler (SQLite is built through CGO). `@latest` resolves to the newest release tag; the Go module proxy can take a short while to pick up a new tag (on 2026-10-31 it still returned `v1.6.1` minutes after `v1.6.2` was published). From v1.6.1 a binary built this way shows the module version it was installed at (for example `v1.6.1`) in the top bar and `/help`; release binaries and `make install` show the tag they were built from.
 
 ### From source
 
@@ -483,6 +483,8 @@ Short version: incoming "delete for everyone" requests are checked before they c
 The full backlog, with priorities and owner decisions, is in [ROADMAP.md](ROADMAP.md). Headlines:
 
 - Shipped in v1.6.0: chat paging and `/more`, non-blocking `/info`, `show` and `/url`, Delete for me, repeat downloads reuse the saved file, part-file sweep, SHA-pinned CI.
+- Shipped in v1.6.1: command drop-down on the input line, timestamped command echo, chats open at their latest message.
+- Shipped in v1.6.2: scroll bars with click and drag, a chat list that no longer jumps when clicked and keeps times visible.
 - Open: row 14, whether the phone answers `/backlog` in a chat whose own record is LID (needs an `@lid` chat on a live account).
 - Release gate: the live-account checklist before every tag (row 15, recurring).
 - Deferred: macOS, Raspberry Pi and Homebrew releases (row 8), Delete for me made while unlinked (row 35), security hardening rows 18 to 22, `ContactId` normalisation (row 21).
