@@ -110,7 +110,7 @@ func (sm *SessionManager) isGroupAdmin(group types.JID, revoker ...types.JID) bo
 		}
 		fetch = client.GetGroupInfo
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), groupAdminCheckTimeout)
+	ctx, cancel := context.WithTimeout(sm.rootContext(), groupAdminCheckTimeout)
 	defer cancel()
 	info, err := fetch(ctx, group)
 	if err != nil || info == nil {

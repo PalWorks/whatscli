@@ -201,7 +201,7 @@ func TestIncomingRevoke_GroupAdmin(t *testing.T) {
 
 func TestMarkMessageRevoked_ScopedToChat(t *testing.T) {
 	sm, _ := newTestSessionManager(t)
-	if err := sm.db.AddMessage(Message{Id: "X", ChatId: "a@s.whatsapp.net", Text: "keep"}); err != nil {
+	if _, err := sm.db.AddMessage(Message{Id: "X", ChatId: "a@s.whatsapp.net", Text: "keep"}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := sm.db.MarkMessageRevoked("b@s.whatsapp.net", "X")

@@ -22,7 +22,7 @@ func seedConv(t *testing.T, sm *SessionManager, c Conversation) {
 
 func seedMsg(t *testing.T, sm *SessionManager, id, chat string, ts uint64) {
 	t.Helper()
-	if err := sm.db.AddMessage(Message{Id: id, ChatId: chat, Timestamp: ts, Text: id, ContactId: "111:3@lid"}); err != nil {
+	if _, err := sm.db.AddMessage(Message{Id: id, ChatId: chat, Timestamp: ts, Text: id, ContactId: "111:3@lid"}); err != nil {
 		t.Fatalf("AddMessage: %v", err)
 	}
 }
@@ -43,7 +43,7 @@ func TestMergeKnownLIDChats_MergesIntoExistingChat(t *testing.T) {
 	seedConv(t, sm, Conversation{JID: "alice@s.whatsapp.net", Name: "Alice", LastMsgTime: 200, Preview: "from pn", Unread: 1})
 	seedMsg(t, sm, "L1", "111@lid", 300)
 	seedMsg(t, sm, "P1", "alice@s.whatsapp.net", 200)
-	// The same message ID stored first under the phone number: INSERT OR IGNORE
+	// The same message ID stored first under the phone number: AddMessage
 	// keeps the first row, so the @lid copy never exists.
 	seedMsg(t, sm, "DUP", "alice@s.whatsapp.net", 250)
 	seedMsg(t, sm, "DUP", "111@lid", 250)

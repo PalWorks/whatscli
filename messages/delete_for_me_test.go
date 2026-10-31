@@ -18,7 +18,7 @@ func seedChat(t *testing.T, sm *SessionManager, jid string, msgs ...Message) {
 	conv := &Conversation{JID: jid, Name: "n", LastMsgTime: int64(last.Timestamp), Preview: last.Text}
 	for _, m := range msgs {
 		m.ChatId = jid
-		if err := sm.db.AddMessage(m); err != nil {
+		if _, err := sm.db.AddMessage(m); err != nil {
 			t.Fatal(err)
 		}
 	}

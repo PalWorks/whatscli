@@ -188,7 +188,7 @@ func (sm *SessionManager) sendText(wid string, text string) {
 			ContactShort: "Me",
 		}
 
-		if err := sm.db.AddMessage(newMsg); err != nil {
+		if _, err := sm.db.AddMessage(newMsg); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))
 		}
 

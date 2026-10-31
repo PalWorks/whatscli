@@ -3,6 +3,7 @@
 package messages
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -149,7 +150,7 @@ func TestWaitForNewMessages(t *testing.T) {
 
 	// Times out with no change.
 	start := time.Now()
-	n, err := sm.waitForNewMessages("c", 0, 50*time.Millisecond, 10*time.Millisecond)
+	n, err := sm.waitForNewMessages(context.Background(), "c", 0, 50*time.Millisecond, 10*time.Millisecond)
 	if err != nil || n != 0 || time.Since(start) < 50*time.Millisecond {
 		t.Fatalf("timeout case: n=%d err=%v elapsed=%v", n, err, time.Since(start))
 	}
@@ -157,10 +158,10 @@ func TestWaitForNewMessages(t *testing.T) {
 	// Returns early when a row arrives.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
-		_ = md.AddMessage(Message{Id: "X", ChatId: "c", Timestamp: 1})
+		_, _ = md.AddMessage(Message{Id: "X", ChatId: "c", Timestamp: 1})
 	}()
 	start = time.Now()
-	n, err = sm.waitForNewMessages("c", 0, 5*time.Second, 5*time.Millisecond)
+	n, err = sm.waitForNewMessages(context.Background(), "c", 0, 5*time.Second, 5*time.Millisecond)
 	if err != nil || n != 1 {
 		t.Fatalf("arrival case: n=%d err=%v", n, err)
 	}

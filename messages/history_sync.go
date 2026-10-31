@@ -251,10 +251,11 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 				mediaErrors++
 			}
 
-			// AddMessage uses INSERT OR IGNORE, so duplicates are skipped
-			if err := sm.db.AddMessage(msg); err != nil {
+			// Known IDs keep their text; only missing media metadata is
+			// filled. Redraw the open chat only when a row changed.
+			if res, err := sm.db.AddMessage(msg); err != nil {
 				addMsgErrors++
-			} else if jidStr == currentChat {
+			} else if res.Changed() && jidStr == currentChat {
 				currentChatChanged = true
 			}
 

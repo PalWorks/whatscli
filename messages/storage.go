@@ -84,6 +84,13 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		}
 	}
 
+	// Backward-compatible migration: where the media of a message was last
+	// saved, so a repeat download reuses the file (ROADMAP row 9). NULL until
+	// the first download; older binaries ignore it.
+	if err := md.addColumnIfMissing("messages", "local_path", "TEXT"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -101,7 +108,8 @@ func (md *MessageDatabase) addColumnIfMissing(table, column, definition string) 
 // messageColumns is the column list shared by every message SELECT so that
 // collectMessages can scan rows uniformly.
 const messageColumns = `id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
-	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto`
+	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto,
+	COALESCE(local_path, '')`
 
 // escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
 // treated as literal characters in a LIKE ? ESCAPE '\' clause.
@@ -121,13 +129,33 @@ func (md *MessageDatabase) Close() error {
 	return nil
 }
 
-// AddMessage persists a message to SQLite.
-// Returns nil on success, or an error if the insert fails.
-func (md *MessageDatabase) AddMessage(msg Message) error {
+// StoreResult reports what AddMessage did with a message.
+type StoreResult int
+
+const (
+	// StoreUnchanged means the message ID was already stored and nothing changed.
+	StoreUnchanged StoreResult = iota
+	// StoreInserted means a new row was written.
+	StoreInserted
+	// StoreMediaFilled means an existing row without media metadata (stored
+	// before the media columns existed) received it.
+	StoreMediaFilled
+)
+
+// Changed reports whether the database row was written.
+func (r StoreResult) Changed() bool { return r != StoreUnchanged }
+
+// AddMessage persists a message to SQLite. The message ID is the primary key
+// and the first write wins for text, sender and timestamp. A later write of
+// the same ID only fills the media columns, and only when the stored row has
+// none, is in the same chat and is not revoked; it never clears or replaces
+// media metadata. The result says whether a row was inserted, filled or left
+// unchanged, so callers redraw only when something changed.
+func (md *MessageDatabase) AddMessage(msg Message) (StoreResult, error) {
 	if md.db == nil {
-		return fmt.Errorf("database not initialized")
+		return StoreUnchanged, fmt.Errorf("database not initialized")
 	}
-	_, err := md.db.Exec(`
+	res, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
 	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
 	 media_kind, mime_type, file_name, media_proto)
@@ -137,7 +165,40 @@ func (md *MessageDatabase) AddMessage(msg Message) error {
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 		msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto,
 	)
-	return err
+	if err != nil {
+		return StoreUnchanged, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to read insert result: %w", err)
+	}
+	if n > 0 {
+		return StoreInserted, nil
+	}
+	if msg.MediaKind == "" || len(msg.MediaProto) == 0 {
+		return StoreUnchanged, nil
+	}
+	// Backfill media metadata on a row stored without it (ROADMAP row 7).
+	// The WHERE clause is checked atomically by SQLite, so a revoke that
+	// lands between the two statements still wins.
+	res, err = md.db.Exec(`
+	UPDATE messages SET media_kind = ?, mime_type = ?, file_name = ?, media_proto = ?
+	WHERE id = ? AND chat_id = ?
+	  AND COALESCE(media_kind, '') = ''
+	  AND (media_proto IS NULL OR length(media_proto) = 0)
+	  AND COALESCE(text, '') <> ?
+	`, msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto, msg.Id, msg.ChatId, RevokedText)
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to fill media metadata: %w", err)
+	}
+	n, err = res.RowsAffected()
+	if err != nil {
+		return StoreUnchanged, fmt.Errorf("failed to read media fill result: %w", err)
+	}
+	if n > 0 {
+		return StoreMediaFilled, nil
+	}
+	return StoreUnchanged, nil
 }
 
 // GetMessage returns a single message by ID. found is false when no row exists.
@@ -196,14 +257,15 @@ func (md *MessageDatabase) CountMessages(chatId string) (int, error) {
 // RevokedText replaces the text of a message deleted for everyone.
 const RevokedText = "[message revoked]"
 
-// MarkMessageRevoked replaces a message's text and clears its media metadata.
+// MarkMessageRevoked replaces a message's text and clears its media metadata
+// and saved download path (the file itself is left on disk).
 // The row must match both the message ID and the chat, so a revoke can never
 // reach a message in another chat. Returns true when a row was updated.
 func (md *MessageDatabase) MarkMessageRevoked(chatID, id string) (bool, error) {
 	if md.db == nil {
 		return false, fmt.Errorf("database not initialized")
 	}
-	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL WHERE id = ? AND chat_id = ?`, RevokedText, id, chatID)
+	res, err := md.db.Exec(`UPDATE messages SET text = ?, media_kind = '', mime_type = '', file_name = '', media_proto = NULL, local_path = NULL WHERE id = ? AND chat_id = ?`, RevokedText, id, chatID)
 	if err != nil {
 		return false, fmt.Errorf("failed to mark message revoked: %w", err)
 	}
@@ -227,6 +289,25 @@ func (md *MessageDatabase) DeleteMessage(chatID, id string) (bool, error) {
 	n, err := res.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("failed to read delete result: %w", err)
+	}
+	return n > 0, nil
+}
+
+// SetLocalPath records where a message's media was saved, so a later download
+// can reuse the file. Scoped by chat like MarkMessageRevoked, and a revoked
+// message is never given a path. Returns true when a row was updated.
+func (md *MessageDatabase) SetLocalPath(chatID, id, localPath string) (bool, error) {
+	if md.db == nil {
+		return false, fmt.Errorf("database not initialized")
+	}
+	res, err := md.db.Exec(`UPDATE messages SET local_path = ? WHERE id = ? AND chat_id = ? AND COALESCE(text, '') <> ?`,
+		localPath, id, chatID, RevokedText)
+	if err != nil {
+		return false, fmt.Errorf("failed to record download path: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to read download path result: %w", err)
 	}
 	return n > 0, nil
 }
@@ -379,7 +460,7 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 	for rows.Next() {
 		var msg Message
 		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto); err != nil {
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto, &msg.LocalPath); err != nil {
 			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)
