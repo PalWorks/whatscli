@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: install and release download, go install version, test counts, structure, roadmap headlines)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: install and release download, go install version, test counts, structure, roadmap headlines; licence and reporting dates in UTC)_
 
 ---
 
@@ -520,7 +520,7 @@ git commit -m "feat: describe the change"
 
 ## License
 
-WhatsCLI is dual licensed (updated 2026-10-31T01:20:43+05:30):
+WhatsCLI is dual licensed (updated 2026-10-30T19:50:43+00:00):
 
 - [GNU AGPL-3.0-only](LICENSE) for open source use.
 - A paid commercial license for use without the AGPL obligations. See [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md) or write to support@palworks.ai.

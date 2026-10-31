@@ -2,7 +2,7 @@
 
 Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in the maintainers' private decision log (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: release workflow has run on real tags, actions pinned to SHAs, local_path reuse and part-file sweep controls)_
+_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: release workflow has run on real tags, actions pinned to SHAs, local_path reuse and part-file sweep controls; licence and reporting dates in UTC)_
 
 ## 1. What is trusted and what is not
 
@@ -50,7 +50,7 @@ WhatsApp login is a QR scan from the phone (linked device). There are no passwor
 
 Do not post exploit details in a public issue.
 
-1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). Enabled 2026-10-31T01:20:43+05:30.
+1. Preferred: GitHub private vulnerability reporting on `PalWorks/whatscli` (Security tab, Report a vulnerability). Enabled 2026-10-30T19:50:43+00:00.
 2. Otherwise: email support@palworks.ai.
 
 Include the version (`/help` shows it), the operating system, what you did, what happened, and what you expected. There is no bounty and no fixed response time; the project is maintained by one owner.
