@@ -2,7 +2,7 @@
 
 Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in the maintainers' private decision log (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
 
-_Last updated: 2026-10-31T15:51:30+00:00 (v1.6.0 audit: release workflow has run on real tags, actions pinned to SHAs, local_path reuse and part-file sweep controls; licence and reporting dates in UTC)_
+_Last updated: 2026-10-31T18:03:42+00:00 (edit authorisation row)_
 
 ## 1. What is trusted and what is not
 
@@ -19,6 +19,7 @@ WhatsCLI is a linked device of one WhatsApp account. Everything that arrives fro
 | Startup sweep deletes files it does not own | Only regular files named exactly `.whatscli-<digits>.part`, directly in the configured download and preview folders, are removed; symlinks, directories, other names and subfolders are left alone; the entry is re-checked with `Lstat` before removal | `messages/partfiles.go` | `partfiles_test.go` |
 | `show` renders a file outside the download or preview directory | `ResolveFileWithin`: file and directories are absolute and symlink-resolved; containment by `filepath.Rel`; sibling directories (`Downloads2`), `..`, the directory itself and blank config values are rejected | `messages/pathcheck.go`, `ui_render.go` `renderImage` | `TestResolveFileWithin` (13 cases) |
 | Malicious link opened by `/url` | Only the first `http` or `https` URL with a host; trailing punctuation trimmed. The opener is exec'd without a shell (Linux, macOS) or through `rundll32` (Windows) | `messages/media.go` `firstURL`, `messages/cmd_message.go` `cmdURL`, `ui_opener.go` `openerCommand` | `TestFirstURL`, `TestCmdURL` |
+| Spoofed edit rewrites someone else's message | An edit applies only in the original message's chat and only from its sender (our own devices for our messages); revoked messages are never edited | `messages/edit_incoming.go` `editAllowed`, `storage.go` `UpdateMessageText` | `TestIncomingEdit_Refused` |
 | SQL injection | All user data uses placeholders; `addColumnIfMissing` builds SQL only from compile-time constants; search escapes `LIKE` wildcards | `messages/storage.go` | `storage_test.go` |
 | Clipboard backend panics | `recover` around read and write; error shown, no crash | `ui_keybindings.go` | manual (TESTING.md step 11) |
 | Release pipeline abuse | Top-level `permissions: contents: read`; only the release job has `contents: write`; `GITHUB_TOKEN` only, no other secrets; tag input passed through `env` and validated by regex, never interpolated into scripts; `persist-credentials: false`; every action pinned to a commit SHA, bumped by Dependabot weekly (`.github/dependabot.yml`) | `.github/workflows/release.yml`, `.github/workflows/ci.yml` | ran on real tags `v1.4.0` to `v1.6.0` and their `-rc1` pre-releases |

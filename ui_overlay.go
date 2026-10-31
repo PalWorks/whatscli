@@ -4,7 +4,7 @@ package main
 
 // ui_overlay.go: help and onboarding. The message pane greets a new user
 // with the essentials (welcomeText, printed by PrintHelp while no chat is
-// open); a help window (F1, /help, Ctrl+?) lists every key and command over
+// open); a help window (Ctrl+g, F1, /help) lists every key and command over
 // the main screen; the top bar shows the connection state and the main keys.
 
 import (
@@ -17,9 +17,12 @@ import (
 	"github.com/rivo/tview"
 )
 
-// helpKey opens the help window; F1 is not configurable, Ctrl+? (keymap
-// command_help) and /help also work.
-const helpKey = "F1"
+// helpKey opens (and closes) the help window. It is fixed so the hint in the
+// top bar is always right; F1, the keymap's command_help and /help also work.
+// Ctrl+g is not taken by common terminal emulators, unlike F1, which Xfce
+// Terminal (seen) and others keep for their own manual, and Ctrl+?, which many
+// terminals send as the Backspace code.
+const helpKey = "Ctrl+g"
 
 // overlay state; UI goroutine only.
 var (
@@ -51,7 +54,7 @@ func helpText(km *config.Keymap, prefix string) string {
 		{km.CommandRead, "Mark the chat read"},
 		{km.CommandConnect, "Reconnect"},
 		{"Ctrl+p", "Mouse on or off (off lets the terminal select text)"},
-		{helpKey + " / " + km.CommandHelp, "This help"},
+		{helpKey + " / F1", "This help (also " + prefix + "help)"},
 		{km.CommandQuit, "Quit"},
 	} {
 		b.WriteString(keyLine(l[0], l[1]) + "\n")
@@ -152,7 +155,7 @@ func closeOverlay() {
 func globalKeys(ev *tcell.EventKey) *tcell.EventKey {
 	if overlayName != "" {
 		switch {
-		case ev.Key() == tcell.KeyEscape, ev.Key() == tcell.KeyEnter, ev.Key() == tcell.KeyF1,
+		case ev.Key() == tcell.KeyEscape, ev.Key() == tcell.KeyEnter, ev.Key() == tcell.KeyF1, ev.Key() == tcell.KeyCtrlG,
 			ev.Key() == tcell.KeyRune && ev.Rune() == 'q':
 			closeOverlay()
 		case ev.Key() == tcell.KeyUp, ev.Key() == tcell.KeyDown, ev.Key() == tcell.KeyPgUp,
@@ -161,7 +164,7 @@ func globalKeys(ev *tcell.EventKey) *tcell.EventKey {
 		}
 		return nil // nothing else reaches the screen behind
 	}
-	if ev.Key() == tcell.KeyF1 {
+	if ev.Key() == tcell.KeyF1 || ev.Key() == tcell.KeyCtrlG {
 		showOverlay("help")
 		return nil
 	}
