@@ -43,70 +43,7 @@ func (sm *SessionManager) loadRecentChats() {
 			}
 		}
 
-		for jid, contact := range contacts {
-			if !contact.Found {
-				continue
-			}
-
-			// Skip non-chat JIDs
-			if jid.Server != "s.whatsapp.net" && jid.Server != "g.us" {
-				continue
-			}
-
-			jidStr := jid.String()
-
-			// Determine name
-			var name string
-			isGroup := jid.Server == "g.us"
-			if isGroup {
-				if gn, ok := groupNames[jidStr]; ok {
-					name = gn
-				} else {
-					name = "Group: " + jid.User
-				}
-			} else {
-				name = contact.FullName
-				if name == "" {
-					name = contact.PushName
-				}
-				if name == "" {
-					name = jid.User
-				}
-			}
-
-			// Update PQ under lock, collect DB write for outside
-			sm.mu.Lock()
-			existingConv := sm.convByJID[jidStr]
-
-			var toUpsert *Conversation
-			if existingConv != nil {
-				if name != "" && existingConv.Name != name {
-					existingConv.Name = name
-					c := *existingConv
-					toUpsert = &c
-				}
-			} else if isGroup {
-				newConv := &Conversation{
-					JID:         jidStr,
-					Name:        name,
-					LastMsgTime: 0,
-					Preview:     "New chat",
-					Unread:      0,
-					IsPinned:    false,
-				}
-				heap.Push(&sm.priorityQueue, newConv)
-				sm.convByJID[newConv.JID] = newConv
-				c := *newConv
-				toUpsert = &c
-			}
-			sm.mu.Unlock()
-
-			if toUpsert != nil {
-				if err := sm.db.UpsertConversation(*toUpsert); err != nil {
-					sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
-				}
-			}
-		}
+		sm.importContacts(contacts, groupNames)
 
 		sm.mu.Lock()
 		safeList := sm.snapshotPQ()
@@ -117,6 +54,91 @@ func (sm *SessionManager) loadRecentChats() {
 		sm.mergeKnownLIDChats()
 	} else {
 		sm.uiHandler.PrintError(errors.New("failed to access contacts store"))
+	}
+}
+
+// importContacts adds the contact list to the chat list. Only phone-number,
+// LID and group contacts are chat JIDs. A LID contact is stored under its
+// phone-number chat when the mapping is known (canonicalChatJID) and is kept
+// as @lid otherwise. Only groups get a new empty chat here; other contacts
+// without messages only refresh the name of a chat that already exists, so no
+// empty rows appear (isEmptyChat, DeleteEmptyConversations).
+func (sm *SessionManager) importContacts(contacts map[types.JID]types.ContactInfo, groupNames map[string]string) {
+	for jid, contact := range contacts {
+		if !contact.Found {
+			continue
+		}
+
+		// Skip non-chat JIDs
+		if !isHistoryChatServer(jid.Server) {
+			continue
+		}
+
+		isGroup := jid.Server == types.GroupServer
+		isLID := jid.Server == types.HiddenUserServer
+		if isLID && contact.FullName == "" && contact.PushName == "" {
+			// A bare LID number is no name and must not replace a real one.
+			continue
+		}
+
+		// Resolve the chat JID before taking sm.mu (the LID lookup may call getClient).
+		chatJID := sm.canonicalChatJID(jid)
+		jidStr := chatJID.String()
+
+		// Determine name
+		var name string
+		if isGroup {
+			if gn, ok := groupNames[jidStr]; ok {
+				name = gn
+			} else {
+				name = "Group: " + jid.User
+			}
+		} else {
+			name = contact.FullName
+			if name == "" {
+				name = contact.PushName
+			}
+			if name == "" {
+				name = jid.User
+			}
+		}
+
+		// Update PQ under lock, collect DB write for outside
+		sm.mu.Lock()
+		existingConv := sm.convByJID[jidStr]
+		if existingConv == nil && isLID {
+			// Chat still stored under the raw LID (mapping learned later).
+			existingConv = sm.convByJID[jid.String()]
+		}
+
+		var toUpsert *Conversation
+		if existingConv != nil {
+			if name != "" && existingConv.Name != name {
+				existingConv.Name = name
+				c := *existingConv
+				toUpsert = &c
+			}
+		} else if isGroup {
+			newConv := &Conversation{
+				JID:         jidStr,
+				Name:        name,
+				LastMsgTime: 0,
+				Preview:     "New chat",
+				Unread:      0,
+				IsPinned:    false,
+			}
+			heap.Push(&sm.priorityQueue, newConv)
+			sm.convByJID[newConv.JID] = newConv
+			c := *newConv
+			toUpsert = &c
+		}
+		sm.mu.Unlock()
+
+		if toUpsert != nil {
+			if err := sm.db.UpsertConversation(*toUpsert); err != nil {
+				sm.uiHandler.PrintError(fmt.Errorf("upsert conversation: %v", err))
+			}
+		}
 	}
 }
 
