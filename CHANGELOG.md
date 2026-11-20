@@ -2,9 +2,18 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T18:03:42+00:00 (released v1.6.6)_
+_Last updated: 2026-11-20T11:57:28+00:00 (fzf file picker, unreleased)_
 
 ## [Unreleased]
+
+### Added
+- File picker (issue #26): `/upload`, `/sendimage`, `/sendvideo` and `/sendaudio` typed without a path, or `Ctrl+o` (new key `pick_file`), open fzf over the files under `upload_search_path` (default: home). fzf is embedded as a Go library and the file list comes from `gocodewalker`, so nothing extra needs installing. Hidden files and `.gitignore`/`.ignore` matches are skipped. `Tab` marks several files; `Enter` sends them; `Esc` cancels.
+- `/sendimage`, `/sendvideo` and `/sendaudio` list only files with the extensions in the new `image_extensions`, `video_extensions` and `audio_extensions` settings. `Ctrl+o` lists every file and sends each as what it is.
+- After a file command with no path (for example `/upload ` picked from the command list), the drop-down shows `Enter  search files with fzf (or type a path)`; `Enter` or `Tab` on it opens the picker.
+- `/sendfile <chat-id> <cmd> <path>` sends a file to a given chat. The picker uses it so picked files go to the chat that was open when it opened, even if you switch chats while they upload.
+
+### Changed
+- `FZF_DEFAULT_OPTS` options that could send a file you did not confirm (`--select-1`), add output lines (`--print-query`, `--expect`) or restart the program (tmux, zellij, winpty) are overridden inside the picker.
 
 ## [1.6.6] - 2026-10-31
 
