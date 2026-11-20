@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T18:03:42+00:00 (Ctrl+g help key, edited messages)_
+_Last updated: 2026-11-20T12:07:57+00:00 (/exit alias of /quit)_
 
 ---
 
@@ -337,7 +337,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 | `/disconnect` | Disconnect |
 | `/logout` | Log out and delete session data |
 | `/reset` | Delete the WhatsApp session database and the local message database |
-| `/quit` | Exit |
+| `/quit` or `/exit` | Exit |
 | `/colorlist` | Show colour names |
 
 **Table CR2: Chats and messages**

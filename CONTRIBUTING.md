@@ -2,7 +2,7 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T17:32:09+00:00 (new commands go in commandHints)_
+_Last updated: 2026-11-20T12:07:57+00:00 (/exit alias)_
 
 ## Licensing of contributions
 
@@ -38,7 +38,7 @@ Commands live in `messages/cmd_*.go` and are dispatched through the `commandRegi
 
 | File | Commands |
 |---|---|
-| `cmd_basic.go` | `/help`, `/quit`, `/colorlist`, `/more`, `/info`, `/read` |
+| `cmd_basic.go` | `/help`, `/quit` (`/exit`), `/colorlist`, `/more`, `/info`, `/read` |
 | `cmd_connection.go` | `/login` (`/connect`), `/disconnect`, `/logout`, `/reset` |
 | `cmd_chat.go` | `/send`, `/select`, `/backlog`, `/sync-groups` |
 | `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |

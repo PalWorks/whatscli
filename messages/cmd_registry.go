@@ -23,6 +23,7 @@ func init() {
 		// Basic commands (cmd_basic.go)
 		"help":      cmdHelp,
 		"quit":      cmdQuit,
+		"exit":      cmdQuit, // alias
 		"colorlist": cmdColorList,
 		"more":      cmdMore,
 		"info":      cmdInfo,
