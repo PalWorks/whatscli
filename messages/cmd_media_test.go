@@ -3,6 +3,7 @@
 package messages
 
 import (
+	"strings"
 	"testing"
 
 	"go.mau.fi/whatsmeow"
@@ -69,4 +70,52 @@ func TestCmdMedia_NilClient(t *testing.T) {
 
 	// Should not panic with nil client — it silently returns because client == nil
 	cmdMedia(sm, nil, "sendimage", []string{"/tmp/nonexistent.jpg"})
+}
+
+func TestParseSendFile(t *testing.T) {
+	tests := []struct {
+		name   string
+		params []string
+		chat   string
+		cmd    string
+		path   string
+		ok     bool
+	}{
+		{"image", []string{"123@s.whatsapp.net", "sendimage", "/a/x.png"}, "123@s.whatsapp.net", "sendimage", "/a/x.png", true},
+		{"document with spaces", []string{"g@g.us", "upload", "/a/my", "report.pdf"}, "g@g.us", "upload", "/a/my report.pdf", true},
+		{"missing path", []string{"123@s.whatsapp.net", "sendimage"}, "", "", "", false},
+		{"not a media command", []string{"123@s.whatsapp.net", "send", "/a/x"}, "", "", "", false},
+		{"empty chat", []string{"", "upload", "/a/x"}, "", "", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chat, cmd, path, ok := parseSendFile(tt.params)
+			if chat != tt.chat || cmd != tt.cmd || path != tt.path || ok != tt.ok {
+				t.Fatalf("parseSendFile(%q) = %q, %q, %q, %v; want %q, %q, %q, %v",
+					tt.params, chat, cmd, path, ok, tt.chat, tt.cmd, tt.path, tt.ok)
+			}
+		})
+	}
+}
+
+func TestCmdSendFileRegisteredAndValidates(t *testing.T) {
+	if _, ok := commandRegistry["sendfile"]; !ok {
+		t.Fatal("sendfile is not registered")
+	}
+	sm, ui := newTestSessionManager(t)
+	cmdSendFile(sm, nil, "sendfile", []string{"123@s.whatsapp.net", "send", "/a/x"})
+	if len(ui.Texts) == 0 || !strings.Contains(ui.Texts[len(ui.Texts)-1], "Usage:") {
+		t.Fatalf("expected a usage message, got %q", ui.Texts)
+	}
+}
+
+// The file must go to the chat named in the command, not the open chat:
+// with no client nothing is sent, but an invalid target JID is reported.
+func TestCmdSendFileUsesGivenChat(t *testing.T) {
+	sm, ui := newTestSessionManager(t)
+	sm.setCurrentReceiver("111@s.whatsapp.net")
+	cmdSendFile(sm, nil, "sendfile", []string{"a.b.c@s.whatsapp.net", "upload", "/a/x"})
+	if len(ui.Errors) == 0 || !strings.Contains(ui.Errors[0].Error(), "invalid JID") {
+		t.Fatalf("expected an invalid JID error for the given chat, got %v", ui.Errors)
+	}
 }

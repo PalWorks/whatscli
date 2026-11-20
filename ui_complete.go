@@ -55,13 +55,14 @@ var commandHints = []commandHint{
 	{"search-contact", "<name>", "Find contacts"},
 	{"select", "<chat-id>", "Open chat"},
 	{"send", "<chat-id> <text>", "Send text to a chat"},
-	{"sendaudio", "<path>", "Send audio"},
-	{"sendimage", "<path>", "Send image"},
-	{"sendvideo", "<path>", "Send video"},
+	{"sendaudio", "<path>", "Send audio (no path: pick with fzf)"},
+	{"sendfile", "<chat-id> <cmd> <path>", "Send a file to a chat"},
+	{"sendimage", "<path>", "Send image (no path: pick with fzf)"},
+	{"sendvideo", "<path>", "Send video (no path: pick with fzf)"},
 	{"show", "<msg-id>", "Show image"},
 	{"subject", "<subject>", "Set group subject"},
 	{"sync-groups", "", "Refresh group list"},
-	{"upload", "<path>", "Send file"},
+	{"upload", "<path>", "Send file (no path: pick with fzf)"},
 	{"url", "<msg-id>", "Open link"},
 }
 

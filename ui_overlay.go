@@ -49,6 +49,7 @@ func helpText(km *config.Keymap, prefix string) string {
 		{km.FocusChats, "Go to the chat list (Up/Down, Enter opens)"},
 		{km.SwitchPanels, "Next panel"},
 		{km.FocusMessages, "Select a message (then the keys below)"},
+		{km.PickFile, "Pick files to send (fzf; Tab marks several)"},
 		{"Esc", "Back to typing"},
 		{km.CommandBacklog, "Ask the phone for older messages"},
 		{km.CommandRead, "Mark the chat read"},

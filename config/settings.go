@@ -29,6 +29,10 @@ type General struct {
 	UseTerminalBell     bool
 	NotificationTimeout int64
 	BacklogMsgQuantity  int
+	UploadSearchPath    string // folder the file picker searches
+	ImageExtensions     string // comma-separated; files /sendimage offers
+	VideoExtensions     string // comma-separated; files /sendvideo offers
+	AudioExtensions     string // comma-separated; files /sendaudio offers
 }
 
 type Keymap struct {
@@ -50,6 +54,7 @@ type Keymap struct {
 	MessageUrl      string
 	MessageInfo     string
 	MessageRevoke   string
+	PickFile        string
 }
 
 type Ui struct {
@@ -83,6 +88,10 @@ var Config = IniFile{
 		UseTerminalBell:     false,
 		NotificationTimeout: 60,
 		BacklogMsgQuantity:  10,
+		UploadSearchPath:    GetHomeDir(),
+		ImageExtensions:     "jpg,jpeg,png,webp",
+		VideoExtensions:     "mp4,3gp,mov,mkv,webm",
+		AudioExtensions:     "mp3,ogg,opus,m4a,aac,amr,wav",
 	},
 	&Keymap{
 		SwitchPanels:    "Tab",
@@ -103,6 +112,7 @@ var Config = IniFile{
 		MessageUrl:      "u",
 		MessageRevoke:   "r",
 		MessageShow:     "s",
+		PickFile:        "Ctrl+o",
 	},
 	&Ui{
 		ChatSidebarWidth: 30,
