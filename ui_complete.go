@@ -37,6 +37,7 @@ var commandHints = []commandHint{
 	{"demote", "<userid>", "Remove admin"},
 	{"disconnect", "", "Disconnect"},
 	{"download", "<msg-id>", "Download media"},
+	{"exit", "", "Exit (same as quit)"},
 	{"help", "", "Help"},
 	{"info", "", "Chat info"},
 	{"leave", "", "Leave group"},

@@ -2,9 +2,12 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T18:03:42+00:00 (released v1.6.6)_
+_Last updated: 2026-11-20T12:07:57+00:00 (/exit alias, unreleased)_
 
 ## [Unreleased]
+
+### Added
+- `/exit` quits, the same as `/quit`.
 
 ## [1.6.6] - 2026-10-31
 
