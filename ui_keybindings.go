@@ -347,6 +347,9 @@ func LoadShortcuts() {
 	if err := ctx.KeyBindings.Set(config.Config.Keymap.CommandHelp, handleHelp); err != nil {
 		PrintErrorMsg("command_help:", err)
 	}
+	if err := ctx.KeyBindings.Set(config.Config.Keymap.PickFile, handlePickFile); err != nil {
+		PrintErrorMsg("pick_file:", err)
+	}
 	// Toggle mouse binding (Hardcoded for now as it's a new feature)
 	ctx.KeyBindings.SetRune(tcell.ModCtrl, 'p', handleToggleMouse)
 
@@ -432,6 +435,11 @@ func EnterCommand(key tcell.Key) {
 			var params []string
 			if len(input) > 1 {
 				params = input[1:]
+			}
+			if opensPicker(cm, params) {
+				ctx.TextInput.SetText("")
+				openPicker(cm, false)
+				return
 			}
 			if cm == "select" && len(params) > 0 && openChatByName(strings.Join(params, " ")) {
 				ctx.TextInput.SetText("")

@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T18:03:42+00:00 (edit_incoming.go)_
+> _Last updated: 2026-11-20T11:57:28+00:00 (picker package, ui_picker.go, /sendfile)_
 
 ## 1. Project
 
@@ -62,15 +62,17 @@ Do not commit or push unless asked. Do not add secrets, keys or tokens anywhere 
 
 ## 5. Architecture in brief
 
-Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
+Two main packages plus three helpers. Full detail in ARCHITECTURE.md.
 
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
               ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
-              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
+              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar),
+              ui_picker.go (file picker: opens fzf, sends picked files with /sendfile), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
+picker/       file picker: gitignore-aware walk (gocodewalker) fed to embedded fzf
 ```
 
 **Data flow:** UI sends `messages.Command` on `CommandChannel`; `SessionManager.runManager()` dispatches through `commandRegistry`. The backend calls back through the `UiMessageHandler` interface (18 methods, implemented by `UiHandler` in `ui_handler.go` and by `MockUiHandler` in `messages/mock_ui_handler.go`).
@@ -104,7 +106,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `cmd_connection.go` | `/login /connect /disconnect /logout /reset` |
 | `cmd_chat.go` | `/send /select /backlog /sync-groups` |
 | `cmd_group.go` | `/create /subject /leave /add /remove /admin /promote /removeadmin /demote` |
-| `cmd_media.go` | `/upload /sendimage /sendvideo /sendaudio` |
+| `cmd_media.go` | `/upload /sendimage /sendvideo /sendaudio /sendfile` |
 | `cmd_message.go` | `/download /open /show /url /revoke` (take a message ID) |
 | `cmd_search.go` | `/search /search-contact` |
 | `mock_ui_handler.go` | Mock UI for tests |

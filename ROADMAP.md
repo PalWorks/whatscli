@@ -6,7 +6,7 @@
 >
 > Timestamps are ISO 8601 to the second, with the offset. "Raised" dates for rows 1 to 25 are 2026-10-31, the date of the independent review (REVIEW-3, an agent report that is not stored in the repository) and of the residual-risk notes written with the fixes; git has no earlier commit for them.
 >
-> _Last updated: 2026-10-31T18:03:42+00:00 (v1.6.6: edits, Ctrl+g help)._
+> _Last updated: 2026-11-20T11:57:28+00:00 (fzf file picker, row 37; Windows mintty gap, row 38)._
 
 ## 0. North star: every open item, one row each
 
@@ -17,6 +17,7 @@ Grouped by state (Open, Decision, Waiting, Blocked, Deferred, Recurring), then b
 | # | Bucket | Priority | State | Size | Impact | Raised | Problem | Solution or next step |
 |---|---|---|---|---|---|---|---|---|
 | 14 | §3.6 | P2 | **Open** | S | M | 2026-10-31 | Partly verified 2026-10-31: the phone answered a backlog request in a phone-number chat; no `@lid` chat was available to test. [Unverified] The phone may not answer an ON_DEMAND backlog request when the anchor chat is a phone-number JID but its own record is LID. `/backlog` would silently do nothing there. | Verify with checklist step 17 on a live account; if no reply, send the anchor in LID form via `GetLIDForPN`. [§8.14](#814-r2-backlog-anchor-jid-form) |
+| 38 | §3.4 | P3 | **Open** | S | L | 2026-11-20 | [Unverified] On Windows under mintty (Git Bash) 3.4.5 or later without `MSYS=enable_pcon`, the embedded fzf restarts the program through winpty when the file picker opens; `--no-winpty` covers only older mintty. Not run on Windows. | Run the picker on Windows Terminal and on mintty; if the restart shows, document Windows Terminal only or set `MSYS=enable_pcon` for the child. |
 | 8 | §3.1 | P2 | **Deferred** | M | M | 2026-10-31 | Releases no longer include macOS, Raspberry Pi (armv5) or a Homebrew tap (owner decision D4). macOS and 32-bit Pi users find no asset. | Back when someone asks: macOS = add a `macos-latest` matrix entry; Homebrew = add a tap job with a token scoped to the tap repository; armv5 needs a cross C toolchain. [§8.8](#88-release-targets-dropped) |
 | 18 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R3: each revoke by a non-sender in a group costs one group info request, and a non-admin can trigger these by sending fake revokes. | Cache admin lists per group for some minutes if rate limits appear in logs. Accepted for now. |
 | 19 | §3.2 | P3 | **Deferred** | S | L | 2026-10-31 | R4: a revoke that arrives before its target (offline queue order) is ignored, so the message stays visible. | Remember pending revokes briefly. Accepted for now. |
@@ -132,6 +133,8 @@ Earlier status, kept for the record:
 | # | Item | Section | State | Size | Impact |
 |---|---|---|---|---|---|
 | 14 | R2 backlog anchor JID form | §3.6 | **Open**: verify live | S | M |
+| 38 | Picker on Windows mintty (winpty restart) | §3.4 | **Open**: verify on Windows | S | L |
+| 37 | fzf file picker for sending files (issue #26) | §3.4 | **Done** 2026-11-20 (unreleased) | M | M |
 | 8 | Release targets dropped (finding 8) | §3.1 | **Deferred**: owner decision D4 | M | M |
 | 18 | R3 admin revoke lookup cost | §3.2 | **Deferred** | S | L |
 | 19 | R4 revoke before target | §3.2 | **Deferred** | S | L |
@@ -186,7 +189,7 @@ Rows 7, 9, 11, 13, 21, 25, 32, 33, 35 (open: 21, 35, both deferred). Row 13 ship
 
 ### 3.4 UI
 
-Rows 5, 6, 10, 24, 34, 36 (all done). Rows 5, 6 and 10 came from `UiHandler` queuing work with `go QueueUpdateDraw`; row 10 was fixed with `NewScreenWithStatus` (option A); an ordered update channel remains a possible later refactor (review option B).
+Rows 5, 6, 10, 24, 34, 36, 37 (done) and 38 (open). Rows 5, 6 and 10 came from `UiHandler` queuing work with `go QueueUpdateDraw`; row 10 was fixed with `NewScreenWithStatus` (option A); an ordered update channel remains a possible later refactor (review option B).
 
 ### 3.5 Docs and repository hygiene
 

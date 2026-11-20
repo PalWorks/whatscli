@@ -55,13 +55,14 @@ var commandHints = []commandHint{
 	{"search-contact", "<name>", "Find contacts"},
 	{"select", "<chat-id>", "Open chat"},
 	{"send", "<chat-id> <text>", "Send text to a chat"},
-	{"sendaudio", "<path>", "Send audio"},
-	{"sendimage", "<path>", "Send image"},
-	{"sendvideo", "<path>", "Send video"},
+	{"sendaudio", "<path>", "Send audio (no path: pick with fzf)"},
+	{"sendfile", "<chat-id> <cmd> <path>", "Send a file to a chat"},
+	{"sendimage", "<path>", "Send image (no path: pick with fzf)"},
+	{"sendvideo", "<path>", "Send video (no path: pick with fzf)"},
 	{"show", "<msg-id>", "Show image"},
 	{"subject", "<subject>", "Set group subject"},
 	{"sync-groups", "", "Refresh group list"},
-	{"upload", "<path>", "Send file"},
+	{"upload", "<path>", "Send file (no path: pick with fzf)"},
 	{"url", "<msg-id>", "Open link"},
 }
 
@@ -139,6 +140,9 @@ func inputEntries(text string) []string {
 		}
 		return entries
 	}
+	if cmd, ok := pickerHint(text, commandPrefix()); ok {
+		return []string{pickerHintEntry(cmd)}
+	}
 	return commandEntries(text, commandPrefix())
 }
 
@@ -149,6 +153,13 @@ func setupCommandCompletion(input *tview.InputField) {
 		if source == tview.AutocompletedNavigate {
 			return false // keep the list open while moving through it
 		}
+		if cmd, ok := pickerHint(input.GetText(), commandPrefix()); ok {
+			input.SetText("")
+			// Queued: this callback runs while the input field holds its
+			// drop-down lock, and the picker takes over the terminal.
+			go ctx.App.QueueUpdateDraw(func() { openPicker(cmd, false) })
+			return true
+		}
 		if _, ok := chatQuery(input.GetText(), commandPrefix()); ok {
 			if index >= 0 && index < len(chatChoices) {
 				SetDisplayedChat(chatFromConversation(chatChoices[index]))
@@ -157,9 +168,12 @@ func setupCommandCompletion(input *tview.InputField) {
 			return true
 		}
 		input.SetText(completedText(text, commandPrefix()))
-		if _, ok := chatQuery(input.GetText(), commandPrefix()); ok {
-			// Offer chats right away. Queued: this callback runs while the
-			// input field holds its drop-down lock.
+		_, isChat := chatQuery(input.GetText(), commandPrefix())
+		_, isPicker := pickerHint(input.GetText(), commandPrefix())
+		if isChat || isPicker {
+			// Offer chats, or the line saying Enter searches files, right
+			// away. Queued: this callback runs while the input field holds
+			// its drop-down lock.
 			go ctx.App.QueueUpdateDraw(func() { input.Autocomplete() })
 		}
 		return true

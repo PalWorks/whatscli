@@ -2,7 +2,7 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T17:32:09+00:00 (new commands go in commandHints)_
+_Last updated: 2026-11-20T11:57:28+00:00 (/sendfile in the command file table)_
 
 ## Licensing of contributions
 
@@ -42,7 +42,7 @@ Commands live in `messages/cmd_*.go` and are dispatched through the `commandRegi
 | `cmd_connection.go` | `/login` (`/connect`), `/disconnect`, `/logout`, `/reset` |
 | `cmd_chat.go` | `/send`, `/select`, `/backlog`, `/sync-groups` |
 | `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |
-| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
+| `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio`, `/sendfile` |
 | `cmd_message.go` | `/download`, `/open`, `/show`, `/url`, `/revoke` |
 | `cmd_search.go` | `/search`, `/search-contact` |
 

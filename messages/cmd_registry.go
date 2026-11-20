@@ -57,6 +57,7 @@ func init() {
 		"sendimage": cmdMedia,
 		"sendvideo": cmdMedia,
 		"sendaudio": cmdMedia,
+		"sendfile":  cmdSendFile,
 
 		// Message commands (cmd_message.go); param is the message ID
 		"download": cmdDownload,

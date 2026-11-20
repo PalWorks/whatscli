@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T18:03:42+00:00 (Ctrl+g help key, edited messages)_
+_Last updated: 2026-11-20T11:57:28+00:00 (fzf file picker for sending files)_
 
 ---
 
@@ -203,6 +203,10 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `use_terminal_bell` | `false` | Ring the bell instead |
 | `notification_timeout` | `60` | Seconds between repeated notifications |
 | `backlog_msg_quantity` | `10` | Messages requested per `/backlog` (50 if not positive) |
+| `upload_search_path` | `~` | Folder the file picker searches |
+| `image_extensions` | `jpg,jpeg,png,webp` | Files `/sendimage` offers in the picker |
+| `video_extensions` | `mp4,3gp,mov,mkv,webm` | Files `/sendvideo` offers in the picker |
+| `audio_extensions` | `mp3,ogg,opus,m4a,aac,amr,wav` | Files `/sendaudio` offers in the picker |
 
 </details>
 
@@ -224,6 +228,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `command_connect` | `Ctrl+r` | `/connect` |
 | `command_quit` | `Ctrl+q` | Quit |
 | `command_help` | `Ctrl+g` | Help window (`Ctrl+g`, `F1` and `/help` always work too) |
+| `pick_file` | `Ctrl+o` | File picker: send files to the open chat |
 | `copyuser` | `Ctrl+c` | Copy user ID |
 | `pasteuser` | `Ctrl+v` | Paste user ID |
 | `message_download` | `d` | Download |
@@ -308,6 +313,13 @@ If a different file already has the same name, the new one is saved as `name_<me
 /upload /path/to/document.pdf
 ```
 
+Leave out the path to pick the file instead. `/sendimage`, `/sendvideo`, `/sendaudio` and `/upload` typed without a path (the drop-down says `Enter  search files with fzf`), or `Ctrl+o` from anywhere, open an fzf finder over the files under `upload_search_path` (your home folder by default). It narrows as you type; `Tab` and `Shift+Tab` mark several files, `Enter` sends them, `Esc` goes back without sending.
+
+- `/sendimage`, `/sendvideo` and `/sendaudio` list only files with the extensions in `image_extensions`, `video_extensions` and `audio_extensions`. `/upload` and `Ctrl+o` list every file; `Ctrl+o` sends each one as what it is (image, video, audio, else document).
+- Hidden files and anything matched by `.gitignore` or `.ignore` are skipped, as ripgrep does. fzf is built in; nothing extra needs installing. Your `FZF_DEFAULT_OPTS` colours and keys apply.
+- Each file is sent to the chat that was open when the finder opened, even if you switch chats while files upload.
+- Windows: under mintty (Git Bash) 3.4.5 or later without `MSYS=enable_pcon`, fzf restarts the program through winpty; use Windows Terminal there.
+
 ### Older messages
 
 ```text
@@ -362,10 +374,11 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 
 | Command | Description |
 |---|---|
-| `/sendimage <path>` | Send an image |
-| `/sendvideo <path>` | Send a video |
-| `/sendaudio <path>` | Send audio |
-| `/upload <path>` | Send a file as a document |
+| `/sendimage <path>` | Send an image; without a path, pick one with fzf |
+| `/sendvideo <path>` | Send a video; without a path, pick one with fzf |
+| `/sendaudio <path>` | Send audio; without a path, pick one with fzf |
+| `/upload <path>` | Send a file as a document; without a path, pick one with fzf |
+| `/sendfile <chat-id> <cmd> <path>` | Send a file to a given chat as `upload`, `sendimage`, `sendvideo` or `sendaudio` (the file picker uses it) |
 
 **Table CR4: Groups**
 
@@ -400,6 +413,7 @@ Configurable under `[keymap]`.
 | `Ctrl+q` | Quit |
 | `Ctrl+g` or `F1` | Help window: every key and command (`Esc`, `Enter`, `q` or `Ctrl+g` closes) |
 | `Ctrl+p` | Toggle mouse |
+| `Ctrl+o` | File picker: pick files with fzf and send them to the open chat |
 | `Ctrl+c` / `Ctrl+v` | Copy and paste user ID |
 
 **Table K2: Keys with a message highlighted**
@@ -422,7 +436,7 @@ Configurable under `[keymap]`.
 whatscli/
 ├── main.go, app_context.go          # entry point, shared UI state
 ├── ui_layout.go, ui_handler.go      # layout, UiMessageHandler implementation
-├── ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go
+├── ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go, ui_picker.go
 ├── ui_*_test.go
 ├── messages/                        # business logic (no TUI dependency)
 │   ├── session_manager.go, connection.go, event_handler.go, history_sync.go, chat_state.go
@@ -432,6 +446,7 @@ whatscli/
 │   ├── cmd_registry.go and cmd_basic, cmd_connection, cmd_chat, cmd_group, cmd_media,
 │   │   cmd_message, cmd_search .go
 │   └── *_test.go
+├── picker/                          # file picker: gitignore-aware walk fed to embedded fzf
 ├── config/                          # INI config, XDG paths
 ├── qrcode/                          # ANSI QR renderer
 ├── doc/screenshot.png

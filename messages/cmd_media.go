@@ -24,7 +24,45 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 		sm.mu.RLock()
 		receiver := sm.currentReceiver
 		sm.mu.RUnlock()
+		sendMediaFile(sm, client, receiver, cmdName, filePath)
+	} else {
+		sm.printCommandUsage(cmdName, "<filepath>")
+	}
+}
 
+// mediaCommands are the commands that send a file; the file picker uses
+// the same names to say how a picked file is sent.
+var mediaCommands = map[string]bool{"upload": true, "sendimage": true, "sendvideo": true, "sendaudio": true}
+
+// parseSendFile reads "<chat-id> <upload|sendimage|sendvideo|sendaudio>
+// <path>" for /sendfile. The path may contain spaces.
+func parseSendFile(params []string) (chat, cmd, path string, ok bool) {
+	if len(params) < 3 || params[0] == "" || !mediaCommands[params[1]] {
+		return "", "", "", false
+	}
+	path = strings.Join(params[2:], " ")
+	if path == "" {
+		return "", "", "", false
+	}
+	return params[0], params[1], path, true
+}
+
+// cmdSendFile sends a file to the chat named in the command rather than the
+// open one. The file picker uses it so every picked file goes to the chat it
+// was picked in, even if the user switches chats while files are uploading.
+func cmdSendFile(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
+	chat, cmd, path, ok := parseSendFile(params)
+	if !ok {
+		sm.printCommandUsage(cmdName, "<chat-id> <upload|sendimage|sendvideo|sendaudio> <filepath>")
+		return
+	}
+	sendMediaFile(sm, client, chat, cmd, path)
+}
+
+// sendMediaFile uploads filePath and sends it to receiver as the kind of
+// message cmdName names (upload sends a document).
+func sendMediaFile(sm *SessionManager, client *whatsmeow.Client, receiver, cmdName, filePath string) {
+	{
 		jid, err := types.ParseJID(receiver)
 		if err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
@@ -130,8 +168,6 @@ func cmdMedia(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 				sm.storeSentMedia(client, receiver, resp.ID, resp.Timestamp, msg)
 			}
 		}
-	} else {
-		sm.printCommandUsage(cmdName, "<filepath>")
 	}
 }
 
