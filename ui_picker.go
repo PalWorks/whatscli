@@ -8,6 +8,9 @@ package main
 // the chat that was open when the picker opened.
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
 	"github.com/PalWorks/whatscli/picker"
@@ -22,6 +25,32 @@ func opensPicker(cmd string, params []string) bool {
 		return len(params) == 0
 	}
 	return false
+}
+
+// pickerHint reports whether text is a file-sending command followed by a
+// space and no path yet ("/upload "), and which command. The drop-down then
+// shows one line saying Enter opens the search.
+func pickerHint(text, prefix string) (string, bool) {
+	if prefix == "" || !strings.HasPrefix(text, prefix) || strings.TrimSpace(text) == text {
+		return "", false
+	}
+	fields := strings.Fields(strings.TrimPrefix(text, prefix))
+	if len(fields) != 1 {
+		return "", false
+	}
+	cmd := strings.ToLower(fields[0])
+	if !opensPicker(cmd, nil) {
+		return "", false
+	}
+	return cmd, true
+}
+
+// pickerNouns names what each command's search lists.
+var pickerNouns = map[string]string{"upload": "files", "sendimage": "images", "sendvideo": "videos", "sendaudio": "audio files"}
+
+// pickerHintEntry is the drop-down line under "<prefix><cmd> ".
+func pickerHintEntry(cmd string) string {
+	return fmt.Sprintf("%-28s %s", "Enter", "search "+pickerNouns[cmd]+" with fzf (or type a path)")
 }
 
 // pickedCommands turns picked files into one /sendfile command each, bound
