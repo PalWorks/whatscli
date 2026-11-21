@@ -7,7 +7,7 @@ _Last updated: 2026-11-21T05:17:01+00:00 (/style command)_
 ## [Unreleased]
 
 ### Added
-- `/style` switches the message pane between bubbles and the classic one-line layout (`/style bubbles`, `/style classic`; no argument toggles). It lasts for the session; `[ui] message_style` stays the default.
+- `/style` switches the message pane between bubbles and the classic one-line layout (`/style bubbles`, `/style classic`; no argument toggles, and `Enter` on `/style` in the command list toggles at once). It lasts for the session; `[ui] message_style` stays the default.
 - Chat bubbles in the message pane (new default, `[ui] message_style = bubbles`): received messages on the left, your own on the right, in tinted blocks with two cells of side padding and half a row of colour above and below, the time at the bottom right. A centred line marks each day; in group chats the sender's name heads each run of messages. Every bubble line is padded to the same width so the background is a rectangle, and the selection highlights the bubble only. `message_style = classic` keeps the one-line layout; new colours `bubble_me`, `bubble_contact`, `bubble_time`.
 
 ### Changed

@@ -32,7 +32,7 @@ var commandHints = []commandHint{
 	{"admin", "<userid>", "Promote to admin"},
 	{"backlog", "", "Request older messages from the phone"},
 	{"colorlist", "", "Show colour names"},
-	{"style", "[bubbles|classic]", "Switch the message layout (no argument: toggle)"},
+	{"style", "[bubbles|classic]", "Enter: switch the message layout (Tab to name one)"},
 	{"connect", "", "(Re)connect"},
 	{"create", "<nums> <subject>", "Create group"},
 	{"demote", "<userid>", "Remove admin"},
@@ -107,6 +107,11 @@ func firstWord(entry, prefix string) string {
 
 // completedText is the input text after choosing entry: the command, plus a
 // space when it takes arguments.
+// runsOnPick lists commands that run as soon as they are picked from the
+// command list with Enter, without a second Enter: harmless commands whose
+// argument is optional.
+var runsOnPick = map[string]bool{"style": true}
+
 func completedText(entry, prefix string) string {
 	name := firstWord(entry, prefix)
 	for _, h := range commandHints {
@@ -155,6 +160,14 @@ func setupCommandCompletion(input *tview.InputField) {
 				SetDisplayedChat(chatFromConversation(chatChoices[index]))
 			}
 			input.SetText("")
+			return true
+		}
+		if name := firstWord(text, commandPrefix()); runsOnPick[name] && source != tview.AutocompletedTab {
+			// Enter (or a click) on the entry runs the command at once;
+			// Tab fills it in so an argument can be typed. Queued: this
+			// callback runs while the input field holds its drop-down lock.
+			input.SetText(commandPrefix() + name)
+			go ctx.App.QueueUpdateDraw(func() { EnterCommand(tcell.KeyEnter) })
 			return true
 		}
 		input.SetText(completedText(text, commandPrefix()))

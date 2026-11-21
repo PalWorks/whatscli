@@ -346,3 +346,32 @@ func TestStyleCommandSwitchesLayout(t *testing.T) {
 		t.Fatalf("not switched back to bubbles:\n%s", screenText(screen))
 	}
 }
+
+// "/sty" + Enter picks /style from the command list and runs it at once;
+// Tab only fills it in so an argument can follow.
+func TestStylePickedWithEnterRunsAtOnce(t *testing.T) {
+	app, input, _, _ := runInputApp(t)
+	sm := &messages.SessionManager{CommandChannel: make(chan messages.Command, 4)}
+	app.QueueUpdateDraw(func() { ctx.SessionManager = sm })
+	typeKeys(app, input, "/sty", tcell.KeyEnter)
+	select {
+	case cmd := <-sm.CommandChannel:
+		if cmd.Name != "style" || len(cmd.Params) != 0 {
+			t.Fatalf("sent %+v, want style with no arguments", cmd)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("/style did not run on Enter; input = %q", input.GetText())
+	}
+	if !waitFor(app, func() bool { return input.GetText() == "" }) {
+		t.Fatalf("input not cleared: %q", input.GetText())
+	}
+	typeKeys(app, input, "/sty", tcell.KeyTab)
+	if !waitFor(app, func() bool { return input.GetText() == "/style " }) {
+		t.Fatalf("Tab: input = %q, want %q", input.GetText(), "/style ")
+	}
+	select {
+	case cmd := <-sm.CommandChannel:
+		t.Fatalf("Tab ran a command: %+v", cmd)
+	default:
+	}
+}

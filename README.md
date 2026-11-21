@@ -346,7 +346,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 | `/reset` | Delete the WhatsApp session database and the local message database |
 | `/quit` | Exit |
 | `/colorlist` | Show colour names |
-| `/style [bubbles\|classic]` | Switch the message layout for this session; with no argument, toggle |
+| `/style [bubbles\|classic]` | Switch the message layout for this session; with no argument, toggle. `Enter` on `/style` in the command list toggles at once; `Tab` fills it in to name a layout |
 
 **Table CR2: Chats and messages**
 
