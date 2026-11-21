@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T18:03:42+00:00 (Ctrl+g help key, edited messages)_
+_Last updated: 2026-11-21T05:04:03+00:00 (message layout: aligned wrapping, one-line names, no skin tones)_
 
 ---
 
@@ -285,6 +285,8 @@ While no chat is open, the message pane shows a short welcome with the five thin
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
 - When someone edits a message (or you edit yours on the phone), the new text replaces the old one, marked `(edited)`.
+- A long message, or one with line breaks, continues under the first character of its text instead of at the left edge; resizing the window re-wraps the open chat. A sender name is always shown on one line (line breaks in a saved name become spaces).
+- Emoji are shown without skin tones: many terminal fonts draw the tone as a separate square next to the emoji, which also shifts the text after it. Stored messages are not changed.
 - Message senders show the name saved in your phone's contacts, else their phone number (`+91...`). A sender whose phone number WhatsApp keeps private shows their WhatsApp name as `~Name`.
 - In the chat lists, the right column shows the unread count, if any, and the time of the last message; long names are shortened to keep it visible.
 
