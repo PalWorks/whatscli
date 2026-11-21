@@ -73,3 +73,18 @@ func TestTypingColonNameInsertsEmoji(t *testing.T) {
 		t.Fatalf("input = %q, want %q", input.GetText(), "hi 😄 ")
 	}
 }
+
+// The list shows each emoji once, in its default look: no skin tone
+// variants, and no second entry for the same emoji without its style marker.
+func TestEmojiEntriesDefaultLookOnly(t *testing.T) {
+	for _, q := range []string{"thumbs", "wave", "clap", "point", "ok"} {
+		for _, e := range emojiEntries(q) {
+			if hasSkinTone(e) {
+				t.Errorf("%s: skin tone variant offered: %q", q, e)
+			}
+		}
+	}
+	if got := emojiEntries("point"); strings.Count(strings.Join(got, ""), "☝") != 1 {
+		t.Errorf("☝ listed twice (with and without U+FE0F): %q", got)
+	}
+}

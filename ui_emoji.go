@@ -20,7 +20,7 @@ const emojiLimit = 10
 var (
 	emojiOnce  sync.Once
 	emojiNames []string          // ":name:" sorted shortest first, then by name
-	emojiByKey map[string]string // ":name:" -> emoji
+	emojiByKey map[string]string // ":name:" -> emoji (skin tone variants are not offered)
 )
 
 func loadEmoji() {
@@ -61,7 +61,11 @@ func emojiEntries(query string) []string {
 	seen := map[string]bool{}
 	for _, name := range emojiNames {
 		e := emojiByKey[name]
-		if seen[e] {
+		// Only the default look of each emoji: no skin tone variants, and
+		// one entry for an emoji listed with and without its style
+		// marker (U+FE0F), such as ☝️ and ☝.
+		key := strings.ReplaceAll(e, "\uFE0F", "")
+		if seen[key] || hasSkinTone(e) {
 			continue
 		}
 		switch {
@@ -72,13 +76,19 @@ func emojiEntries(query string) []string {
 		default:
 			continue
 		}
-		seen[e] = true
+		seen[key] = true
 	}
 	entries := append(prefix, contains...)
 	if len(entries) > emojiLimit {
 		entries = entries[:emojiLimit]
 	}
 	return entries
+}
+
+// hasSkinTone reports whether e contains an emoji skin tone modifier
+// (U+1F3FB to U+1F3FF).
+func hasSkinTone(e string) bool {
+	return strings.ContainsFunc(e, func(r rune) bool { return r >= 0x1F3FB && r <= 0x1F3FF })
 }
 
 // applyEmoji replaces the ":name" being typed at the end of text with the

@@ -7,7 +7,7 @@ _Last updated: 2026-11-21T04:08:33+00:00 (emoji suggestions)_
 ## [Unreleased]
 
 ### Added
-- Emoji suggestions on the input line: typing `:` and two or more letters of a name (`:smil`) shows up to 10 matching emoji in the drop-down; `Enter` or `Tab` puts the chosen one in place of the typed name. Names come from `github.com/kyokomi/emoji/v2`.
+- Emoji suggestions on the input line: typing `:` and two or more letters of a name (`:smil`) shows up to 10 matching emoji in the drop-down, each once in its default look (no skin tone variants); `Enter` or `Tab` puts the chosen one in place of the typed name. Names come from `github.com/kyokomi/emoji/v2`.
 
 ## [1.6.6] - 2026-10-31
 
