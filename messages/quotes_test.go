@@ -75,7 +75,7 @@ func TestLabelQuote(t *testing.T) {
 		filledIn string
 	}{
 		{Message{QuoteId: "mine"}, QuoteYou, "Q beta"},
-		{Message{QuoteId: "theirs", QuoteText: "kept copy"}, "+222", "kept copy"},
+		{Message{QuoteId: "theirs", QuoteText: "a changed copy"}, "+222", "mera dimag"}, // ours wins
 		{Message{QuoteId: "gone", QuoteSender: "333@s.whatsapp.net", QuoteText: "old"}, "+333", "old"},
 		{Message{}, "", ""},
 	} {

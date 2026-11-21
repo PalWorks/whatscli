@@ -2,7 +2,7 @@
 
 System design of WhatsCLI as it is in the code at `v1.6.2`. Decisions and their reasons are in the maintainers' private decision log; agent rules in [AGENTS.md](AGENTS.md).
 
-_Last updated: 2026-11-21T06:48:53+00:00 (status -1 for failed sends)_
+_Last updated: 2026-11-21T07:40:17+00:00 (quote columns)_
 
 ## 1. Components
 
@@ -103,6 +103,7 @@ SQLite via go-sqlite3 (CGO), WAL mode, 5 s busy timeout. No in-memory caches; ev
 | `media_proto` | BLOB, nullable | serialised `waE2E.Message` holding only the media sub-message, thumbnails stripped |
 | `local_path` | TEXT, nullable | where the media was last saved; reused only if still a regular file directly in the target folder; cleared on revoke |
 | `status` | INTEGER NOT NULL DEFAULT 0 | own messages only: -1 not sent (retry with `/retry`), 1 sent, 2 delivered, 3 read; only ever raised (`receipts.go`) |
+| `quote_id`, `quote_sender`, `quote_text` | TEXT NOT NULL DEFAULT '' | for a reply: the quoted message's ID, its sender's JID and a copy of its text (`quotes.go`); empty otherwise |
 
 Indexes: `idx_messages_chat_id (chat_id)`, `idx_messages_chat_ts (chat_id, timestamp)`.
 

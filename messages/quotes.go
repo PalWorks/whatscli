@@ -65,17 +65,16 @@ func (sm *SessionManager) ownJID() types.JID {
 	return client.Store.ID.ToNonAD()
 }
 
-// labelQuote sets QuoteName (who is quoted) and, if the stored copy has
-// none, QuoteText from the quoted message when it is stored. Never call it
-// under sm.mu.
+// labelQuote sets QuoteName (who is quoted). When the quoted message is
+// stored, its name and text come from our copy, not from the copy the
+// replying side sent (which it could have changed). Never call it under
+// sm.mu.
 func (sm *SessionManager) labelQuote(msg *Message) {
 	if msg.QuoteId == "" {
 		return
 	}
 	if q, found, err := sm.db.GetMessage(msg.QuoteId); err == nil && found {
-		if msg.QuoteText == "" {
-			msg.QuoteText = q.Text
-		}
+		msg.QuoteText = q.Text
 		if q.FromMe {
 			msg.QuoteName = QuoteYou
 		} else {

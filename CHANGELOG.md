@@ -2,11 +2,12 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-11-21T06:48:53+00:00 (drafts, edit, failed sends, typing and online status)_
+_Last updated: 2026-11-21T07:40:17+00:00 (replies)_
 
 ## [Unreleased]
 
 ### Added
+- Replies: `Enter` on a selected message starts a reply (input labelled `↳ Asha: ... ›`, `Esc` cancels), sent with the new `/reply`. Replies show the quote at the top of the bubble (bar, who is quoted, up to two lines) or, in the classic layout, a dim line above; `q` (new key `message_quote`) jumps to the quoted message. The quote's ID, sender and text are stored with the reply (new columns `quote_id`, `quote_sender`, `quote_text`) from incoming replies, history sync and our own, so it shows without the original. A failed reply is retried with its quote.
 - Drafts: text typed but not sent stays with its chat and comes back when the chat is opened again (also after `/select <name>` and `Ctrl+f`).
 - Edit: `Up` in an empty input loads your last text message if it is at most 15 minutes old (label `edit>`); `Enter` sends the edit (new command `/edit`), `Esc` cancels. When it cannot be edited (too old, media, deleted, not sent), a note says why.
 - Failed sends: a text message that could not be sent is stored and shown with a red `! not sent` (status -1); select it and press `t` (new key `message_retry`) or use `/retry` to send it again under the same ID.

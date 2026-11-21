@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-11-21T06:48:53+00:00 (drafts, edit, failed sends, typing and online status)_
+_Last updated: 2026-11-21T07:40:17+00:00 (replies)_
 
 ---
 
@@ -234,6 +234,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `message_info` | `i` | Chat info (the open chat or group) |
 | `message_revoke` | `r` | Delete for everyone (own messages) |
 | `message_retry` | `t` | Send a message marked as not sent again |
+| `message_quote` | `q` | On a reply: jump to the message it quotes |
 
 </details>
 
@@ -293,6 +294,7 @@ While no chat is open, the message pane shows a short welcome with the five thin
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
 - When someone edits a message (or you edit yours on the phone), the new text replaces the old one, marked `(edited)`.
 - Messages are shown as chat bubbles: received ones on the left, yours on the right, each with its time (`HH:MM`) at the bottom right. A centred line (`Today`, `Yesterday`, `Friday, 13 Nov`) marks each new day; in group chats the sender's name heads each run of their messages (a run ends when someone else writes or after 10 minutes). Selecting a message highlights its bubble. Set `message_style = classic` under `[ui]` for one line per message; `bubble_me`, `bubble_contact` and `bubble_time` under `[colors]` set the colours (names or `#rrggbb`).
+- Replies: select a message (`Ctrl+w`) and press `Enter`; the input is labelled `↳ Asha: ... ›`, `Enter` sends the reply and `Esc` cancels it (the text stays). A reply shows the quoted message at the top of its bubble: a coloured bar, who is quoted (`You` for your own messages) and up to two lines of the quoted text; in the classic layout a dim `┃ Asha: ...` line above it. `q` on a selected reply jumps to the quoted message. The quote is stored with the reply, so it shows even when the original is not loaded.
 - Text you type but do not send stays with its chat: open another chat and come back, and it is there again. Sending it or pressing `Esc` clears it.
 - `Up` in an empty input loads your last message for editing (label `edit>`); `Enter` sends the edit and the message is marked `(edited)`, `Esc` cancels. Only your own text messages up to 15 minutes old can be edited (WhatsApp's limit); otherwise a note says why.
 - A message that could not be sent (offline, or the send failed) stays in the chat marked `! not sent` in red; select it and press `t` (or `/retry`) to send it again.
@@ -372,6 +374,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 | `/revoke <msg-id>` | Delete your own message for everyone |
 | `/edit <chat-id> <msg-id> <text>` | Edit your message (`Up` in an empty input edits the last one) |
 | `/retry <msg-id>` | Send a message marked as not sent again |
+| `/reply <chat-id> <msg-id> <text>` | Reply to a message (select it and press `Enter`) |
 | `/search <keyword>` | Search messages |
 | `/search-contact <name>` | Search contacts |
 
