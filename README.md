@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-11-21T05:04:47+00:00 (chat bubbles)_
+_Last updated: 2026-11-21T05:17:01+00:00 (/style command)_
 
 ---
 
@@ -289,7 +289,7 @@ While no chat is open, the message pane shows a short welcome with the five thin
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
 - When someone edits a message (or you edit yours on the phone), the new text replaces the old one, marked `(edited)`.
-- Messages are shown as chat bubbles: received ones on the left, yours on the right, each with its time (`HH:MM`) at the bottom right. A centred line (`Today`, `Yesterday`, `Friday, 13 Nov`) marks each new day; in group chats the sender's name heads each run of their messages (a run ends when someone else writes or after 10 minutes). Selecting a message highlights its bubble. Set `message_style = classic` under `[ui]` for one line per message; `bubble_me`, `bubble_contact` and `bubble_time` under `[colors]` set the colours (names or `#rrggbb`).
+- Messages are shown as chat bubbles: received ones on the left, yours on the right, each with its time (`HH:MM`) at the bottom right. A centred line (`Today`, `Yesterday`, `Friday, 13 Nov`) marks each new day; in group chats the sender's name heads each run of their messages (a run ends when someone else writes or after 10 minutes). Selecting a message highlights its bubble. `/style` switches between bubbles and one line per message for the session (`/style classic`, `/style bubbles`); set `message_style = classic` under `[ui]` to make the one-line layout the default; `bubble_me`, `bubble_contact` and `bubble_time` under `[colors]` set the colours (names or `#rrggbb`).
 - In the classic layout, a long message, or one with line breaks, continues under the first character of its text instead of at the left edge; resizing the window re-wraps the open chat. A sender name is always shown on one line (line breaks in a saved name become spaces).
 - Emoji are shown without skin tones: many terminal fonts draw the tone as a separate square next to the emoji, which also shifts the text after it. Stored messages are not changed.
 - Message senders show the name saved in your phone's contacts, else their phone number (`+91...`). A sender whose phone number WhatsApp keeps private shows their WhatsApp name as `~Name`.
@@ -346,6 +346,7 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 | `/reset` | Delete the WhatsApp session database and the local message database |
 | `/quit` | Exit |
 | `/colorlist` | Show colour names |
+| `/style [bubbles\|classic]` | Switch the message layout for this session; with no argument, toggle |
 
 **Table CR2: Chats and messages**
 

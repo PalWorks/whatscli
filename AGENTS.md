@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-11-21T05:04:47+00:00 (ui_bubbles.go)_incoming.go)_
+> _Last updated: 2026-11-21T05:17:01+00:00 (/style in cmd_basic.go)_bubbles.go)_incoming.go)_
 
 ## 1. Project
 
@@ -100,7 +100,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `revoke_incoming.go` | Authorisation of incoming revokes |
 | `pathcheck.go` | `ResolveFileWithin`: symlink-aware directory containment |
 | `cmd_registry.go` | Command name to handler map |
-| `cmd_basic.go` | `/help /quit /colorlist /more /info /read` |
+| `cmd_basic.go` | `/help /quit /colorlist /style /more /info /read` |
 | `cmd_connection.go` | `/login /connect /disconnect /logout /reset` |
 | `cmd_chat.go` | `/send /select /backlog /sync-groups` |
 | `cmd_group.go` | `/create /subject /leave /add /remove /admin /promote /removeadmin /demote` |
