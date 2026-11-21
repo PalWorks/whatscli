@@ -56,15 +56,27 @@ func rewrapOnResize() {
 	}
 }
 
+// dropSkinTones removes emoji skin tone modifiers (U+1F3FB to U+1F3FF), which
+// many terminal fonts draw as a separate square next to the emoji and which
+// make the terminal and tview disagree about the width of the text.
+func dropSkinTones(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 0x1F3FB && r <= 0x1F3FF {
+			return -1
+		}
+		return r
+	}, s)
+}
+
 // displayName puts a contact name on one line: line breaks, tabs and other
-// control characters become single spaces.
+// control characters become single spaces; skin tones are dropped.
 func displayName(name string) string {
 	name = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
 			return ' '
 		}
 		return r
-	}, name)
+	}, dropSkinTones(name))
 	return strings.Join(strings.Fields(name), " ")
 }
 
@@ -99,7 +111,7 @@ func getTextMessageString(msg *messages.Message, width int) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
 	out := ""
-	text := tview.Escape(msg.Text)
+	text := tview.Escape(dropSkinTones(msg.Text))
 	tim := time.Unix(int64(msg.Timestamp), 0)
 	time := tim.Format("02-01-06 15:04:05")
 	name := "Me"
@@ -254,7 +266,7 @@ func RenderChatTable() {
 		}
 
 		// Name cell
-		name := conv.Name
+		name := displayName(conv.Name)
 		if name == "" {
 			name = conv.JID // Fallback
 		}
