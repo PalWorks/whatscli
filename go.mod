@@ -10,6 +10,7 @@ require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/gdamore/tcell/v2 v2.13.10
 	github.com/gen2brain/beeep v0.11.3
+	github.com/kyokomi/emoji/v2 v2.2.14
 	github.com/mattn/go-colorable v0.1.16
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/rivo/tview v0.42.0

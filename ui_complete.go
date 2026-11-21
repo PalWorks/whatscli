@@ -139,6 +139,9 @@ func inputEntries(text string) []string {
 		}
 		return entries
 	}
+	if q, ok := emojiQuery(text); ok {
+		return emojiEntries(q)
+	}
 	return commandEntries(text, commandPrefix())
 }
 
@@ -154,6 +157,10 @@ func setupCommandCompletion(input *tview.InputField) {
 				SetDisplayedChat(chatFromConversation(chatChoices[index]))
 			}
 			input.SetText("")
+			return true
+		}
+		if _, ok := emojiQuery(input.GetText()); ok {
+			input.SetText(applyEmoji(input.GetText(), text))
 			return true
 		}
 		input.SetText(completedText(text, commandPrefix()))
