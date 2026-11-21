@@ -242,7 +242,7 @@ func TestBubbleNamesInGroupsOncePerRun(t *testing.T) {
 	var out []string
 	var prev *messages.Message
 	for i := range msgs {
-		out = append(out, messageBlock(prev, &msgs[i], 80, true))
+		out = append(out, messageBlock(prev, &msgs[i], 80, true, false))
 		prev = &msgs[i]
 	}
 	names := []bool{true, false, true, true} // a new run after a long pause
@@ -259,7 +259,7 @@ func TestBubbleSelectionHighlightsBubbleOnly(t *testing.T) {
 	saved := config.Config.Ui.MessageStyle
 	config.Config.Ui.MessageStyle = "bubbles"
 	t.Cleanup(func() { config.Config.Ui.MessageStyle = saved })
-	lines := strings.Split(bubble(&msg, 50, false), "\n")
+	lines := strings.Split(bubble(&msg, 50, false, ""), "\n")
 	for _, line := range lines[1 : len(lines)-1] { // the half-row edges are not selectable
 		if !strings.HasPrefix(strings.TrimLeft(line, " "), `["m1"]`) {
 			t.Errorf("region must start after the padding: %q", line)
@@ -272,7 +272,7 @@ func TestClassicStyleSetting(t *testing.T) {
 	t.Cleanup(func() { config.Config.Ui.MessageStyle = saved })
 	msg := messages.Message{Id: "m1", FromMe: true, Text: "hi"}
 	config.Config.Ui.MessageStyle = "Classic"
-	if got := messageBlock(nil, &msg, 80, false); got != getTextMessageString(&msg, 80) {
+	if got := messageBlock(nil, &msg, 80, false, false); got != getTextMessageString(&msg, 80, "") {
 		t.Errorf("classic style should give the one-line layout, got %q", got)
 	}
 }
@@ -325,5 +325,73 @@ func TestBubbleDemo(t *testing.T) {
 	view.SetText(getMessagesString(msgs))
 	if err := app.SetRoot(view, true).Run(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Only the chat's last message shows status ticks, and only if it is ours;
+// read ticks use the read colour.
+func TestStatusTicksOnLastOwnMessageOnly(t *testing.T) {
+	saved := config.Config.Ui.MessageStyle
+	savedCtx := ctx
+	ctx = &AppContext{}
+	t.Cleanup(func() { config.Config.Ui.MessageStyle = saved; ctx = savedCtx })
+	for _, style := range []string{"bubbles", "classic"} {
+		config.Config.Ui.MessageStyle = style
+		mine := func(id string, s int) messages.Message {
+			return messages.Message{Id: id, FromMe: true, Text: "msg " + id, Status: s, Timestamp: 1000}
+		}
+		out := getMessagesString([]messages.Message{mine("1", messages.StatusRead), mine("2", messages.StatusDelivered)})
+		if n := strings.Count(out, "✓"); n != 2 {
+			t.Errorf("%s: want one ✓✓ on the last message, got %d ticks:\n%s", style, n, out)
+		}
+		if strings.Contains(out, config.Config.Colors.StatusRead) {
+			t.Errorf("%s: the read colour shows although the last message is only delivered", style)
+		}
+		out = getMessagesString([]messages.Message{mine("1", messages.StatusRead)})
+		if !strings.Contains(out, "["+config.Config.Colors.StatusRead+"::]✓✓") {
+			t.Errorf("%s: read ticks not in the read colour:\n%s", style, out)
+		}
+		theirs := messages.Message{Id: "3", Text: "reply", Timestamp: 1001}
+		out = getMessagesString([]messages.Message{mine("1", messages.StatusRead), theirs})
+		if strings.Contains(out, "✓") {
+			t.Errorf("%s: ticks shown although the last message is theirs:\n%s", style, out)
+		}
+		out = getMessagesString([]messages.Message{mine("1", messages.StatusSent)})
+		if strings.Count(out, "✓") != 1 {
+			t.Errorf("%s: sent should show one ✓:\n%s", style, out)
+		}
+	}
+}
+
+// A bubble with ticks is still a rectangle with the ticks inside.
+func TestBubbleWithTicksIsRectangle(t *testing.T) {
+	msgs := bubbleSamples(time.Now())
+	msgs[len(msgs)-1].Status = messages.StatusRead
+	app, screen := runBubbleView(t, 60, 120, msgs, "x")
+	if !waitFor(app, func() bool { return messageWrapWidth == 60 && screenContains(screen, "20:48 ✓✓") }) {
+		t.Fatalf("ticks not shown:\n%s", screenText(screen))
+	}
+	cells, w, h := snapshot(app, screen)
+	if boxes := bubbleBoxes(t, cells, w, h); len(boxes) != len(msgs) || boxes[len(boxes)-1].right != w-2 {
+		t.Fatalf("bad bubbles: %+v", boxes)
+	}
+}
+
+// A message sent while the chat is open arrives through NewMessage and shows
+// its tick; the previous last message loses its own.
+func TestNewSentMessageShowsTick(t *testing.T) {
+	msgs := bubbleSamples(time.Now())[:3]
+	msgs[2].Status = messages.StatusRead // "Q beta", the last message so far
+	app, screen := runBubbleView(t, 80, 40, msgs, "x")
+	if !waitFor(app, func() bool { return messageWrapWidth == 80 && screenContains(screen, "20:10 ✓✓") }) {
+		t.Fatalf("last message has no ticks:\n%s", screenText(screen))
+	}
+	app.QueueUpdateDraw(func() { ctx.CurRegions = msgs })
+	UiHandler{}.NewMessage(messages.Message{Id: "new", FromMe: true, Text: "fresh one", Timestamp: uint64(time.Now().Unix()), Status: messages.StatusSent})
+	if !waitFor(app, func() bool { return screenContains(screen, "fresh one") && !screenContains(screen, "✓✓") }) {
+		t.Fatalf("old ticks kept or new message missing:\n%s", screenText(screen))
+	}
+	if strings.Count(screenText(screen), "✓") != 1 {
+		t.Fatalf("want exactly one ✓ on the new message:\n%s", screenText(screen))
 	}
 }

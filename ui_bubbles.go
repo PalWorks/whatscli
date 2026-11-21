@@ -45,11 +45,31 @@ func isGroupChat() bool {
 	return strings.HasSuffix(ctx.CurrentReceiver.Id, messages.GROUPSUFFIX)
 }
 
+// statusMark is the tick text shown after the time of our own message:
+// ✓ sent, ✓✓ delivered, blue ✓✓ read; "" when the status is not known.
+func statusMark(status int) string {
+	switch status {
+	case messages.StatusSent:
+		return "[" + config.Config.Colors.BubbleTime + "::]✓"
+	case messages.StatusDelivered:
+		return "[" + config.Config.Colors.BubbleTime + "::]✓✓"
+	case messages.StatusRead:
+		return "[" + config.Config.Colors.StatusRead + "::]✓✓"
+	}
+	return ""
+}
+
 // messageBlock returns the text for msg, which follows prev (nil for the
 // first message shown), in the configured style, without a final newline.
-func messageBlock(prev, msg *messages.Message, width int, group bool) string {
+// last is set for the last message of the chat: only that one shows its
+// status, and only if it is ours.
+func messageBlock(prev, msg *messages.Message, width int, group, last bool) string {
+	mark := ""
+	if last && msg.FromMe {
+		mark = statusMark(msg.Status)
+	}
 	if classicStyle() {
-		return getTextMessageString(msg, width)
+		return getTextMessageString(msg, width, mark)
 	}
 	if width <= 0 {
 		width = fallbackWidth
@@ -66,7 +86,7 @@ func messageBlock(prev, msg *messages.Message, width int, group bool) string {
 		b.WriteString("\n\n")
 	}
 	showName := group && !msg.FromMe && (newDay || !sameRun(prev, msg))
-	b.WriteString(bubble(msg, width, showName))
+	b.WriteString(bubble(msg, width, showName, mark))
 	return b.String()
 }
 
@@ -138,9 +158,10 @@ func (l *bubbleLayout) add(line string) {
 }
 
 // layoutBubble wraps msg into lines of at most maxContent cells: the name
-// (if shown), "Forwarded" (if so), the text, and the time at the bottom
-// right, on the last text line when it fits.
-func layoutBubble(msg *messages.Message, maxContent int, showName bool) bubbleLayout {
+// (if shown), "Forwarded" (if so), the text, and the time (followed by mark,
+// the status ticks, if any) at the bottom right, on the last text line when
+// it fits.
+func layoutBubble(msg *messages.Message, maxContent int, showName bool, mark string) bubbleLayout {
 	text := config.Config.Colors.Text
 	var l bubbleLayout
 	if showName {
@@ -164,8 +185,12 @@ func layoutBubble(msg *messages.Message, maxContent int, showName bool) bubbleLa
 		}
 	}
 	stamp := time.Unix(int64(msg.Timestamp), 0).Format("15:04")
-	stampTag := "[" + config.Config.Colors.BubbleTime + "::]" + stamp + "[" + text + "::]"
-	sw := tview.TaggedStringWidth(stamp)
+	stampTag := "[" + config.Config.Colors.BubbleTime + "::]" + stamp
+	if mark != "" {
+		stampTag += " " + mark
+	}
+	stampTag += "[" + text + "::]"
+	sw := tview.TaggedStringWidth(stampTag)
 	last := len(l.lines) - 1
 	if l.widths[last]+2+sw <= maxContent {
 		// Time on the last line, at the right edge of the content.
@@ -191,7 +216,7 @@ func layoutBubble(msg *messages.Message, maxContent int, showName bool) bubbleLa
 // bubble returns the lines of one message bubble placed in a pane width
 // cells wide: received on the left after a one-cell margin, your own ending
 // one cell before the right edge.
-func bubble(msg *messages.Message, width int, showName bool) string {
+func bubble(msg *messages.Message, width int, showName bool, mark string) string {
 	maxBubble := int(float64(width) * bubbleShare)
 	if maxBubble < 24 {
 		maxBubble = 24
@@ -201,9 +226,9 @@ func bubble(msg *messages.Message, width int, showName bool) string {
 	}
 	maxContent := maxBubble - 2*bubblePadX
 	if maxContent < 8 {
-		return getTextMessageString(msg, width) // too narrow for bubbles
+		return getTextMessageString(msg, width, mark) // too narrow for bubbles
 	}
-	l := layoutBubble(msg, maxContent, showName)
+	l := layoutBubble(msg, maxContent, showName, mark)
 	bg := config.Config.Colors.BubbleContact
 	outer := l.content + 2*bubblePadX
 	left := 1

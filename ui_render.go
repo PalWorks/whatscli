@@ -24,12 +24,13 @@ func getMessagesString(msgs []messages.Message) string {
 	var out strings.Builder
 	var prev *messages.Message
 	group := isGroupChat()
+	last := lastShown(msgs)
 	for i := range msgs {
 		msg := &msgs[i]
 		if strings.TrimSpace(msg.Text) == "" {
 			continue // skip empty/protocol messages
 		}
-		out.WriteString(messageBlock(prev, msg, messageWrapWidth, group))
+		out.WriteString(messageBlock(prev, msg, messageWrapWidth, group, msg == last))
 		out.WriteString("\n")
 		prev = msg
 	}
@@ -110,8 +111,9 @@ func hangingIndent(body string, indent, width int) string {
 }
 
 // create a formatted string with regions based on message ID from a text
-// message; width is the message pane width (0: unknown)
-func getTextMessageString(msg *messages.Message, width int) string {
+// message; width is the message pane width (0: unknown); mark (the status
+// ticks, may be "") follows the text
+func getTextMessageString(msg *messages.Message, width int, mark string) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
 	out := ""
@@ -128,6 +130,9 @@ func getTextMessageString(msg *messages.Message, width int) string {
 	text = hangingIndent(text, tview.TaggedStringWidth(tview.Escape(prefix)), width)
 	if msg.Forwarded {
 		text = "[" + config.Config.Colors.ForwardedText + "]" + text + "[-]"
+	}
+	if mark != "" {
+		text += " " + mark + "[-]"
 	}
 	out += "[\""
 	out += msg.Id

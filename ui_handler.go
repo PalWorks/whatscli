@@ -23,7 +23,13 @@ func (u UiHandler) NewMessage(msg messages.Message) {
 		if strings.TrimSpace(msg.Text) == "" {
 			return // not shown, as in a full redraw
 		}
-		PrintText(messageBlock(prev, &msg, messageWrapWidth, isGroupChat()))
+		if prev != nil && prev.FromMe && prev.Status != messages.StatusUnknown {
+			// The previous last message shows its status ticks, which
+			// belong to the last message only: redraw instead of append.
+			renderScreen(ctx.CurRegions)
+			return
+		}
+		PrintText(messageBlock(prev, &msg, messageWrapWidth, isGroupChat(), true))
 	})
 }
 

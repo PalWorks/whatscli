@@ -96,7 +96,7 @@ func TestSkinTonesDropped(t *testing.T) {
 		t.Errorf("displayName = %q", got)
 	}
 	msg := messages.Message{Id: "1", FromMe: true, Text: "hi 👋🏾"}
-	if s := getTextMessageString(&msg, 0); strings.ContainsRune(s, 0x1F3FE) {
+	if s := getTextMessageString(&msg, 0, ""); strings.ContainsRune(s, 0x1F3FE) {
 		t.Errorf("message text keeps the skin tone: %q", s)
 	}
 }

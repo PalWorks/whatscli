@@ -75,6 +75,7 @@ type Colors struct {
 	BubbleMe        string
 	BubbleContact   string
 	BubbleTime      string
+	StatusRead      string
 }
 
 var Config = IniFile{
@@ -130,6 +131,7 @@ var Config = IniFile{
 		BubbleMe:        "#005c4b",
 		BubbleContact:   "#202c33",
 		BubbleTime:      "silver",
+		StatusRead:      "#53bdeb",
 	},
 }
 
