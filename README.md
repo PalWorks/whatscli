@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-11-21T05:04:47+00:00 (chat bubbles)_
+_Last updated: 2026-11-21T05:06:02+00:00 (message status ticks)_
 
 ---
 
@@ -261,6 +261,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `[colors]` | `bubble_me` | `#005c4b` |
 | `[colors]` | `bubble_contact` | `#202c33` |
 | `[colors]` | `bubble_time` | `silver` |
+| `[colors]` | `status_read` | `#53bdeb` |
 
 `/colorlist` shows the available colour names.
 
@@ -290,6 +291,7 @@ While no chat is open, the message pane shows a short welcome with the five thin
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
 - When someone edits a message (or you edit yours on the phone), the new text replaces the old one, marked `(edited)`.
 - Messages are shown as chat bubbles: received ones on the left, yours on the right, each with its time (`HH:MM`) at the bottom right. A centred line (`Today`, `Yesterday`, `Friday, 13 Nov`) marks each new day; in group chats the sender's name heads each run of their messages (a run ends when someone else writes or after 10 minutes). Selecting a message highlights its bubble. Set `message_style = classic` under `[ui]` for one line per message; `bubble_me`, `bubble_contact` and `bubble_time` under `[colors]` set the colours (names or `#rrggbb`).
+- The chat's last message, if it is yours, shows its status after the time: one tick when WhatsApp's server accepted it, two when it reached the recipient's phone, two in `status_read` colour when it was read (or a voice message played). In a group, a receipt from any member counts. Messages stored before this version show no ticks until a new receipt arrives.
 - In the classic layout, a long message, or one with line breaks, continues under the first character of its text instead of at the left edge; resizing the window re-wraps the open chat. A sender name is always shown on one line (line breaks in a saved name become spaces).
 - Emoji are shown without skin tones: many terminal fonts draw the tone as a separate square next to the emoji, which also shifts the text after it. Stored messages are not changed.
 - Message senders show the name saved in your phone's contacts, else their phone number (`+91...`). A sender whose phone number WhatsApp keeps private shows their WhatsApp name as `~Name`.

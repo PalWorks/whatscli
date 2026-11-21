@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-11-21T05:04:47+00:00 (ui_bubbles.go)_incoming.go)_
+> _Last updated: 2026-11-21T05:06:02+00:00 (receipts.go)_bubbles.go)_incoming.go)_
 
 ## 1. Project
 
@@ -93,6 +93,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `jid_norm.go` | One canonical chat JID per person (`@lid` to phone number) |
 | `lid_merge.go` | Merges chats stored under `@lid` into the phone-number chat once the mapping is known |
 | `edit_incoming.go` | Incoming MESSAGE_EDIT: same chat and same sender rules as revoke; text replaced and marked `(edited)`; revoked rows never edited |
+| `receipts.go` | Status of our own messages: sent on store, raised by delivery and read receipts from others (never lowered, own devices' receipts ignored); receipts for not-yet-stored IDs kept (bounded) and applied on store |
 | `display_names.go` | Sender name at display time: saved contact name, else `+<phone>`, else `~PushName`, else the LID; never changes `ContactId` |
 | `chat_view.go` | Paging of the open chat: `viewAnchor` (under `sm.mu`), page sizes, anchor lowered when older messages arrive |
 | `delete_for_me.go` | "Delete for me" from your other devices (`events.DeleteForMe`): removes the stored row and moves the chat preview |
