@@ -18,7 +18,7 @@
   Read and send WhatsApp messages from a terminal, with no browser. Connects as a linked device through <a href="https://github.com/tulir/whatsmeow">whatsmeow</a> and draws its interface with <a href="https://github.com/rivo/tview">tview</a>.
 </p>
 
-_Last updated: 2026-10-31T18:03:42+00:00 (Ctrl+g help key, edited messages)_
+_Last updated: 2026-11-21T06:48:53+00:00 (drafts, edit, failed sends, typing and online status)_
 
 ---
 
@@ -203,6 +203,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `use_terminal_bell` | `false` | Ring the bell instead |
 | `notification_timeout` | `60` | Seconds between repeated notifications |
 | `backlog_msg_quantity` | `10` | Messages requested per `/backlog` (50 if not positive) |
+| `share_presence` | `true` | Be online while you use WhatsCLI and send typing notices, so typing and online status of others are shown (WhatsApp shares these only with online clients); `false` sends and shows none |
 
 </details>
 
@@ -232,6 +233,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `message_url` | `u` | Open link |
 | `message_info` | `i` | Chat info (the open chat or group) |
 | `message_revoke` | `r` | Delete for everyone (own messages) |
+| `message_retry` | `t` | Send a message marked as not sent again |
 
 </details>
 
@@ -243,6 +245,7 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | Section | Key | Default |
 |---|---|---|
 | `[ui]` | `chat_sidebar_width` | `30` |
+| `[ui]` | `message_style` | `bubbles` (`classic`: one line per message) |
 | `[colors]` | `background` | `black` |
 | `[colors]` | `text` | `white` |
 | `[colors]` | `forwarded_text` | `purple` |
@@ -257,6 +260,10 @@ INI file, created with defaults on first run: `~/.config/whatscli/whatscli.confi
 | `[colors]` | `unread_count` | `yellow` |
 | `[colors]` | `positive` | `green` |
 | `[colors]` | `negative` | `red` |
+| `[colors]` | `bubble_me` | `#005c4b` |
+| `[colors]` | `bubble_contact` | `#202c33` |
+| `[colors]` | `bubble_time` | `silver` |
+| `[colors]` | `status_read` | `#53bdeb` |
 
 `/colorlist` shows the available colour names.
 
@@ -285,6 +292,14 @@ While no chat is open, the message pane shows a short welcome with the five thin
 - `Ctrl+w` enters message selection; `Up` and `Down` (or `k` and `j`, `g`, `G`, `Ctrl+u`, `Ctrl+d`) move the highlight. With a message highlighted press `d`, `o`, `s`, `u`, `i` or `r`.
 - `Ctrl+p` toggles mouse support (off lets the terminal select text). With the mouse on, click a chat to open it, use the wheel to scroll, and click or drag the scroll bar (a thick line on the right border of a panel whose content is longer than the panel).
 - When someone edits a message (or you edit yours on the phone), the new text replaces the old one, marked `(edited)`.
+- Messages are shown as chat bubbles: received ones on the left, yours on the right, each with its time (`HH:MM`) at the bottom right. A centred line (`Today`, `Yesterday`, `Friday, 13 Nov`) marks each new day; in group chats the sender's name heads each run of their messages (a run ends when someone else writes or after 10 minutes). Selecting a message highlights its bubble. Set `message_style = classic` under `[ui]` for one line per message; `bubble_me`, `bubble_contact` and `bubble_time` under `[colors]` set the colours (names or `#rrggbb`).
+- Text you type but do not send stays with its chat: open another chat and come back, and it is there again. Sending it or pressing `Esc` clears it.
+- `Up` in an empty input loads your last message for editing (label `edit>`); `Enter` sends the edit and the message is marked `(edited)`, `Esc` cancels. Only your own text messages up to 15 minutes old can be edited (WhatsApp's limit); otherwise a note says why.
+- A message that could not be sent (offline, or the send failed) stays in the chat marked `! not sent` in red; select it and press `t` (or `/retry`) to send it again.
+- The chat title shows `typing…`, `recording audio…` (in groups `Asha is typing…`), else `online` or `last seen ...`, and the other side sees when you type. WhatsApp shares these only with clients that are online, so WhatsCLI is online while you use it (any key) and offline after 5 idle minutes, like WhatsApp Web; while online, contacts see you online and your phone may hold back notifications. `share_presence = false` under `[general]` turns this off.
+- The chat's last message, if it is yours, shows its status after the time: one tick when WhatsApp's server accepted it, two when it reached the recipient's phone, two in `status_read` colour when it was read (or a voice message played). In a group, a receipt from any member counts. Messages stored before this version show no ticks until a new receipt arrives.
+- In the classic layout, a long message, or one with line breaks, continues under the first character of its text instead of at the left edge; resizing the window re-wraps the open chat. A sender name is always shown on one line (line breaks in a saved name become spaces).
+- Emoji are shown without skin tones: many terminal fonts draw the tone as a separate square next to the emoji, which also shifts the text after it. Stored messages are not changed.
 - Message senders show the name saved in your phone's contacts, else their phone number (`+91...`). A sender whose phone number WhatsApp keeps private shows their WhatsApp name as `~Name`.
 - In the chat lists, the right column shows the unread count, if any, and the time of the last message; long names are shortened to keep it visible.
 
@@ -355,6 +370,8 @@ Commands use the configurable prefix (default `/`). The `<msg-id>` commands are 
 | `/show <msg-id>` | Save and render an image |
 | `/url <msg-id>` | Open the first http or https link |
 | `/revoke <msg-id>` | Delete your own message for everyone |
+| `/edit <chat-id> <msg-id> <text>` | Edit your message (`Up` in an empty input edits the last one) |
+| `/retry <msg-id>` | Send a message marked as not sent again |
 | `/search <keyword>` | Search messages |
 | `/search-contact <name>` | Search contacts |
 

@@ -123,6 +123,7 @@ func main() {
 		}
 		return event
 	})
+	setupCompose() // drafts, edit with Up, typing notices (ui_compose.go)
 
 	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
 	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)
@@ -133,7 +134,10 @@ func main() {
 	pages = tview.NewPages().AddPage("main", gridLayout, true, true)
 	ctx.App.SetRoot(pages, true)
 	ctx.App.EnableMouse(true)
-	ctx.App.SetAfterDrawFunc(drawScrollBars)
+	ctx.App.SetAfterDrawFunc(func(screen tcell.Screen) {
+		drawScrollBars(screen)
+		rewrapOnResize()
+	})
 	ctx.App.SetMouseCapture(scrollBarMouse)
 	ctx.App.SetFocus(ctx.TextInput)
 	if err := ctx.SessionManager.StartManager(); err != nil {

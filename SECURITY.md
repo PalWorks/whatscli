@@ -2,7 +2,7 @@
 
 Threat notes, controls and reporting for WhatsCLI. Rationale for each control is in the maintainers' private decision log (D9, D14, D15, D17); open hardening work is in [ROADMAP.md](ROADMAP.md) §3.2.
 
-_Last updated: 2026-10-31T18:03:42+00:00 (edit authorisation row)_
+_Last updated: 2026-11-21T06:48:53+00:00 (presence row)_
 
 ## 1. What is trusted and what is not
 
@@ -20,6 +20,8 @@ WhatsCLI is a linked device of one WhatsApp account. Everything that arrives fro
 | `show` renders a file outside the download or preview directory | `ResolveFileWithin`: file and directories are absolute and symlink-resolved; containment by `filepath.Rel`; sibling directories (`Downloads2`), `..`, the directory itself and blank config values are rejected | `messages/pathcheck.go`, `ui_render.go` `renderImage` | `TestResolveFileWithin` (13 cases) |
 | Malicious link opened by `/url` | Only the first `http` or `https` URL with a host; trailing punctuation trimmed. The opener is exec'd without a shell (Linux, macOS) or through `rundll32` (Windows) | `messages/media.go` `firstURL`, `messages/cmd_message.go` `cmdURL`, `ui_opener.go` `openerCommand` | `TestFirstURL`, `TestCmdURL` |
 | Spoofed edit rewrites someone else's message | An edit applies only in the original message's chat and only from its sender (our own devices for our messages); revoked messages are never edited | `messages/edit_incoming.go` `editAllowed`, `storage.go` `UpdateMessageText` | `TestIncomingEdit_Refused` |
+| Presence reveals activity; typing notices leak that you are writing | Online state and typing notices are sent only while `share_presence` is on (default); online is set on a key press and cleared after 5 idle minutes; with it off nothing is sent and nothing is subscribed | `messages/presence.go`, `ui_compose.go` | `ui_compose_test.go` (typing state), manual |
+| Edit or retry sends to the wrong message | `/edit` accepts only our own sent text message in the given chat within 15 minutes, not revoked; `/retry` only our own failed text message, resent under its own ID | `messages/cmd_edit.go` `Editable`, `cmdRetry` | `compose_test.go` |
 | SQL injection | All user data uses placeholders; `addColumnIfMissing` builds SQL only from compile-time constants; search escapes `LIKE` wildcards | `messages/storage.go` | `storage_test.go` |
 | Clipboard backend panics | `recover` around read and write; error shown, no crash | `ui_keybindings.go` | manual (TESTING.md step 11) |
 | Release pipeline abuse | Top-level `permissions: contents: read`; only the release job has `contents: write`; `GITHUB_TOKEN` only, no other secrets; tag input passed through `env` and validated by regex, never interpolated into scripts; `persist-credentials: false`; every action pinned to a commit SHA, bumped by Dependabot weekly (`.github/dependabot.yml`) | `.github/workflows/release.yml`, `.github/workflows/ci.yml` | ran on real tags `v1.4.0` to `v1.6.0` and their `-rc1` pre-releases |

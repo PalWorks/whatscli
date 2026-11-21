@@ -2,7 +2,7 @@
 
 Thanks for helping. Read [AGENTS.md](AGENTS.md) (rules, concurrency, security-sensitive code) and [ARCHITECTURE.md](ARCHITECTURE.md) first; they apply to people and AI agents alike.
 
-_Last updated: 2026-10-31T17:32:09+00:00 (new commands go in commandHints)_
+_Last updated: 2026-11-21T06:48:53+00:00 (/edit and /retry)_
 
 ## Licensing of contributions
 
@@ -44,6 +44,7 @@ Commands live in `messages/cmd_*.go` and are dispatched through the `commandRegi
 | `cmd_group.go` | `/create`, `/subject`, `/leave`, `/add`, `/remove`, `/admin`, `/removeadmin` |
 | `cmd_media.go` | `/upload`, `/sendimage`, `/sendvideo`, `/sendaudio` |
 | `cmd_message.go` | `/download`, `/open`, `/show`, `/url`, `/revoke` |
+| `cmd_edit.go` | `/edit`, `/retry` |
 | `cmd_search.go` | `/search`, `/search-contact` |
 
 Create a new `cmd_<feature>.go` if none fits.

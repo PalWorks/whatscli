@@ -2,9 +2,21 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T18:03:42+00:00 (released v1.6.6)_
+_Last updated: 2026-11-21T06:48:53+00:00 (drafts, edit, failed sends, typing and online status)_
 
 ## [Unreleased]
+
+### Added
+- Drafts: text typed but not sent stays with its chat and comes back when the chat is opened again (also after `/select <name>` and `Ctrl+f`).
+- Edit: `Up` in an empty input loads your last text message if it is at most 15 minutes old (label `edit>`); `Enter` sends the edit (new command `/edit`), `Esc` cancels. When it cannot be edited (too old, media, deleted, not sent), a note says why.
+- Failed sends: a text message that could not be sent is stored and shown with a red `! not sent` (status -1); select it and press `t` (new key `message_retry`) or use `/retry` to send it again under the same ID.
+- Typing and online status in the chat title (`typing…`, `recording audio…`, `Asha is typing…`, `online`, `last seen ...`), and typing notices sent while you type. WhatsCLI is marked online on a key press and offline after 5 idle minutes; new setting `share_presence` (default `true`) turns all of it off.
+- Message status: your own messages keep a status (sent, delivered, read; new column `messages.status`), raised by delivery and read receipts and never lowered, and filled from history sync. The chat's last message, if yours, shows it after the time: one tick, two ticks, or two ticks in the new colour `status_read`. In a group a receipt from any member counts.
+- Chat bubbles in the message pane (new default, `[ui] message_style = bubbles`): received messages on the left, your own on the right, in tinted blocks with two cells of side padding and half a row of colour above and below, the time at the bottom right. A centred line marks each day; in group chats the sender's name heads each run of messages. Every bubble line is padded to the same width so the background is a rectangle, and the selection highlights the bubble only. `message_style = classic` keeps the one-line layout; new colours `bubble_me`, `bubble_contact`, `bubble_time`.
+
+### Changed
+- Message pane: lines of a long message, and lines after a line break in it, start under the first character of the message text (hanging indent); the open chat is re-wrapped when the pane width changes. Line breaks and control characters in a sender name become spaces, so the name stays on the first line.
+- Emoji skin tone modifiers are dropped when showing message text, sender names, chat list names and the chat title, because many terminal fonts draw them as a separate square and the text after them shifted.
 
 ## [1.6.6] - 2026-10-31
 

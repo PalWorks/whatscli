@@ -379,6 +379,9 @@ func LoadShortcuts() {
 	if err := keysMessages.Set(config.Config.Keymap.MessageRevoke, handleMessageCommand("revoke")); err != nil {
 		PrintErrorMsg("message_revoke:", err)
 	}
+	if err := keysMessages.Set(config.Config.Keymap.MessageRetry, handleMessageCommand("retry")); err != nil {
+		PrintErrorMsg("message_retry:", err)
+	}
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyEscape, handleExitMessages)
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyUp, handleMessagesMove(-1))
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyDown, handleMessagesMove(1))
@@ -434,25 +437,35 @@ func EnterCommand(key tcell.Key) {
 				params = input[1:]
 			}
 			if cm == "select" && len(params) > 0 && openChatByName(strings.Join(params, " ")) {
-				ctx.TextInput.SetText("")
+				setInputText("")
 				return
 			}
 			if cm == "select" && len(params) == 1 {
-				ctx.CurrentReceiver = chatForID(params[0])
-				ctx.TextView.SetTitle(ctx.CurrentReceiver.Name)
+				enterChat(chatForID(params[0]))
 			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
+			setInputText("")
 		} else {
 			if ctx.CurrentReceiver.Id == "" {
 				PrintText("no receiver")
-				ctx.TextInput.SetText("")
+				setInputText("")
+				return
+			}
+			if editing != nil {
+				finishEdit(cmd)
 				return
 			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: "send", Params: []string{ctx.CurrentReceiver.Id, cmd}}
+			clearAfterSend(ctx.CurrentReceiver.Id)
 		}
-		ctx.TextInput.SetText("")
 	} else if key == tcell.KeyEsc {
-		ctx.TextInput.SetText("")
+		if editing != nil {
+			cancelEdit()
+			return
+		}
+		delete(drafts, ctx.CurrentReceiver.Id)
+		stopTyping()
+		setInputText("")
 	}
 }
 

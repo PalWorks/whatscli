@@ -4,9 +4,15 @@ package messages
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/PalWorks/whatscli/config"
+	"go.mau.fi/whatsmeow"
 
 	waProto "go.mau.fi/whatsmeow/binary/proto"
 	"go.mau.fi/whatsmeow/types"
@@ -33,6 +39,14 @@ func (sm *SessionManager) setCurrentReceiver(id string) {
 	if hasUnread {
 		go sm.markChatAsRead(id)
 	}
+	go sm.subscribeChatPresence(id) // online / last seen in the title (presence.go)
+}
+
+// getCurrentReceiver returns the open chat ("" if none).
+func (sm *SessionManager) getCurrentReceiver() string {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	return sm.currentReceiver
 }
 
 // showStatus prints status (and errs) for an action that may also have
@@ -187,57 +201,64 @@ func (sm *SessionManager) getMessages(wid string) []Message {
 	return msgs
 }
 
-// sendText sends a text message to a WhatsApp JID.
+// sendText sends a text message to a WhatsApp JID. The message is stored
+// and shown either way: sent, or, when it could not be sent (offline, or the
+// send failed), marked StatusFailed so it can be retried (cmdRetry).
 func (sm *SessionManager) sendText(wid string, text string) {
-	sm.mu.RLock()
-	client := sm.client
-	sm.mu.RUnlock()
-
-	if client == nil || !client.IsConnected() {
-		sm.uiHandler.PrintError(errors.New("not connected to WhatsApp"))
-		return
-	}
-
-	// Parse JID
 	receiver, err := types.ParseJID(wid)
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
 		return
 	}
-
-	// Create message
-	msg := &waProto.Message{
-		Conversation: proto.String(text),
+	client := sm.getClient()
+	newMsg := Message{
+		Id:           newMessageID(client),
+		ChatId:       wid,
+		FromMe:       true,
+		Timestamp:    uint64(time.Now().Unix()),
+		Text:         text,
+		ContactName:  "Me",
+		ContactShort: "Me",
+		Status:       StatusSent,
+	}
+	if client != nil && client.Store != nil && client.Store.ID != nil {
+		newMsg.ContactId = client.Store.ID.String()
 	}
 
-	// Send message
-	resp, err := client.SendMessage(context.Background(), receiver, msg)
-
-	if err != nil {
-		sm.uiHandler.PrintError(fmt.Errorf("failed to send message: %v", err))
+	var sendErr error
+	if client == nil || !client.IsConnected() {
+		sendErr = errors.New("not connected to WhatsApp")
 	} else {
-		// Create a Message struct to save to the database
-		newMsg := Message{
-			Id:           resp.ID,
-			ChatId:       wid,
-			FromMe:       true,
-			Timestamp:    uint64(time.Now().Unix()),
-			Text:         text,
-			ContactId:    client.Store.ID.String(),
-			ContactName:  "Me",
-			ContactShort: "Me",
-		}
-
-		if _, err := sm.db.AddMessage(newMsg); err != nil {
-			sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))
-		}
-
-		sm.mu.RLock()
-		isCurrent := sm.currentReceiver == wid
-		sm.mu.RUnlock()
-
-		if isCurrent {
-			sm.uiHandler.NewMessage(newMsg)
+		msg := &waProto.Message{Conversation: proto.String(text)}
+		resp, err := client.SendMessage(context.Background(), receiver, msg, whatsmeow.SendRequestExtra{ID: types.MessageID(newMsg.Id)})
+		if err != nil {
+			sendErr = err
+		} else if resp.ID != "" {
+			newMsg.Id = string(resp.ID)
 		}
 	}
+	if sendErr != nil {
+		newMsg.Status = StatusFailed
+		sm.uiHandler.PrintError(fmt.Errorf("message not sent: %v (select it and press %s to try again)", sendErr, config.Config.Keymap.MessageRetry))
+	} else {
+		sm.withEarlyStatus(&newMsg)
+	}
+
+	if _, err := sm.db.AddMessage(newMsg); err != nil {
+		sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))
+	}
+	if sm.getCurrentReceiver() == wid {
+		sm.uiHandler.NewMessage(newMsg)
+	}
+}
+
+// newMessageID returns an ID for a message we send, so a failed send can be
+// stored and retried under the same ID (WhatsApp ignores a repeat).
+func newMessageID(client *whatsmeow.Client) string {
+	if client != nil {
+		return string(client.GenerateMessageID())
+	}
+	b := make([]byte, 9)
+	_, _ = rand.Read(b)
+	return "3EB0" + strings.ToUpper(hex.EncodeToString(b))
 }
