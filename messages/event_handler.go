@@ -31,6 +31,7 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		eh.sm.loggedOut = false
 		eh.sm.mu.Unlock()
 		eh.sm.StatusChannel <- StatusMsg{true, nil}
+		go eh.sm.sendPresence() // online again if the user is active
 	case *events.Disconnected:
 		eh.sm.StatusChannel <- StatusMsg{false, nil}
 		// Attempt auto-reconnect unless logged out or already reconnecting
@@ -54,6 +55,10 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		eh.sm.handleDeleteForMe(v)
 	case *events.Receipt:
 		eh.sm.handleReceipt(v)
+	case *events.ChatPresence:
+		eh.sm.handleChatPresence(v)
+	case *events.Presence:
+		eh.sm.handlePresence(v)
 	case *events.HistorySync:
 		go eh.sm.processHistorySync(v.Data)
 	}

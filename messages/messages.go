@@ -21,6 +21,12 @@ type UiMessageHandler interface {
 	// returns an error if the opener could not be started.
 	OpenFile(string) error
 	ShowColorList()
+	// SetChatActivity shows what the other side is doing in chat ("typing…",
+	// "Asha is recording audio…"); "" clears it.
+	SetChatActivity(chat, text string)
+	// SetChatPresence shows a contact's online state ("online", "last seen
+	// ..."); "" clears it.
+	SetChatPresence(chat, text string)
 	Clear()
 	// ReplaceText clears the message pane and prints text in a single draw.
 	ReplaceText(string)

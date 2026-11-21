@@ -29,6 +29,7 @@ type General struct {
 	UseTerminalBell     bool
 	NotificationTimeout int64
 	BacklogMsgQuantity  int
+	SharePresence       bool // online while active, typing sent and shown (messages/presence.go)
 }
 
 type Keymap struct {
@@ -50,6 +51,7 @@ type Keymap struct {
 	MessageUrl      string
 	MessageInfo     string
 	MessageRevoke   string
+	MessageRetry    string
 }
 
 type Ui struct {
@@ -88,6 +90,7 @@ var Config = IniFile{
 		UseTerminalBell:     false,
 		NotificationTimeout: 60,
 		BacklogMsgQuantity:  10,
+		SharePresence:       true,
 	},
 	&Keymap{
 		SwitchPanels:    "Tab",
@@ -108,6 +111,7 @@ var Config = IniFile{
 		MessageUrl:      "u",
 		MessageRevoke:   "r",
 		MessageShow:     "s",
+		MessageRetry:    "t",
 	},
 	&Ui{
 		ChatSidebarWidth: 30,

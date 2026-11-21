@@ -23,6 +23,7 @@ import (
 type SessionManager struct {
 	db              *MessageDatabase
 	earlyReceipts   earlyReceipts // receipts for messages not stored yet (receipts.go)
+	presence        presenceState // whether we are marked online (presence.go)
 	currentReceiver string        // currently selected chat for message handling
 	viewAnchor      uint64        // oldest timestamp shown in the open chat (chat_view.go)
 	uiHandler       UiMessageHandler

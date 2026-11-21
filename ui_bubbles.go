@@ -49,6 +49,8 @@ func isGroupChat() bool {
 // ✓ sent, ✓✓ delivered, blue ✓✓ read; "" when the status is not known.
 func statusMark(status int) string {
 	switch status {
+	case messages.StatusFailed:
+		return "[" + config.Config.Colors.Negative + "::b]! not sent[" + config.Config.Colors.Text + "::-]"
 	case messages.StatusSent:
 		return "[" + config.Config.Colors.BubbleTime + "::]✓"
 	case messages.StatusDelivered:
@@ -65,8 +67,8 @@ func statusMark(status int) string {
 // status, and only if it is ours.
 func messageBlock(prev, msg *messages.Message, width int, group, last bool) string {
 	mark := ""
-	if last && msg.FromMe {
-		mark = statusMark(msg.Status)
+	if msg.FromMe && (last || msg.Status == messages.StatusFailed) {
+		mark = statusMark(msg.Status) // a failed send is marked wherever it is
 	}
 	if classicStyle() {
 		return getTextMessageString(msg, width, mark)

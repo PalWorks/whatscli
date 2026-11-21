@@ -47,7 +47,7 @@ func TestCommandEntries(t *testing.T) {
 	}{
 		{"/lo", "login logout"},
 		{"/LO", "login logout"},
-		{"/re", "read remove removeadmin reset revoke"},
+		{"/re", "read remove removeadmin reset revoke retry"},
 		{"/read", ""}, // fully typed: no list, Enter runs it
 		{"/remove", "remove removeadmin"},
 		{"/send ", ""}, // arguments started

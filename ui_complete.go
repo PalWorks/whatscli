@@ -51,6 +51,8 @@ var commandHints = []commandHint{
 	{"removeadmin", "<userid>", "Remove admin"},
 	{"reset", "", "Delete session and messages"},
 	{"revoke", "<msg-id>", "Delete own message for everyone"},
+	{"edit", "<chat-id> <msg-id> <text>", "Edit your message (Up in an empty input edits the last one)"},
+	{"retry", "<msg-id>", "Send a message marked as not sent again"},
 	{"search", "<keyword>", "Search messages"},
 	{"search-contact", "<name>", "Find contacts"},
 	{"select", "<chat-id>", "Open chat"},

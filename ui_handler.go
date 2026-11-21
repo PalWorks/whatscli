@@ -169,6 +169,16 @@ func (u UiHandler) SetStatus(status messages.SessionStatus) {
 	})
 }
 
+// SetChatActivity shows what the other side of chat is doing in its title.
+func (u UiHandler) SetChatActivity(chat, text string) {
+	go ctx.App.QueueUpdateDraw(func() { setChatActivity(chat, text) })
+}
+
+// SetChatPresence shows a contact's online state in the chat title.
+func (u UiHandler) SetChatPresence(chat, text string) {
+	go ctx.App.QueueUpdateDraw(func() { setChatPresence(chat, text) })
+}
+
 func (u UiHandler) ShowColorList() {
 	out := ""
 	for idx, _ := range tcell.ColorNames {

@@ -123,6 +123,7 @@ func main() {
 		}
 		return event
 	})
+	setupCompose() // drafts, edit with Up, typing notices (ui_compose.go)
 
 	gridLayout.AddItem(topBar, 0, 0, 1, 4, 0, 0, false)
 	gridLayout.AddItem(SetupLeftPane(), 1, 0, 2, 1, 0, 0, false)

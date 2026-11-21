@@ -23,7 +23,8 @@ import (
 
 // Message status values, in order; a status only ever goes up.
 const (
-	StatusUnknown   = 0 // received messages, and own messages from before status was kept
+	StatusFailed    = -1 // could not be sent; cmdRetry sends it again
+	StatusUnknown   = 0  // received messages, and own messages from before status was kept
 	StatusSent      = 1
 	StatusDelivered = 2
 	StatusRead      = 3 // read, or a voice message played
