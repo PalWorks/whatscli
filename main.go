@@ -133,7 +133,10 @@ func main() {
 	pages = tview.NewPages().AddPage("main", gridLayout, true, true)
 	ctx.App.SetRoot(pages, true)
 	ctx.App.EnableMouse(true)
-	ctx.App.SetAfterDrawFunc(drawScrollBars)
+	ctx.App.SetAfterDrawFunc(func(screen tcell.Screen) {
+		drawScrollBars(screen)
+		rewrapOnResize()
+	})
 	ctx.App.SetMouseCapture(scrollBarMouse)
 	ctx.App.SetFocus(ctx.TextInput)
 	if err := ctx.SessionManager.StartManager(); err != nil {

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
@@ -17,38 +18,105 @@ import (
 	"github.com/rivo/tview"
 )
 
-// get a string representation of all messages for chat
+// get a string representation of all messages for chat, wrapped to the
+// width of the message pane
 func getMessagesString(msgs []messages.Message) string {
 	out := ""
 	for _, msg := range msgs {
 		if strings.TrimSpace(msg.Text) == "" {
 			continue // skip empty/protocol messages
 		}
-		out += getTextMessageString(&msg)
+		out += getTextMessageString(&msg, messageWrapWidth)
 		out += "\n"
 	}
 	return out
 }
 
-// create a formatted string with regions based on message ID from a text message
-func getTextMessageString(msg *messages.Message) string {
+// messageWrapWidth is the message pane width the shown chat was wrapped to,
+// 0 before the pane was first drawn (UI goroutine only).
+var messageWrapWidth int
+
+// paneWidth is the inner width of the message pane.
+func paneWidth() int {
+	_, _, w, _ := ctx.TextView.GetInnerRect()
+	return w
+}
+
+// rewrapOnResize redraws the shown chat when the message pane's width no
+// longer matches the width its messages were wrapped to (terminal resized,
+// first draw). Called after every draw.
+func rewrapOnResize() {
+	if ctx.TextView == nil || len(ctx.CurRegions) == 0 {
+		return
+	}
+	if w := paneWidth(); w > 0 && w != messageWrapWidth {
+		messageWrapWidth = w
+		msgs := ctx.CurRegions
+		go ctx.App.QueueUpdateDraw(func() { renderScreen(msgs) })
+	}
+}
+
+// displayName puts a contact name on one line: line breaks, tabs and other
+// control characters become single spaces.
+func displayName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, name)
+	return strings.Join(strings.Fields(name), " ")
+}
+
+// hangingIndent lays out a message body after a prefix of width indent so
+// that every following line, whether the text broke it or it was wrapped to
+// width, starts under the first character of the body. With no width known,
+// or too little room, the body is left for the text view to wrap.
+func hangingIndent(body string, indent, width int) string {
+	if width <= 0 {
+		return body
+	}
+	if indent > width/2 {
+		indent = 4 // a very long name: do not squeeze the text
+	}
+	if width-indent < 10 {
+		return body
+	}
+	var lines []string
+	for _, para := range strings.Split(body, "\n") {
+		wrapped := tview.WordWrap(para, width-indent)
+		if len(wrapped) == 0 {
+			wrapped = []string{""}
+		}
+		lines = append(lines, wrapped...)
+	}
+	return strings.Join(lines, "\n"+strings.Repeat(" ", indent))
+}
+
+// create a formatted string with regions based on message ID from a text
+// message; width is the message pane width (0: unknown)
+func getTextMessageString(msg *messages.Message, width int) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
 	out := ""
 	text := tview.Escape(msg.Text)
+	tim := time.Unix(int64(msg.Timestamp), 0)
+	time := tim.Format("02-01-06 15:04:05")
+	name := "Me"
+	color := colorMe
+	if !msg.FromMe {
+		name = displayName(msg.ContactShort)
+		color = colorContact
+	}
+	prefix := "(" + time + ") " + name + ": "
+	text = hangingIndent(text, tview.TaggedStringWidth(tview.Escape(prefix)), width)
 	if msg.Forwarded {
 		text = "[" + config.Config.Colors.ForwardedText + "]" + text + "[-]"
 	}
-	tim := time.Unix(int64(msg.Timestamp), 0)
-	time := tim.Format("02-01-06 15:04:05")
 	out += "[\""
 	out += msg.Id
 	out += "\"]"
-	if msg.FromMe { //msg from me
-		out += "[-::d](" + time + ") [" + colorMe + "::b]Me: [-::-]" + text
-	} else { // message from others
-		out += "[-::d](" + time + ") [" + colorContact + "::b]" + tview.Escape(msg.ContactShort) + ": [-::-]" + text
-	}
+	out += "[-::d](" + time + ") [" + color + "::b]" + tview.Escape(name) + ": [-::-]" + text
 	out += "[\"\"]"
 	return out
 }

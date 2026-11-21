@@ -18,7 +18,7 @@ func (u UiHandler) NewMessage(msg messages.Message) {
 	// QueueUpdateDraw must be called from a goroutine to avoid blocking the caller.
 	go ctx.App.QueueUpdateDraw(func() {
 		ctx.CurRegions = append(ctx.CurRegions, msg)
-		PrintText(getTextMessageString(&msg))
+		PrintText(getTextMessageString(&msg, messageWrapWidth))
 	})
 }
 
@@ -49,6 +49,9 @@ var renderedChat string
 // newly opened chat starts at its latest message; a redraw of the same chat
 // keeps the user's scroll position.
 func renderScreen(msgs []messages.Message) {
+	if w := paneWidth(); w > 0 {
+		messageWrapWidth = w
+	}
 	ctx.TextView.Clear()
 	screen := getMessagesString(msgs)
 	ctx.TextView.SetText(screen)
