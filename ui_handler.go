@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
@@ -17,9 +18,23 @@ type UiHandler struct{}
 func (u UiHandler) NewMessage(msg messages.Message) {
 	// QueueUpdateDraw must be called from a goroutine to avoid blocking the caller.
 	go ctx.App.QueueUpdateDraw(func() {
+		prev := lastShown(ctx.CurRegions)
 		ctx.CurRegions = append(ctx.CurRegions, msg)
-		PrintText(getTextMessageString(&msg, messageWrapWidth))
+		if strings.TrimSpace(msg.Text) == "" {
+			return // not shown, as in a full redraw
+		}
+		PrintText(messageBlock(prev, &msg, messageWrapWidth, isGroupChat()))
 	})
+}
+
+// lastShown is the last message of msgs that the pane shows, nil if none.
+func lastShown(msgs []messages.Message) *messages.Message {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if strings.TrimSpace(msgs[i].Text) != "" {
+			return &msgs[i]
+		}
+	}
+	return nil
 }
 
 func (u UiHandler) NewScreen(msgs []messages.Message) {

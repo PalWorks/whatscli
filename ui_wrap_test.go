@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -42,6 +43,9 @@ func TestHangingIndent(t *testing.T) {
 // the first character of its text, and a name with line breaks stays on the
 // first line.
 func TestMessagesAlignInPane(t *testing.T) {
+	savedStyle := config.Config.Ui.MessageStyle
+	config.Config.Ui.MessageStyle = "classic"
+	t.Cleanup(func() { config.Config.Ui.MessageStyle = savedStyle })
 	screen := tcell.NewSimulationScreen("UTF-8")
 	if err := screen.Init(); err != nil {
 		t.Fatal(err)

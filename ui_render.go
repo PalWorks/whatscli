@@ -21,15 +21,19 @@ import (
 // get a string representation of all messages for chat, wrapped to the
 // width of the message pane
 func getMessagesString(msgs []messages.Message) string {
-	out := ""
-	for _, msg := range msgs {
+	var out strings.Builder
+	var prev *messages.Message
+	group := isGroupChat()
+	for i := range msgs {
+		msg := &msgs[i]
 		if strings.TrimSpace(msg.Text) == "" {
 			continue // skip empty/protocol messages
 		}
-		out += getTextMessageString(&msg, messageWrapWidth)
-		out += "\n"
+		out.WriteString(messageBlock(prev, msg, messageWrapWidth, group))
+		out.WriteString("\n")
+		prev = msg
 	}
-	return out
+	return out.String()
 }
 
 // messageWrapWidth is the message pane width the shown chat was wrapped to,
