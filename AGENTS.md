@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-11-21T06:48:19+00:00 (receipts.go)_
+> _Last updated: 2026-11-21T06:48:53+00:00 (ui_compose.go, presence.go, cmd_edit.go)_
 
 ## 1. Project
 
@@ -67,7 +67,7 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
               ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
-              ui_complete.go (command drop-down and echo), ui_render.go (message text, wrapping), ui_bubbles.go (chat bubble layout), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
+              ui_complete.go (command drop-down and echo), ui_render.go (message text, wrapping), ui_bubbles.go (chat bubble layout), ui_compose.go (drafts, Up to edit, typing notices, chat title, online while active), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
@@ -93,6 +93,8 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `jid_norm.go` | One canonical chat JID per person (`@lid` to phone number) |
 | `lid_merge.go` | Merges chats stored under `@lid` into the phone-number chat once the mapping is known |
 | `edit_incoming.go` | Incoming MESSAGE_EDIT: same chat and same sender rules as revoke; text replaced and marked `(edited)`; revoked rows never edited |
+| `presence.go` | Online while active (`SetActive`), typing notices (`SendTyping`), incoming typing and presence to the UI; nothing sent when `share_presence` is off; all network calls in goroutines |
+| `cmd_edit.go` | `/edit` (own text messages within `EditWindow`, `Editable`) and `/retry` (failed own text messages, same ID) |
 | `receipts.go` | Status of our own messages: sent on store, raised by delivery and read receipts from others (never lowered, own devices' receipts ignored); receipts for not-yet-stored IDs kept (bounded) and applied on store |
 | `display_names.go` | Sender name at display time: saved contact name, else `+<phone>`, else `~PushName`, else the LID; never changes `ContactId` |
 | `chat_view.go` | Paging of the open chat: `viewAnchor` (under `sm.mu`), page sizes, anchor lowered when older messages arrive |
