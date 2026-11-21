@@ -144,19 +144,34 @@ func TestUpEditsLastOwnMessage(t *testing.T) {
 	}
 }
 
-func TestUpDoesNothingWhenTooLateOrNotOwn(t *testing.T) {
+// Up on a last message that may not be edited loads nothing and says why;
+// with no own message it stays quiet.
+func TestUpExplainsWhyNotEditable(t *testing.T) {
 	app, input, _ := composeApp(t)
 	old := uint64(time.Now().Add(-messages.EditWindow - time.Minute).Unix())
-	for _, regions := range [][]messages.Message{
-		{{Id: "a", FromMe: true, Text: "old one", Timestamp: old}},
-		{{Id: "b", FromMe: true, Text: "[IMAGE]", MediaKind: "image", Timestamp: uint64(time.Now().Unix())}},
-		{{Id: "c", FromMe: true, Text: "failed", Status: messages.StatusFailed, Timestamp: uint64(time.Now().Unix())}},
-		nil,
+	now := uint64(time.Now().Unix())
+	for _, tt := range []struct {
+		regions []messages.Message
+		note    string
+	}{
+		{[]messages.Message{{Id: "a", FromMe: true, Text: "old one", Timestamp: old}}, "too late to edit"},
+		{[]messages.Message{{Id: "b", FromMe: true, Text: "[IMAGE]", MediaKind: "image", Timestamp: now}}, "only text messages"},
+		{[]messages.Message{{Id: "c", FromMe: true, Text: "failed", Status: messages.StatusFailed, Timestamp: now}}, "was not sent"},
+		{[]messages.Message{{Id: "d", Text: "only theirs", Timestamp: now}}, ""},
+		{nil, ""},
 	} {
-		run(app, func() { enterChat(chatA); ctx.CurRegions = regions; setInputText("") })
+		run(app, func() { enterChat(chatA); ctx.CurRegions = tt.regions; setInputText(""); ctx.TextView.Clear() })
 		typeKeys(app, input, tcell.KeyUp)
 		if got := inputText(app, input); got != "" || editing != nil {
-			t.Errorf("%+v: Up loaded %q", regions, got)
+			t.Errorf("%+v: Up loaded %q", tt.regions, got)
+		}
+		var pane string
+		run(app, func() { pane = ctx.TextView.GetText(true) })
+		switch {
+		case tt.note == "" && strings.Contains(pane, "Cannot edit"):
+			t.Errorf("%+v: unexpected note %q", tt.regions, pane)
+		case tt.note != "" && (!strings.Contains(pane, "Cannot edit your last message") || !strings.Contains(pane, tt.note)):
+			t.Errorf("%+v: pane = %q, want a note with %q", tt.regions, pane, tt.note)
 		}
 	}
 }

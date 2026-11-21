@@ -25,6 +25,7 @@ import (
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
 	"github.com/gdamore/tcell/v2"
+	"github.com/rivo/tview"
 )
 
 const (
@@ -138,27 +139,29 @@ func clearAfterSend(chat string) {
 	setInputText("")
 }
 
-// lastEditable returns the chat's last own message if it may still be
-// edited, else nil.
-func lastEditable(now time.Time) *messages.Message {
+// lastOwn returns the chat's last own message, nil if there is none, and
+// why it may not be edited (nil if it may).
+func lastOwn(now time.Time) (*messages.Message, error) {
 	for i := len(ctx.CurRegions) - 1; i >= 0; i-- {
 		m := ctx.CurRegions[i]
 		if !m.FromMe || strings.TrimSpace(m.Text) == "" {
 			continue
 		}
-		if messages.Editable(m, now) != nil {
-			return nil
-		}
-		return &m
+		return &m, messages.Editable(m, now)
 	}
-	return nil
+	return nil, nil
 }
 
-// startEdit loads the last own message for editing; false if there is none
-// that may be edited.
+// startEdit loads the last own message for editing. If it may not be
+// edited, a note in the message pane says why. False if nothing was loaded.
 func startEdit() bool {
-	m := lastEditable(time.Now())
+	m, err := lastOwn(time.Now())
 	if m == nil {
+		return false
+	}
+	if err != nil {
+		PrintText("[::d]Cannot edit your last message: " + tview.Escape(err.Error()) + "[::-]")
+		ctx.TextView.ScrollToEnd()
 		return false
 	}
 	editing = m
