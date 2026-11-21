@@ -30,6 +30,8 @@ const (
 	bubbleShare = 0.75
 	// fallbackWidth is used before the message pane has been drawn once.
 	fallbackWidth = 80
+	// bubblePadX is the space between a bubble's edge and its text.
+	bubblePadX = 2
 )
 
 // classicStyle reports whether the one-line-per-message layout is set
@@ -62,8 +64,6 @@ func messageBlock(prev, msg *messages.Message, width int, group bool) string {
 		}
 		b.WriteString(daySeparator(at, time.Now(), width))
 		b.WriteString("\n\n")
-	default:
-		b.WriteString("\n") // a blank line between bubbles
 	}
 	showName := group && !msg.FromMe && (newDay || !sameRun(prev, msg))
 	b.WriteString(bubble(msg, width, showName))
@@ -199,25 +199,35 @@ func bubble(msg *messages.Message, width int, showName bool) string {
 	if maxBubble > width-2 {
 		maxBubble = width - 2
 	}
-	maxContent := maxBubble - 2 // one cell of padding on each side
+	maxContent := maxBubble - 2*bubblePadX
 	if maxContent < 8 {
 		return getTextMessageString(msg, width) // too narrow for bubbles
 	}
 	l := layoutBubble(msg, maxContent, showName)
 	bg := config.Config.Colors.BubbleContact
+	outer := l.content + 2*bubblePadX
 	left := 1
 	if msg.FromMe {
 		bg = config.Config.Colors.BubbleMe
-		left = width - 1 - (l.content + 2)
+		left = width - 1 - outer
 		if left < 0 {
 			left = 0
 		}
 	}
-	open := "[\"" + msg.Id + "\"][" + config.Config.Colors.Text + ":" + bg + ":-] "
-	closing := " [-:-:-][\"\"]"
-	out := make([]string, len(l.lines))
-	for i, line := range l.lines {
-		out[i] = strings.Repeat(" ", left) + open + line + strings.Repeat(" ", l.content-l.widths[i]) + closing
+	margin := strings.Repeat(" ", left)
+	pad := strings.Repeat(" ", bubblePadX)
+	// Half a row of bubble colour above and below the text: the lower half
+	// block on the row above, the upper half block on the row below. They
+	// also keep two bubbles in a row apart.
+	edge := func(block string) string {
+		return margin + "[" + bg + ":-:-]" + strings.Repeat(block, outer) + "[-:-:-]"
 	}
+	open := "[\"" + msg.Id + "\"][" + config.Config.Colors.Text + ":" + bg + ":-]" + pad
+	closing := pad + "[-:-:-][\"\"]"
+	out := []string{edge("▄")}
+	for i, line := range l.lines {
+		out = append(out, margin+open+line+strings.Repeat(" ", l.content-l.widths[i])+closing)
+	}
+	out = append(out, edge("▀"))
 	return strings.Join(out, "\n")
 }

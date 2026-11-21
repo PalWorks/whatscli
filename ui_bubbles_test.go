@@ -195,6 +195,25 @@ func TestBubblesAreRectanglesOnTheRightSide(t *testing.T) {
 				if b.right-b.left+1 > w-2 {
 					t.Errorf("bubble %d is wider than the pane", i)
 				}
+				// Half-row edges above and below, exactly as wide.
+				for _, e := range []struct {
+					y     int
+					block string
+				}{{b.top - 1, "▄"}, {b.bottom + 1, "▀"}} {
+					row := []rune(strings.Split(cellsText(cells, cw, ch), "\n")[e.y])
+					got := string(row[b.left : b.right+1])
+					if got != strings.Repeat(e.block, b.right-b.left+1) ||
+						(b.left > 0 && row[b.left-1] != ' ') || (b.right+1 < len(row) && row[b.right+1] != ' ') {
+						t.Errorf("bubble %d: edge row %d is %q, want %d x %s", i, e.y, string(row), b.right-b.left+1, e.block)
+					}
+				}
+				// Two cells of space between the edge and the text.
+				lines := strings.Split(strings.TrimRight(b.text, "\n"), "\n")
+				for _, line := range lines {
+					if !strings.HasPrefix(line, "  ") || !strings.HasSuffix(line, "  ") {
+						t.Errorf("bubble %d: line %q lacks padding", i, line)
+					}
+				}
 			}
 			for _, want := range []string{"Today", "Yesterday", "Forwarded", "Q beta"} {
 				if !screenContains(screen, want) {
@@ -240,7 +259,8 @@ func TestBubbleSelectionHighlightsBubbleOnly(t *testing.T) {
 	saved := config.Config.Ui.MessageStyle
 	config.Config.Ui.MessageStyle = "bubbles"
 	t.Cleanup(func() { config.Config.Ui.MessageStyle = saved })
-	for _, line := range strings.Split(bubble(&msg, 50, false), "\n") {
+	lines := strings.Split(bubble(&msg, 50, false), "\n")
+	for _, line := range lines[1 : len(lines)-1] { // the half-row edges are not selectable
 		if !strings.HasPrefix(strings.TrimLeft(line, " "), `["m1"]`) {
 			t.Errorf("region must start after the padding: %q", line)
 		}
