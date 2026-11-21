@@ -32,6 +32,7 @@ var commandHints = []commandHint{
 	{"admin", "<userid>", "Promote to admin"},
 	{"backlog", "", "Request older messages from the phone"},
 	{"colorlist", "", "Show colour names"},
+	{"style", "[bubbles|classic]", "Switch the message layout (no argument: toggle)"},
 	{"connect", "", "(Re)connect"},
 	{"create", "<nums> <subject>", "Create group"},
 	{"demote", "<userid>", "Remove admin"},

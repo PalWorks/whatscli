@@ -21,6 +21,9 @@ type UiMessageHandler interface {
 	// returns an error if the opener could not be started.
 	OpenFile(string) error
 	ShowColorList()
+	// SetMessageStyle switches the message pane between "bubbles" and
+	// "classic"; "" toggles between them.
+	SetMessageStyle(style string)
 	Clear()
 	// ReplaceText clears the message pane and prints text in a single draw.
 	ReplaceText(string)

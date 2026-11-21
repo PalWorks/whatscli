@@ -21,6 +21,7 @@ type MockUiHandler struct {
 	QuitCalled  int
 	ColorCalled int
 	CmdsCalled  int
+	Styles      []string
 	// OpenErr is returned by OpenFile.
 	OpenErr error
 }
@@ -40,6 +41,7 @@ func (m *MockUiHandler) PrintQR(qr string)                { m.QRCodes = append(m
 func (m *MockUiHandler) SetStatus(s SessionStatus)        { m.Statuses = append(m.Statuses, s) }
 func (m *MockUiHandler) ShowColorList()                   { m.ColorCalled++ }
 func (m *MockUiHandler) Clear()                           { m.ClearCalled++ }
+func (m *MockUiHandler) SetMessageStyle(style string)     { m.Styles = append(m.Styles, style) }
 func (m *MockUiHandler) ReplaceText(text string) {
 	m.ClearCalled++
 	m.Texts = append(m.Texts, text)

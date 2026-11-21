@@ -327,3 +327,22 @@ func TestBubbleDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// /style switches the open chat between bubbles and classic and back.
+func TestStyleCommandSwitchesLayout(t *testing.T) {
+	msgs := bubbleSamples(time.Now())[1:3]
+	app, screen := runBubbleView(t, 80, 30, msgs, "111@s.whatsapp.net")
+	if !waitFor(app, func() bool { return messageWrapWidth == 80 && screenContains(screen, "▄▄▄") }) {
+		t.Fatalf("bubbles not shown:\n%s", screenText(screen))
+	}
+	app.QueueUpdateDraw(func() { ctx.CurRegions = msgs; applyMessageStyle("") })
+	if !waitFor(app, func() bool {
+		return classicStyle() && !screenContains(screen, "▄▄▄") && screenContains(screen, "Me: Q beta") && screenContains(screen, "Message style: classic")
+	}) {
+		t.Fatalf("not switched to classic:\n%s", screenText(screen))
+	}
+	app.QueueUpdateDraw(func() { applyMessageStyle("") })
+	if !waitFor(app, func() bool { return !classicStyle() && screenContains(screen, "▄▄▄") }) {
+		t.Fatalf("not switched back to bubbles:\n%s", screenText(screen))
+	}
+}

@@ -178,6 +178,21 @@ func cmdQuit(sm *SessionManager, client *whatsmeow.Client, cmdName string, param
 	sm.uiHandler.Quit()
 }
 
+// cmdStyle switches the message layout: "/style" toggles, "/style classic"
+// or "/style bubbles" picks one. For this session only; the config setting
+// ui.message_style is the default.
+func cmdStyle(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
+	style := ""
+	if len(params) > 0 {
+		style = strings.ToLower(params[0])
+		if len(params) > 1 || (style != "classic" && style != "bubbles") {
+			sm.printCommandUsage(cmdName, "[bubbles|classic]")
+			return
+		}
+	}
+	sm.uiHandler.SetMessageStyle(style)
+}
+
 // cmdColorList shows available colors.
 func cmdColorList(sm *SessionManager, client *whatsmeow.Client, cmdName string, params []string) {
 	sm.uiHandler.ShowColorList()

@@ -163,6 +163,28 @@ func (u UiHandler) SetStatus(status messages.SessionStatus) {
 	})
 }
 
+// SetMessageStyle switches the message pane between "bubbles" and "classic"
+// ("" toggles) for this session and redraws the open chat.
+func (u UiHandler) SetMessageStyle(style string) {
+	go ctx.App.QueueUpdateDraw(func() { applyMessageStyle(style) })
+}
+
+// applyMessageStyle sets the message style and redraws the open chat. UI
+// goroutine only.
+func applyMessageStyle(style string) {
+	if style == "" {
+		style = "classic"
+		if classicStyle() {
+			style = "bubbles"
+		}
+	}
+	config.Config.Ui.MessageStyle = style
+	if ctx.CurrentReceiver.Id != "" {
+		renderScreen(ctx.CurRegions)
+	}
+	PrintText("[::d]Message style: " + style + " (set message_style under [ui] in the config to keep it)[::-]")
+}
+
 func (u UiHandler) ShowColorList() {
 	out := ""
 	for idx, _ := range tcell.ColorNames {
