@@ -2,9 +2,17 @@
 
 All notable changes to this project are recorded here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are git tags (`vX.Y.Z`).
 
-_Last updated: 2026-10-31T18:03:42+00:00 (released v1.6.6)_
+_Last updated: 2026-11-21T05:17:01+00:00 (/style command)_
 
 ## [Unreleased]
+
+### Added
+- `/style` switches the message pane between bubbles and the classic one-line layout (`/style bubbles`, `/style classic`; no argument toggles, and `Enter` on `/style` in the command list toggles at once). It lasts for the session; `[ui] message_style` stays the default.
+- Chat bubbles in the message pane (new default, `[ui] message_style = bubbles`): received messages on the left, your own on the right, in tinted blocks with two cells of side padding and half a row of colour above and below, the time at the bottom right. A centred line marks each day; in group chats the sender's name heads each run of messages. Every bubble line is padded to the same width so the background is a rectangle, and the selection highlights the bubble only. `message_style = classic` keeps the one-line layout; new colours `bubble_me`, `bubble_contact`, `bubble_time`.
+
+### Changed
+- Message pane: lines of a long message, and lines after a line break in it, start under the first character of the message text (hanging indent); the open chat is re-wrapped when the pane width changes. Line breaks and control characters in a sender name become spaces, so the name stays on the first line.
+- Emoji skin tone modifiers are dropped when showing message text, sender names, chat list names and the chat title, because many terminal fonts draw them as a separate square and the text after them shifted.
 
 ## [1.6.6] - 2026-10-31
 

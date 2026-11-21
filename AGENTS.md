@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-10-31T18:03:42+00:00 (edit_incoming.go)_
+> _Last updated: 2026-11-21T06:48:19+00:00 (/style in cmd_basic.go)_
 
 ## 1. Project
 
@@ -67,7 +67,7 @@ Two main packages plus two helpers. Full detail in ARCHITECTURE.md.
 ```
 main (root)   TUI: main.go, app_context.go, ui_layout.go, ui_handler.go,
               ui_keybindings.go, ui_render.go, ui_helpers.go, ui_opener.go,
-              ui_complete.go (command drop-down and echo), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
+              ui_complete.go (command drop-down and echo), ui_render.go (message text, wrapping), ui_bubbles.go (chat bubble layout), ui_scrollbar.go (scroll bars), ui_overlay.go (help window, welcome text, top bar), version.go
 messages/     business logic, WhatsApp connection, SQLite, commands
 config/       INI config with XDG paths (settings.go)
 qrcode/       ANSI QR rendering (qrcode.go)
@@ -100,7 +100,7 @@ qrcode/       ANSI QR rendering (qrcode.go)
 | `revoke_incoming.go` | Authorisation of incoming revokes |
 | `pathcheck.go` | `ResolveFileWithin`: symlink-aware directory containment |
 | `cmd_registry.go` | Command name to handler map |
-| `cmd_basic.go` | `/help /quit /colorlist /more /info /read` |
+| `cmd_basic.go` | `/help /quit /colorlist /style /more /info /read` |
 | `cmd_connection.go` | `/login /connect /disconnect /logout /reset` |
 | `cmd_chat.go` | `/send /select /backlog /sync-groups` |
 | `cmd_group.go` | `/create /subject /leave /add /remove /admin /promote /removeadmin /demote` |

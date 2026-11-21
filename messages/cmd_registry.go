@@ -24,6 +24,7 @@ func init() {
 		"help":      cmdHelp,
 		"quit":      cmdQuit,
 		"colorlist": cmdColorList,
+		"style":     cmdStyle,
 		"more":      cmdMore,
 		"info":      cmdInfo,
 		"read":      cmdRead,

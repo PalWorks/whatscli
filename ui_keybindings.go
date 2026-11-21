@@ -439,7 +439,7 @@ func EnterCommand(key tcell.Key) {
 			}
 			if cm == "select" && len(params) == 1 {
 				ctx.CurrentReceiver = chatForID(params[0])
-				ctx.TextView.SetTitle(ctx.CurrentReceiver.Name)
+				ctx.TextView.SetTitle(displayName(ctx.CurrentReceiver.Name))
 			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: cm, Params: params}
 		} else {
