@@ -86,6 +86,7 @@ func (sm *SessionManager) labelSenders(msgs []Message) {
 	cache := make(map[string]string)
 	for i := range msgs {
 		m := &msgs[i]
+		sm.labelQuote(m) // who a reply quotes (quotes.go)
 		if m.FromMe || m.ContactId == "" {
 			continue
 		}

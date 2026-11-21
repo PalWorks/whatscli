@@ -68,6 +68,8 @@ func helpText(km *config.Keymap, prefix string) string {
 		{km.MessageUrl, "Open the first link"},
 		{km.MessageRevoke, "Delete your own message for everyone"},
 		{km.MessageRetry, "Send a message marked as not sent again"},
+		{"Enter", "Reply to the message (Esc cancels the reply)"},
+		{km.MessageQuote, "Jump to the message a reply quotes"},
 		{km.MessageInfo, "Chat info"},
 		{km.Copyuser + " / " + km.Pasteuser, "Copy or paste the sender's ID"},
 	} {

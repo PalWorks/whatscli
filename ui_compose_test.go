@@ -30,6 +30,7 @@ func composeApp(t *testing.T) (*tview.Application, *tview.InputField, chan messa
 	})
 	run(app, func() {
 		ctx.SessionManager = &messages.SessionManager{CommandChannel: cmds}
+		ctx.TextView.SetDynamicColors(true).SetRegions(true) // as in main.go: selectable messages
 		setupCompose()
 	})
 	return app, input, cmds

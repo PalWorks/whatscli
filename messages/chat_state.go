@@ -14,9 +14,8 @@ import (
 	"github.com/PalWorks/whatscli/config"
 	"go.mau.fi/whatsmeow"
 
-	waProto "go.mau.fi/whatsmeow/binary/proto"
+	"go.mau.fi/whatsmeow/proto/waE2E"
 	"go.mau.fi/whatsmeow/types"
-	"google.golang.org/protobuf/proto"
 )
 
 // setCurrentReceiver sets the currently selected chat and refreshes the
@@ -205,6 +204,11 @@ func (sm *SessionManager) getMessages(wid string) []Message {
 // and shown either way: sent, or, when it could not be sent (offline, or the
 // send failed), marked StatusFailed so it can be retried (cmdRetry).
 func (sm *SessionManager) sendText(wid string, text string) {
+	sm.sendTextQuoted(wid, text, nil)
+}
+
+// sendTextQuoted sends text as a reply to quote (nil: a plain message).
+func (sm *SessionManager) sendTextQuoted(wid string, text string, quote *Message) {
 	receiver, err := types.ParseJID(wid)
 	if err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("invalid JID: %v", err))
@@ -224,12 +228,18 @@ func (sm *SessionManager) sendText(wid string, text string) {
 	if client != nil && client.Store != nil && client.Store.ID != nil {
 		newMsg.ContactId = client.Store.ID.String()
 	}
+	var quoted *waE2E.Message
+	if quote != nil {
+		newMsg.QuoteId = quote.Id
+		newMsg.QuoteText = quote.Text
+		newMsg.QuoteSender, quoted = sm.quoteOf(*quote)
+	}
 
 	var sendErr error
 	if client == nil || !client.IsConnected() {
 		sendErr = errors.New("not connected to WhatsApp")
 	} else {
-		msg := &waProto.Message{Conversation: proto.String(text)}
+		msg := textMessage(text, newMsg.QuoteId, newMsg.QuoteSender, quoted)
 		resp, err := client.SendMessage(context.Background(), receiver, msg, whatsmeow.SendRequestExtra{ID: types.MessageID(newMsg.Id)})
 		if err != nil {
 			sendErr = err
@@ -248,6 +258,7 @@ func (sm *SessionManager) sendText(wid string, text string) {
 		sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))
 	}
 	if sm.getCurrentReceiver() == wid {
+		sm.labelQuote(&newMsg)
 		sm.uiHandler.NewMessage(newMsg)
 	}
 }

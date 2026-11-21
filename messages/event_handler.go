@@ -210,6 +210,7 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		ContactName:  eh.getContactName(evt.Info.Sender),
 		ContactShort: eh.getContactShort(evt.Info.Sender),
 	}
+	attachQuote(&msg, evt.Message)
 	if msg.FromMe {
 		msg.Status = StatusSent // sent from another of our devices
 		eh.sm.withEarlyStatus(&msg)

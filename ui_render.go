@@ -127,7 +127,20 @@ func getTextMessageString(msg *messages.Message, width int, mark string) string 
 		color = colorContact
 	}
 	prefix := "(" + time + ") " + name + ": "
-	text = hangingIndent(text, tview.TaggedStringWidth(tview.Escape(prefix)), width)
+	indent := tview.TaggedStringWidth(tview.Escape(prefix))
+	text = hangingIndent(text, indent, width)
+	quote := ""
+	if msg.QuoteId != "" {
+		// The quote goes on its own line above, starting where the text does.
+		if width <= 0 || indent > width/2 {
+			indent = 4
+		}
+		qw := 0
+		if width > 0 {
+			qw = width - indent
+		}
+		quote = strings.Repeat(" ", indent) + quoteClassic(msg, qw) + "\n"
+	}
 	if msg.Forwarded {
 		text = "[" + config.Config.Colors.ForwardedText + "]" + text + "[-]"
 	}
@@ -137,6 +150,7 @@ func getTextMessageString(msg *messages.Message, width int, mark string) string 
 	out += "[\""
 	out += msg.Id
 	out += "\"]"
+	out += quote
 	out += "[-::d](" + time + ") [" + color + "::b]" + tview.Escape(name) + ": [-::-]" + text
 	out += "[\"\"]"
 	return out

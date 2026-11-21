@@ -98,6 +98,14 @@ func (md *MessageDatabase) InitWithDB(db *sql.DB) error {
 		return err
 	}
 
+	// Backward-compatible migration: replies (quotes.go). Empty when the
+	// message is not a reply.
+	for _, col := range []string{"quote_id", "quote_sender", "quote_text"} {
+		if err := md.addColumnIfMissing("messages", col, "TEXT NOT NULL DEFAULT ''"); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -116,7 +124,8 @@ func (md *MessageDatabase) addColumnIfMissing(table, column, definition string) 
 // collectMessages can scan rows uniformly.
 const messageColumns = `id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
 	COALESCE(media_kind, ''), COALESCE(mime_type, ''), COALESCE(file_name, ''), media_proto,
-	COALESCE(local_path, ''), COALESCE(status, 0)`
+	COALESCE(local_path, ''), COALESCE(status, 0),
+	COALESCE(quote_id, ''), COALESCE(quote_sender, ''), COALESCE(quote_text, '')`
 
 // escapeLike escapes the SQL LIKE metacharacters (%, _, \) so they are
 // treated as literal characters in a LIKE ? ESCAPE '\' clause.
@@ -165,12 +174,13 @@ func (md *MessageDatabase) AddMessage(msg Message) (StoreResult, error) {
 	res, err := md.db.Exec(`
 	INSERT OR IGNORE INTO messages
 	(id, chat_id, contact_id, contact_name, contact_short, timestamp, from_me, forwarded, text,
-	 media_kind, mime_type, file_name, media_proto, status)
-	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	 media_kind, mime_type, file_name, media_proto, status, quote_id, quote_sender, quote_text)
+	VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`,
 		msg.Id, msg.ChatId, msg.ContactId, msg.ContactName,
 		msg.ContactShort, msg.Timestamp, msg.FromMe, msg.Forwarded, msg.Text,
 		msg.MediaKind, msg.MimeType, msg.FileName, msg.MediaProto, msg.Status,
+		msg.QuoteId, msg.QuoteSender, msg.QuoteText,
 	)
 	if err != nil {
 		return StoreUnchanged, err
@@ -555,7 +565,7 @@ func collectMessages(rows *sql.Rows) ([]Message, error) {
 	for rows.Next() {
 		var msg Message
 		var ts int64
-		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto, &msg.LocalPath, &msg.Status); err != nil {
+		if err := rows.Scan(&msg.Id, &msg.ChatId, &msg.ContactId, &msg.ContactName, &msg.ContactShort, &ts, &msg.FromMe, &msg.Forwarded, &msg.Text, &msg.MediaKind, &msg.MimeType, &msg.FileName, &msg.MediaProto, &msg.LocalPath, &msg.Status, &msg.QuoteId, &msg.QuoteSender, &msg.QuoteText); err != nil {
 			return msgs, fmt.Errorf("failed to scan message row: %w", err)
 		}
 		msg.Timestamp = uint64(ts)

@@ -298,6 +298,53 @@ func handleMessagesFirst(ev *tcell.EventKey) *tcell.EventKey {
 	return nil
 }
 
+// selectedMessage returns the highlighted message, nil if none.
+func selectedMessage() *messages.Message {
+	hls := ctx.TextView.GetHighlights()
+	if len(hls) == 0 {
+		return nil
+	}
+	for i := range ctx.CurRegions {
+		if ctx.CurRegions[i].Id == hls[0] {
+			return &ctx.CurRegions[i]
+		}
+	}
+	return nil
+}
+
+// handleReplyToSelected starts a reply to the selected message (Enter).
+func handleReplyToSelected(ev *tcell.EventKey) *tcell.EventKey {
+	m := selectedMessage()
+	if m == nil {
+		return nil
+	}
+	if m.Text == messages.RevokedText {
+		PrintText("[::d]A deleted message cannot be replied to.[::-]")
+		return nil
+	}
+	ResetMsgSelection()
+	startReply(*m)
+	return nil
+}
+
+// handleJumpToQuote moves the selection to the message the selected reply
+// quotes, if it is loaded.
+func handleJumpToQuote(ev *tcell.EventKey) *tcell.EventKey {
+	m := selectedMessage()
+	if m == nil || m.QuoteId == "" {
+		return nil
+	}
+	for _, q := range ctx.CurRegions {
+		if q.Id == m.QuoteId {
+			ctx.TextView.Highlight(q.Id)
+			ctx.TextView.ScrollToHighlight()
+			return nil
+		}
+	}
+	PrintText("[::d]The quoted message is not loaded; " + config.Config.Keymap.CommandBacklog + " asks the phone for older messages.[::-]")
+	return nil
+}
+
 func handleExitMessages(ev *tcell.EventKey) *tcell.EventKey {
 	if ctx.CurRegions == nil || len(ctx.CurRegions) == 0 {
 		return nil
@@ -382,6 +429,10 @@ func LoadShortcuts() {
 	if err := keysMessages.Set(config.Config.Keymap.MessageRetry, handleMessageCommand("retry")); err != nil {
 		PrintErrorMsg("message_retry:", err)
 	}
+	if err := keysMessages.Set(config.Config.Keymap.MessageQuote, handleJumpToQuote); err != nil {
+		PrintErrorMsg("message_quote:", err)
+	}
+	keysMessages.SetKey(tcell.ModNone, tcell.KeyEnter, handleReplyToSelected)
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyEscape, handleExitMessages)
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyUp, handleMessagesMove(-1))
 	keysMessages.SetKey(tcell.ModNone, tcell.KeyDown, handleMessagesMove(1))
@@ -455,12 +506,20 @@ func EnterCommand(key tcell.Key) {
 				finishEdit(cmd)
 				return
 			}
+			if replying != nil {
+				sendReply(cmd)
+				return
+			}
 			ctx.SessionManager.CommandChannel <- messages.Command{Name: "send", Params: []string{ctx.CurrentReceiver.Id, cmd}}
 			clearAfterSend(ctx.CurrentReceiver.Id)
 		}
 	} else if key == tcell.KeyEsc {
 		if editing != nil {
 			cancelEdit()
+			return
+		}
+		if replying != nil {
+			cancelReply() // the typed text stays
 			return
 		}
 		delete(drafts, ctx.CurrentReceiver.Id)

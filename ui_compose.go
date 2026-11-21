@@ -46,6 +46,7 @@ var (
 	drafts       = map[string]string{} // chat ID -> text typed but not sent
 	composeQuiet bool                  // set while the program changes the input text
 	editing      *messages.Message     // the message being edited, nil if none
+	replying     *messages.Message     // the message being replied to, nil if none
 
 	typingChat  string // chat told we are typing, "" if none
 	typingSent  time.Time
@@ -109,6 +110,7 @@ func enterChat(chat messages.Chat) {
 	old := ctx.CurrentReceiver.Id
 	if old != chat.Id {
 		cancelEdit()
+		cancelReply()
 		stopTyping()
 	}
 	text := ctx.TextInput.GetText()
@@ -164,6 +166,7 @@ func startEdit() bool {
 		ctx.TextView.ScrollToEnd()
 		return false
 	}
+	cancelReply()
 	editing = m
 	ctx.TextInput.SetLabel("[" + config.Config.Colors.ForwardedText + "]" + editLabel + "[-]")
 	setInputText(strings.TrimSuffix(m.Text, " "+messages.EditedMark))
@@ -192,6 +195,41 @@ func finishEdit(text string) {
 		ctx.SessionManager.CommandChannel <- messages.Command{Name: "edit", Params: []string{m.ChatId, m.Id, text}}
 	}
 	setInputText(drafts[ctx.CurrentReceiver.Id])
+}
+
+// replyLabelWidth caps the "↳ Asha: text ›" label on the input line.
+const replyLabelWidth = 40
+
+// startReply starts a reply to m: the input line is labelled with who and
+// what is quoted, and gets the focus. Enter sends the reply, Esc cancels.
+func startReply(m messages.Message) {
+	cancelEdit()
+	name := messages.QuoteYou
+	if !m.FromMe {
+		name = displayName(m.ContactShort)
+	}
+	q := messages.Message{QuoteId: m.Id, QuoteName: name, QuoteText: m.Text}
+	_, color := quoteLabel(&q)
+	replying = &m
+	ctx.TextInput.SetLabel("[" + color + "]↳ " + clip(tview.Escape(name)+": "+quoteText(&q), replyLabelWidth) + " › [-]")
+	ctx.App.SetFocus(ctx.TextInput)
+}
+
+// cancelReply leaves reply mode; the typed text stays.
+func cancelReply() {
+	if replying == nil {
+		return
+	}
+	replying = nil
+	ctx.TextInput.SetLabel("")
+}
+
+// sendReply sends text as a reply to the message being replied to.
+func sendReply(text string) {
+	m := replying
+	cancelReply()
+	ctx.SessionManager.CommandChannel <- messages.Command{Name: "reply", Params: []string{m.ChatId, m.Id, text}}
+	clearAfterSend(ctx.CurrentReceiver.Id)
 }
 
 // noteTyping tells chat that we type (repeated every typingRefresh) and

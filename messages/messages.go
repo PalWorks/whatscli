@@ -78,6 +78,13 @@ type Message struct {
 	// Status of our own messages: StatusSent, StatusDelivered, StatusRead
 	// (receipts.go); StatusUnknown for received messages.
 	Status int
+	// Reply: the quoted message's ID, its sender's JID and a copy of its
+	// text (quotes.go); empty when this is not a reply. QuoteName is who is
+	// quoted, resolved at display time and not stored.
+	QuoteId     string
+	QuoteSender string
+	QuoteText   string
+	QuoteName   string
 	// Media metadata (empty for text messages). MediaProto holds a serialized
 	// waE2E.Message containing only the media sub-message, which carries the
 	// DirectPath/MediaKey/hashes needed to download it later.

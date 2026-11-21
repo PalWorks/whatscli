@@ -52,6 +52,7 @@ type Keymap struct {
 	MessageInfo     string
 	MessageRevoke   string
 	MessageRetry    string
+	MessageQuote    string
 }
 
 type Ui struct {
@@ -112,6 +113,7 @@ var Config = IniFile{
 		MessageRevoke:   "r",
 		MessageShow:     "s",
 		MessageRetry:    "t",
+		MessageQuote:    "q",
 	},
 	&Ui{
 		ChatSidebarWidth: 30,

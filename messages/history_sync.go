@@ -252,6 +252,7 @@ func (sm *SessionManager) storeHistorySync(data *waHistorySync.HistorySync, pars
 			if msg.FromMe {
 				msg.Status = historyStatus(webMsg.GetStatus())
 			}
+			attachQuote(&msg, evt.Message)
 			if err := attachMediaInfo(&msg, evt.Message); err != nil {
 				mediaErrors++
 			}

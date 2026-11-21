@@ -176,6 +176,11 @@ func layoutBubble(msg *messages.Message, maxContent int, showName bool, mark str
 	if msg.Forwarded {
 		l.add("[" + config.Config.Colors.ForwardedText + "::i]Forwarded[" + text + "::-]")
 	}
+	if msg.QuoteId != "" {
+		for _, q := range quoteBubble(msg, maxContent) {
+			l.add(q)
+		}
+	}
 	body := tview.Escape(dropSkinTones(msg.Text))
 	for _, para := range strings.Split(strings.TrimRight(body, "\n"), "\n") {
 		wrapped := tview.WordWrap(para, maxContent)

@@ -117,6 +117,9 @@ func cmdRetry(sm *SessionManager, client *whatsmeow.Client, cmdName string, para
 	}
 	go func() {
 		out := &waProto.Message{Conversation: proto.String(msg.Text)}
+		if msg.QuoteId != "" {
+			out = textMessage(msg.Text, msg.QuoteId, msg.QuoteSender, sm.quoteForRetry(msg))
+		}
 		if _, err := client.SendMessage(sm.rootContext(), jid, out, whatsmeow.SendRequestExtra{ID: types.MessageID(msg.Id)}); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("message not sent: %v", err))
 			return
