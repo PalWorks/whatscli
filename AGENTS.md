@@ -2,7 +2,7 @@
 
 > Canonical instructions for every AI agent working in this repository (Claude Code, Gemini, Cursor, Copilot, Codex). `CLAUDE.md`, `GEMINI.md` and `.cursorrules` point here. Change rules here only.
 >
-> _Last updated: 2026-11-21T05:04:47+00:00 (ui_bubbles.go)_incoming.go)_
+> _Last updated: 2026-11-21T06:48:19+00:00 (ui_render.go, ui_bubbles.go)_
 
 ## 1. Project
 
