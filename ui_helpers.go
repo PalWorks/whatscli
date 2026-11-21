@@ -67,6 +67,6 @@ func chatForID(id string) messages.Chat {
 func SetDisplayedChat(chat messages.Chat) {
 	ctx.CurrentReceiver = chat
 	ctx.TextView.Clear()
-	ctx.TextView.SetTitle(chat.Name)
+	ctx.TextView.SetTitle(displayName(chat.Name))
 	ctx.SessionManager.CommandChannel <- messages.Command{Name: "select", Params: []string{ctx.CurrentReceiver.Id}}
 }
