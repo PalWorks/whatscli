@@ -2,7 +2,7 @@
 
 How WhatsCLI is tested, and the live-account checklist that gates every release. The checklist is ROADMAP row 15 (Recurring).
 
-_Last updated: 2026-10-31T18:03:42+00:00 (step 35, edit tests)_
+_Last updated: 2026-11-21T07:40:17+00:00 (reply tests)_
 
 ## 1. Commands
 
@@ -42,6 +42,11 @@ Last verified 2026-10-31 at `v1.6.2` (`ad7df87`): build, vet and `go test -race 
 | `messages/delete_for_me_test.go` | 6 | Delete for me: row removed, preview and redraw, other chat, last message, LID chat, wrong chat ignored |
 | `messages/chat_view_test.go` | 7 | Newest page on open, `/more` paging and "all shown", new and history-synced messages visible |
 | `messages/store_upsert_test.go` | 6 | `StoreResult`, media fill only when empty, revoked row untouched, redraw only on change, redelivered live message |
+| `messages/quotes_test.go` | 6 | Quote read from text and media replies, reply built with ContextInfo, (edited) dropped from the copy, who is quoted, offline reply stored with its quote, `/reply` refusals |
+| `ui_quote_test.go` | 4 | Reply bubbles stay rectangles with the quote first and long quotes cut to two lines, classic quote line, Enter / Esc reply flow, `q` jump |
+| `messages/compose_test.go` | 7 | Typing and presence texts and events, offline send kept as failed, retry rules, `Editable`, `/edit` checks |
+| `ui_compose_test.go` | 7 | Drafts across chat switches and `/select`, Up to edit and Esc, why a message cannot be edited, title with typing and presence, typing state, failed mark in both styles |
+| `messages/receipts_test.go` | 5 | Receipts raise own messages only and never lower, own-device and other receipt types ignored, early receipt applied once, bounded, history status, `status` migration |
 | `messages/local_path_test.go` | 4 | `local_path` migration, scoping and clearing on revoke, repeat download reuse and fallback |
 | `messages/partfiles_test.go` | 8 | Part-file name match, sweep, blank or missing folder, same folder once, `Shutdown` cancels download and backlog wait |
 | `messages/status_order_test.go` | 7 | Status printed with the redraw (`NewScreenWithStatus`) for revoke, backlog and history sync |

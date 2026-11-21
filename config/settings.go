@@ -29,6 +29,7 @@ type General struct {
 	UseTerminalBell     bool
 	NotificationTimeout int64
 	BacklogMsgQuantity  int
+	SharePresence       bool // online while active, typing sent and shown (messages/presence.go)
 }
 
 type Keymap struct {
@@ -50,10 +51,13 @@ type Keymap struct {
 	MessageUrl      string
 	MessageInfo     string
 	MessageRevoke   string
+	MessageRetry    string
+	MessageQuote    string
 }
 
 type Ui struct {
 	ChatSidebarWidth int
+	MessageStyle     string // "bubbles" (default) or "classic" (one line per message)
 }
 
 type Colors struct {
@@ -71,6 +75,10 @@ type Colors struct {
 	UnreadCount     string
 	Positive        string
 	Negative        string
+	BubbleMe        string
+	BubbleContact   string
+	BubbleTime      string
+	StatusRead      string
 }
 
 var Config = IniFile{
@@ -83,6 +91,7 @@ var Config = IniFile{
 		UseTerminalBell:     false,
 		NotificationTimeout: 60,
 		BacklogMsgQuantity:  10,
+		SharePresence:       true,
 	},
 	&Keymap{
 		SwitchPanels:    "Tab",
@@ -103,9 +112,12 @@ var Config = IniFile{
 		MessageUrl:      "u",
 		MessageRevoke:   "r",
 		MessageShow:     "s",
+		MessageRetry:    "t",
+		MessageQuote:    "q",
 	},
 	&Ui{
 		ChatSidebarWidth: 30,
+		MessageStyle:     "bubbles",
 	},
 	&Colors{
 		Background:      "black",
@@ -122,6 +134,10 @@ var Config = IniFile{
 		UnreadCount:     "yellow",
 		Positive:        "green",
 		Negative:        "red",
+		BubbleMe:        "#005c4b",
+		BubbleContact:   "#202c33",
+		BubbleTime:      "silver",
+		StatusRead:      "#53bdeb",
 	},
 }
 

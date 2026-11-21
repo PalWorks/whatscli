@@ -49,6 +49,7 @@ func helpText(km *config.Keymap, prefix string) string {
 		{km.FocusChats, "Go to the chat list (Up/Down, Enter opens)"},
 		{km.SwitchPanels, "Next panel"},
 		{km.FocusMessages, "Select a message (then the keys below)"},
+		{"Up", "In an empty input: edit your last message (Esc cancels)"},
 		{"Esc", "Back to typing"},
 		{km.CommandBacklog, "Ask the phone for older messages"},
 		{km.CommandRead, "Mark the chat read"},
@@ -66,6 +67,9 @@ func helpText(km *config.Keymap, prefix string) string {
 		{km.MessageShow, "Show an image in the terminal"},
 		{km.MessageUrl, "Open the first link"},
 		{km.MessageRevoke, "Delete your own message for everyone"},
+		{km.MessageRetry, "Send a message marked as not sent again"},
+		{"Enter", "Reply to the message (Esc cancels the reply)"},
+		{km.MessageQuote, "Jump to the message a reply quotes"},
 		{km.MessageInfo, "Chat info"},
 		{km.Copyuser + " / " + km.Pasteuser, "Copy or paste the sender's ID"},
 	} {
@@ -153,6 +157,7 @@ func closeOverlay() {
 
 // globalKeys handles F1 and the overlay's own keys before the key map.
 func globalKeys(ev *tcell.EventKey) *tcell.EventKey {
+	noteUserActive() // online while in use (ui_compose.go)
 	if overlayName != "" {
 		switch {
 		case ev.Key() == tcell.KeyEscape, ev.Key() == tcell.KeyEnter, ev.Key() == tcell.KeyF1, ev.Key() == tcell.KeyCtrlG,

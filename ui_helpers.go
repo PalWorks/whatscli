@@ -65,8 +65,7 @@ func chatForID(id string) messages.Chat {
 
 // sets the current chat, loads text from storage to TextView
 func SetDisplayedChat(chat messages.Chat) {
-	ctx.CurrentReceiver = chat
+	enterChat(chat) // title, draft (ui_compose.go)
 	ctx.TextView.Clear()
-	ctx.TextView.SetTitle(chat.Name)
 	ctx.SessionManager.CommandChannel <- messages.Command{Name: "select", Params: []string{ctx.CurrentReceiver.Id}}
 }

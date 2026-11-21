@@ -172,7 +172,9 @@ func (sm *SessionManager) storeSentMedia(client *whatsmeow.Client, chatID string
 		ContactId:    contactID,
 		ContactName:  "Me",
 		ContactShort: "Me",
+		Status:       StatusSent,
 	}
+	sm.withEarlyStatus(&newMsg)
 	if err := attachMediaInfo(&newMsg, waMsg); err != nil {
 		sm.uiHandler.PrintError(fmt.Errorf("sent media %s: %w", id, err))
 	}

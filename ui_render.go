@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/PalWorks/whatscli/config"
 	"github.com/PalWorks/whatscli/messages"
@@ -17,38 +18,140 @@ import (
 	"github.com/rivo/tview"
 )
 
-// get a string representation of all messages for chat
+// get a string representation of all messages for chat, wrapped to the
+// width of the message pane
 func getMessagesString(msgs []messages.Message) string {
-	out := ""
-	for _, msg := range msgs {
+	var out strings.Builder
+	var prev *messages.Message
+	group := isGroupChat()
+	last := lastShown(msgs)
+	for i := range msgs {
+		msg := &msgs[i]
 		if strings.TrimSpace(msg.Text) == "" {
 			continue // skip empty/protocol messages
 		}
-		out += getTextMessageString(&msg)
-		out += "\n"
+		out.WriteString(messageBlock(prev, msg, messageWrapWidth, group, msg == last))
+		out.WriteString("\n")
+		prev = msg
 	}
-	return out
+	return out.String()
 }
 
-// create a formatted string with regions based on message ID from a text message
-func getTextMessageString(msg *messages.Message) string {
+// messageWrapWidth is the message pane width the shown chat was wrapped to,
+// 0 before the pane was first drawn (UI goroutine only).
+var messageWrapWidth int
+
+// paneWidth is the inner width of the message pane.
+func paneWidth() int {
+	_, _, w, _ := ctx.TextView.GetInnerRect()
+	return w
+}
+
+// rewrapOnResize redraws the shown chat when the message pane's width no
+// longer matches the width its messages were wrapped to (terminal resized,
+// first draw). Called after every draw.
+func rewrapOnResize() {
+	if ctx.TextView == nil || len(ctx.CurRegions) == 0 {
+		return
+	}
+	if w := paneWidth(); w > 0 && w != messageWrapWidth {
+		messageWrapWidth = w
+		msgs := ctx.CurRegions
+		go ctx.App.QueueUpdateDraw(func() { renderScreen(msgs) })
+	}
+}
+
+// dropSkinTones removes emoji skin tone modifiers (U+1F3FB to U+1F3FF), which
+// many terminal fonts draw as a separate square next to the emoji and which
+// make the terminal and tview disagree about the width of the text.
+func dropSkinTones(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r >= 0x1F3FB && r <= 0x1F3FF {
+			return -1
+		}
+		return r
+	}, s)
+}
+
+// displayName puts a contact name on one line: line breaks, tabs and other
+// control characters become single spaces; skin tones are dropped.
+func displayName(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, dropSkinTones(name))
+	return strings.Join(strings.Fields(name), " ")
+}
+
+// hangingIndent lays out a message body after a prefix of width indent so
+// that every following line, whether the text broke it or it was wrapped to
+// width, starts under the first character of the body. With no width known,
+// or too little room, the body is left for the text view to wrap.
+func hangingIndent(body string, indent, width int) string {
+	if width <= 0 {
+		return body
+	}
+	if indent > width/2 {
+		indent = 4 // a very long name: do not squeeze the text
+	}
+	if width-indent < 10 {
+		return body
+	}
+	var lines []string
+	for _, para := range strings.Split(body, "\n") {
+		wrapped := tview.WordWrap(para, width-indent)
+		if len(wrapped) == 0 {
+			wrapped = []string{""}
+		}
+		lines = append(lines, wrapped...)
+	}
+	return strings.Join(lines, "\n"+strings.Repeat(" ", indent))
+}
+
+// create a formatted string with regions based on message ID from a text
+// message; width is the message pane width (0: unknown); mark (the status
+// ticks, may be "") follows the text
+func getTextMessageString(msg *messages.Message, width int, mark string) string {
 	colorMe := config.Config.Colors.ChatMe
 	colorContact := config.Config.Colors.ChatContact
 	out := ""
-	text := tview.Escape(msg.Text)
+	text := tview.Escape(dropSkinTones(msg.Text))
+	tim := time.Unix(int64(msg.Timestamp), 0)
+	time := tim.Format("02-01-06 15:04:05")
+	name := "Me"
+	color := colorMe
+	if !msg.FromMe {
+		name = displayName(msg.ContactShort)
+		color = colorContact
+	}
+	prefix := "(" + time + ") " + name + ": "
+	indent := tview.TaggedStringWidth(tview.Escape(prefix))
+	text = hangingIndent(text, indent, width)
+	quote := ""
+	if msg.QuoteId != "" {
+		// The quote goes on its own line above, starting where the text does.
+		if width <= 0 || indent > width/2 {
+			indent = 4
+		}
+		qw := 0
+		if width > 0 {
+			qw = width - indent
+		}
+		quote = strings.Repeat(" ", indent) + quoteClassic(msg, qw) + "\n"
+	}
 	if msg.Forwarded {
 		text = "[" + config.Config.Colors.ForwardedText + "]" + text + "[-]"
 	}
-	tim := time.Unix(int64(msg.Timestamp), 0)
-	time := tim.Format("02-01-06 15:04:05")
+	if mark != "" {
+		text += " " + mark + "[-]"
+	}
 	out += "[\""
 	out += msg.Id
 	out += "\"]"
-	if msg.FromMe { //msg from me
-		out += "[-::d](" + time + ") [" + colorMe + "::b]Me: [-::-]" + text
-	} else { // message from others
-		out += "[-::d](" + time + ") [" + colorContact + "::b]" + tview.Escape(msg.ContactShort) + ": [-::-]" + text
-	}
+	out += quote
+	out += "[-::d](" + time + ") [" + color + "::b]" + tview.Escape(name) + ": [-::-]" + text
 	out += "[\"\"]"
 	return out
 }
@@ -186,7 +289,7 @@ func RenderChatTable() {
 		}
 
 		// Name cell
-		name := conv.Name
+		name := displayName(conv.Name)
 		if name == "" {
 			name = conv.JID // Fallback
 		}
