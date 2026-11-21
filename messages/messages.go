@@ -69,6 +69,9 @@ type Message struct {
 	FromMe       bool
 	Forwarded    bool
 	Text         string
+	// Status of our own messages: StatusSent, StatusDelivered, StatusRead
+	// (receipts.go); StatusUnknown for received messages.
+	Status int
 	// Media metadata (empty for text messages). MediaProto holds a serialized
 	// waE2E.Message containing only the media sub-message, which carries the
 	// DirectPath/MediaKey/hashes needed to download it later.

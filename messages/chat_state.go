@@ -226,7 +226,9 @@ func (sm *SessionManager) sendText(wid string, text string) {
 			ContactId:    client.Store.ID.String(),
 			ContactName:  "Me",
 			ContactShort: "Me",
+			Status:       StatusSent,
 		}
+		sm.withEarlyStatus(&newMsg)
 
 		if _, err := sm.db.AddMessage(newMsg); err != nil {
 			sm.uiHandler.PrintError(fmt.Errorf("failed to save sent message: %v", err))

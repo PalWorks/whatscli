@@ -52,6 +52,8 @@ func (eh *eventHandler) Handle(evt interface{}) {
 		eh.sm.uiHandler.PrintText("Logged out: " + reasonText)
 	case *events.DeleteForMe:
 		eh.sm.handleDeleteForMe(v)
+	case *events.Receipt:
+		eh.sm.handleReceipt(v)
 	case *events.HistorySync:
 		go eh.sm.processHistorySync(v.Data)
 	}
@@ -202,6 +204,10 @@ func (eh *eventHandler) processIncomingMessage(evt *events.Message, text, previe
 		ContactId:    evt.Info.Sender.String(),
 		ContactName:  eh.getContactName(evt.Info.Sender),
 		ContactShort: eh.getContactShort(evt.Info.Sender),
+	}
+	if msg.FromMe {
+		msg.Status = StatusSent // sent from another of our devices
+		eh.sm.withEarlyStatus(&msg)
 	}
 	if err := attachMediaInfo(&msg, evt.Message); err != nil {
 		// Keep the text message; only the download metadata is lost.

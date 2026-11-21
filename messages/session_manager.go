@@ -22,8 +22,9 @@ import (
 // it updates the UI accordingly
 type SessionManager struct {
 	db              *MessageDatabase
-	currentReceiver string // currently selected chat for message handling
-	viewAnchor      uint64 // oldest timestamp shown in the open chat (chat_view.go)
+	earlyReceipts   earlyReceipts // receipts for messages not stored yet (receipts.go)
+	currentReceiver string        // currently selected chat for message handling
+	viewAnchor      uint64        // oldest timestamp shown in the open chat (chat_view.go)
 	uiHandler       UiMessageHandler
 	client          *whatsmeow.Client
 	container       *sqlstore.Container
